@@ -183,6 +183,8 @@ void DinoGame::_initRound() {
     _dinoVY         = 0.0f;
     _onGround       = true;
     _isDucking      = false;
+    _coyoteFrames   = 0;
+    _jumpBuffer     = 0;
     _score          = 0;
     _lastMilestone  = 0;
     _flashTimer     = 0;
@@ -314,10 +316,30 @@ void DinoGame::update(InputManager& input, Sound& sound) {
             // Duck — only valid on ground; suppresses jump input
             _isDucking = wantDuck && _onGround;
 
-            // Jump
-            if (jumpPressed && _onGround && !_isDucking) {
-                _dinoVY   = JUMP_VY;
-                _onGround = false;
+            // ── Jump buffer ───────────────────────────────────────────────────
+            // Remember a jump press for JUMP_BUFFER_FRAMES even if in the air.
+            if (jumpPressed) _jumpBuffer = JUMP_BUFFER_FRAMES;
+            if (_jumpBuffer > 0) _jumpBuffer--;
+
+            // ── Coyote time ───────────────────────────────────────────────────
+            // Count down from COYOTE_FRAMES after leaving the ground.
+            if (_onGround) {
+                _coyoteFrames = COYOTE_FRAMES;   // keep refreshing while grounded
+            } else {
+                if (_coyoteFrames > 0) _coyoteFrames--;
+            }
+
+            // ── Can we jump? ──────────────────────────────────────────────────
+            // Conditions: a buffered press exists AND
+            //             either on the ground or within the coyote window AND
+            //             not ducking.
+            bool canJump = (_jumpBuffer > 0) && (_coyoteFrames > 0) && !_isDucking;
+
+            if (canJump) {
+                _dinoVY       = JUMP_VY;
+                _onGround     = false;
+                _coyoteFrames = 0;   // consume the coyote window
+                _jumpBuffer   = 0;   // consume the buffered press
                 SFX::jump(sound);
             }
 

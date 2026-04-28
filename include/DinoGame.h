@@ -15,6 +15,15 @@
 //   Pterodactyl (high)    → duck under (appears after score 200)
 //
 // Score milestones every 100 pts: brief flash + beep.
+//
+// Jump feel
+// ─────────────────────────────────────────────────────────────────────────────
+// Coyote time:  jump is still allowed for COYOTE_FRAMES after leaving ground.
+//               Forgives the player pressing jump a tiny bit late.
+//
+// Jump buffer:  a jump input is remembered for JUMP_BUFFER_FRAMES.
+//               If the dino lands within that window the jump fires immediately,
+//               forgiving a press that came slightly too early.
 class DinoGame : public GameBase {
 public:
     void onEnter() override;
@@ -80,6 +89,10 @@ private:
     static constexpr uint32_t SCORE_MILESTONE   = 100;  // flash + beep interval
     static constexpr uint8_t  FLASH_FRAMES      = 12;   // frames the flash lasts
 
+    // Jump feel
+    static constexpr uint8_t  COYOTE_FRAMES     = 6;   // ~200 ms grace after leaving ground
+    static constexpr uint8_t  JUMP_BUFFER_FRAMES = 8;  // ~266 ms input buffer before landing
+
     // ── Member variables ──────────────────────────────────────────────────────
     DinoState    _state         = DinoState::RUNNING;
     bool         _running       = false;
@@ -88,6 +101,8 @@ private:
     float        _dinoY         = 0.0f;
     float        _dinoVY        = 0.0f;
     bool         _onGround      = true;
+    uint8_t      _coyoteFrames  = 0;   // counts down after leaving ground
+    uint8_t      _jumpBuffer    = 0;   // counts down after jump pressed in air
 
     uint32_t     _score         = 0;
     uint32_t     _hiScore       = 0;   // persists across rounds until power-off
