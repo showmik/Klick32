@@ -1,34 +1,32 @@
 #include "DinoGame.h"
 #include <U8g2lib.h>
 
-// ─── Sprites ─────────────────────────────────────────────────────────────────
+// ─── Sprites ──────────────────────────────────────────────────────────────────
 // All bitmaps: MSB-first, big-endian rows.
-// For 16-wide sprites: 2 bytes per row, 16 rows = 32 bytes total.
+// For 16-wide sprites: 2 bytes per row.
 // Bit mapping: col 0 = MSB of byte 0, col 7 = LSB of byte 0,
 //              col 8 = MSB of byte 1, col 15 = LSB of byte 1.
 //
 // Dino faces RIGHT. Head is upper-right of the sprite.
-//
-// Legend (each comment shows the 16-pixel row):
-//   col:  0123456789ABCDEF
 
+// ── Running dino (16×16) ──────────────────────────────────────────────────────
 static const uint8_t PROGMEM spr_run1[32] = {
     0x01, 0xF0,   // .......XXXXX....  head top
     0x01, 0xFC,   // .......XXXXXXX..  head
-    0x01, 0xBC,   // .......XX.XXXX..  head (eye gap at col 9)
+    0x01, 0xBC,   // .......XX.XXXX..  head (eye gap)
     0x0F, 0xFC,   // ....XXXXXXXXXX..  neck
     0x1F, 0xFC,   // ...XXXXXXXXXXX..  upper body
     0x1F, 0xF0,   // ...XXXXXXXXX....  body
     0x0F, 0xE0,   // ....XXXXXXX.....  body
     0x07, 0xC0,   // .....XXXXX......  body
-    0x07, 0xC0,   // .....XXXXX......
-    0x07, 0xC0,   // .....XXXXX......
-    0x07, 0xC0,   // .....XXXXX......
+    0x07, 0xC0,
+    0x07, 0xC0,
+    0x07, 0xC0,
     0x07, 0xC0,   // .....XXXXX......  body base
-    0x05, 0x00,   // .....X.X........  legs (split)
-    0x05, 0x00,   // .....X.X........
+    0x05, 0x00,   // .....X.X........  legs split
+    0x05, 0x00,
     0x0D, 0x80,   // ....XX.XX.......  feet
-    0x00, 0x00,   // ................
+    0x00, 0x00,
 };
 
 static const uint8_t PROGMEM spr_run2[32] = {
@@ -44,13 +42,12 @@ static const uint8_t PROGMEM spr_run2[32] = {
     0x07, 0xC0,
     0x07, 0xC0,
     0x07, 0xC0,
-    0x06, 0x00,   // .....XX.........  legs (together)
-    0x06, 0x00,   // .....XX.........
-    0x0F, 0x00,   // ....XXXX........  feet (together)
+    0x06, 0x00,   // .....XX.........  legs together
+    0x06, 0x00,
+    0x0F, 0x00,   // ....XXXX........  feet together
     0x00, 0x00,
 };
 
-// Dead dino: eye row unchanged → fill it (closed eye)
 static const uint8_t PROGMEM spr_dead[32] = {
     0x01, 0xF0,
     0x01, 0xFC,
@@ -70,39 +67,91 @@ static const uint8_t PROGMEM spr_dead[32] = {
     0x00, 0x00,
 };
 
-// Small cactus: 8 px wide, 1 byte per row, 16 rows
-// Stem = cols 2-3 (0x30 = ..XX....)
+// ── Ducking dino (16×8) ───────────────────────────────────────────────────────
+// Crouched body — head + compressed torso + legs.
+// 2 bytes per row, 8 rows = 16 bytes per frame.
+
+static const uint8_t PROGMEM spr_duck1[16] = {
+    0x01, 0xF0,   // .......XXXXX....  head
+    0x01, 0xBC,   // .......XX.XXXX..  head + eye
+    0x0F, 0xFC,   // ....XXXXXXXXXX..  neck
+    0x1F, 0xE0,   // ...XXXXXXXXX....  upper body
+    0x0F, 0xC0,   // ....XXXXXXX.....  lower body
+    0x05, 0x00,   // .....X.X........  legs split
+    0x0D, 0x80,   // ....XX.XX.......  feet
+    0x00, 0x00,
+};
+
+static const uint8_t PROGMEM spr_duck2[16] = {
+    0x01, 0xF0,
+    0x01, 0xBC,
+    0x0F, 0xFC,
+    0x1F, 0xE0,
+    0x0F, 0xC0,
+    0x06, 0x00,   // .....XX.........  legs together
+    0x0F, 0x00,   // ....XXXX........  feet together
+    0x00, 0x00,
+};
+
+// ── Pterodactyl (16×8) ────────────────────────────────────────────────────────
+// Symmetric bird shape. 2 bytes per row, 8 rows = 16 bytes per frame.
+//
+// Frame 0 — wings up:
+//   col: 0123456789ABCDEF
+//   ..X.......X.....   tips up
+//   ..XX.....XX.....   wings rising
+//   ..XXXXXXXXX.....   full span
+//   .....XXXXX......   body
+//   .......X........   beak / tail
+//
+// Frame 1 — wings down (mirrored vertically):
+//   .......X........   beak
+//   .....XXXXX......   body
+//   ..XXXXXXXXX.....   full span
+//   ..XX.....XX.....   wings dropping
+//   ..X.......X.....   tips down
+
+static const uint8_t PROGMEM spr_ptero1[16] = {
+    0x20, 0x20,   // ..X.......X.....
+    0x30, 0x30,   // ..XX.....XX.....
+    0x3F, 0xE0,   // ..XXXXXXXXX.....
+    0x07, 0xC0,   // .....XXXXX......
+    0x01, 0x00,   // .......X........
+    0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x00,
+};
+
+static const uint8_t PROGMEM spr_ptero2[16] = {
+    0x01, 0x00,   // .......X........
+    0x07, 0xC0,   // .....XXXXX......
+    0x3F, 0xE0,   // ..XXXXXXXXX.....
+    0x30, 0x30,   // ..XX.....XX.....
+    0x20, 0x20,   // ..X.......X.....
+    0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x00,
+};
+
+// ── Small cactus (8×16) ───────────────────────────────────────────────────────
 static const uint8_t PROGMEM spr_cactus_s[16] = {
-    0x30,   // ..XX....  upper stem
-    0x30,
-    0x30,
-    0x30,
-    0xFC,   // XXXXXX..  left arm
-    0xFC,
-    0x3F,   // ..XXXXXX  right arm
-    0x3F,
-    0x30,   // ..XX....  lower stem
-    0x30,
-    0x30,
-    0x30,
-    0x30,
-    0x30,
-    0x30,
-    0x30,
+    0x30, 0x30, 0x30, 0x30,
+    0xFC, 0xFC,   // left arm
+    0x3F, 0x3F,   // right arm
+    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
 };
 
-// Large cactus: 12 px wide, 2 bytes per row, 16 rows = 32 bytes
-// Stem = cols 4-5 (0x0C, 0x00 = ....XX......)
+// ── Large cactus (12×16) ──────────────────────────────────────────────────────
 static const uint8_t PROGMEM spr_cactus_l[32] = {
-    0x0C, 0x00,   // ....XX......  upper stem
     0x0C, 0x00,
     0x0C, 0x00,
     0x0C, 0x00,
-    0x7F, 0xC0,   // .XXXXXXXXX..  left arm (cols 1-9)
+    0x0C, 0x00,
+    0x7F, 0xC0,   // left arm
     0x7F, 0xC0,
-    0x0F, 0xF0,   // ....XXXXXXXX  right arm (cols 4-11)
+    0x0F, 0xF0,   // right arm
     0x0F, 0xF0,
-    0x0C, 0x00,   // ....XX......  lower stem
+    0x0C, 0x00,
     0x0C, 0x00,
     0x0C, 0x00,
     0x0C, 0x00,
@@ -112,41 +161,50 @@ static const uint8_t PROGMEM spr_cactus_l[32] = {
     0x0C, 0x00,
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
+// ─── AABB collision helper ────────────────────────────────────────────────────
 static bool aabbOverlap(int ax, int ay, int aw, int ah,
                         int bx, int by, int bw, int bh) {
     return !(ax + aw <= bx || bx + bw <= ax ||
              ay + ah <= by || by + bh <= ay);
 }
 
-// ─── DinoGame Implementation ───────────────────────────────────────────────
+// ─── DinoGame implementation ──────────────────────────────────────────────────
 
 void DinoGame::onEnter() {
     _initRound();
     _running = true;
 }
 
-void DinoGame::onExit() {
-    // Nothing to clean up
-}
+void DinoGame::onExit() {}
 
+// ─── _initRound ──────────────────────────────────────────────────────────────
 void DinoGame::_initRound() {
-    _dinoY     = (float)(GROUND_Y - DINO_H);
-    _dinoVY    = 0.0f;
-    _onGround  = true;
-    _score     = 0;
-    _speed     = INIT_SPEED;
-    _frameCnt  = 0;
-    _animTimer = 0;
-    _animFrame = 0;
-    _state     = DinoState::RUNNING;
-    for (auto& o : _obs) o.active = false;
-    _spawnIfNeeded();
+    _dinoY          = (float)(GROUND_Y - DINO_H);
+    _dinoVY         = 0.0f;
+    _onGround       = true;
+    _isDucking      = false;
+    _score          = 0;
+    _lastMilestone  = 0;
+    _flashTimer     = 0;
+    _speed          = INIT_SPEED;
+    _frameCnt       = 0;
+    _animTimer      = 0;
+    _animFrame      = 0;
+    _state          = DinoState::RUNNING;
+
+    for (auto& o : _obs)   o.active = false;
+    for (auto& p : _ptero) p.active = false;
+
+    // Space clouds evenly across the screen at varied heights
+    _clouds[0] = { 15.0f,  14 };
+    _clouds[1] = { 62.0f,  19 };
+    _clouds[2] = { 105.0f, 13 };
+
+    _spawnObsIfNeeded();
 }
 
-void DinoGame::_spawnIfNeeded() {
-    // Find rightmost edge of all active obstacles
+// ─── _spawnObsIfNeeded ────────────────────────────────────────────────────────
+void DinoGame::_spawnObsIfNeeded() {
     float rightmost = -1.0f;
     uint8_t nActive = 0;
     for (auto& o : _obs) {
@@ -158,133 +216,240 @@ void DinoGame::_spawnIfNeeded() {
 
     bool shouldSpawn = (nActive == 0) ||
                        (nActive < MAX_OBS && rightmost < (float)(SCREEN_W + MAX_GAP));
-
     if (!shouldSpawn) return;
 
     for (auto& o : _obs) {
         if (o.active) continue;
         float base = (rightmost < (float)SCREEN_W) ? (float)SCREEN_W : rightmost;
-        o.x      = base + (float)random(MIN_GAP, MAX_GAP + 1);
-        o.large  = (random(4) == 0);   // 25 % chance of large cactus
+        o.x     = base + (float)random(MIN_GAP, MAX_GAP + 1);
+        o.large = (random(4) == 0);   // 25 % large
         o.active = true;
         break;
     }
 }
 
-bool DinoGame::_checkCollision(const Obstacle& o) const {
-    // Dino hitbox (inset from sprite to be forgiving)
-    int dx = DINO_X + 4;
-    int dy = (int)_dinoY + 2;
-    int dw = DINO_W - 8;   // 8 px wide hit area
-    int dh = DINO_H - 4;
+// ─── _spawnPteroIfNeeded ──────────────────────────────────────────────────────
+void DinoGame::_spawnPteroIfNeeded() {
+    if (_score < PTERO_MIN_SCORE) return;
 
-    int cw  = o.large ? LARGE_W : SMALL_W;
-    int cx  = (int)o.x + 1;
-    int cy  = GROUND_Y - CACTUS_H;
-    int ch  = CACTUS_H - 1;
+    for (auto& p : _ptero)
+        if (p.active) return;   // one at a time
+
+    // ~1 % chance per frame  →  appears roughly every 3 seconds
+    if (random(100) != 0) return;
+
+    _ptero[0].x          = (float)(SCREEN_W + 16);
+    _ptero[0].heightIdx  = (uint8_t)(random(2));   // 0 = low, 1 = high
+    _ptero[0].animFrame  = 0;
+    _ptero[0].animTimer  = 0;
+    _ptero[0].active     = true;
+}
+
+// ─── _checkObsCollision ───────────────────────────────────────────────────────
+bool DinoGame::_checkObsCollision(const Obstacle& o) const {
+    // Dino hitbox — same whether standing or ducking on x-axis
+    int dx, dy, dw, dh;
+    if (_isDucking) {
+        dx = DINO_X + 3;
+        dy = GROUND_Y - DUCK_H + 1;
+        dw = DINO_W - 5;
+        dh = DUCK_H - 2;
+    } else {
+        dx = DINO_X + 4;
+        dy = (int)_dinoY + 2;
+        dw = DINO_W - 8;
+        dh = DINO_H - 4;
+    }
+
+    int cw = o.large ? LARGE_W : SMALL_W;
+    int cx = (int)o.x + 1;
+    int cy = GROUND_Y - CACTUS_H;
+    int ch = CACTUS_H - 1;
 
     return aabbOverlap(dx, dy, dw, dh, cx, cy, cw, ch);
 }
 
-void DinoGame::update(InputManager& input, Sound& sound) {
-    // ── Read inputs ──────────────────────────────────────────────────────────
-    bool jumpPressed = input.justPressed(Btn::UP) || input.justPressed(Btn::A);
-    bool menuPressed = input.justPressed(Btn::MENU1) || input.justPressed(Btn::B);
+// ─── _checkPteroCollision ─────────────────────────────────────────────────────
+bool DinoGame::_checkPteroCollision(const Pterodactyl& p) const {
+    // Dino hitbox
+    int dx, dy, dw, dh;
+    if (_isDucking) {
+        dx = DINO_X + 3;
+        dy = GROUND_Y - DUCK_H + 1;
+        dw = DINO_W - 5;
+        dh = DUCK_H - 2;
+    } else {
+        dx = DINO_X + 4;
+        dy = (int)_dinoY + 2;
+        dw = DINO_W - 8;
+        dh = DINO_H - 4;
+    }
 
-    // ── State Machine ────────────────────────────────────────────────────────
+    int py = (p.heightIdx == 0) ? PTERO_LOW_Y : PTERO_HIGH_Y;
+    return aabbOverlap(dx, dy, dw, dh,
+                       (int)p.x + 2, py + 1,
+                       PTERO_W - 4,  PTERO_H - 2);
+}
+
+// ─── _drawCloud ───────────────────────────────────────────────────────────────
+// Three overlapping filled circles — classic side-scroller cloud silhouette.
+void DinoGame::_drawCloud(U8G2& disp, int x, int y) const {
+    disp.drawDisc(x + 4,  y + 5, 3);
+    disp.drawDisc(x + 9,  y + 3, 4);
+    disp.drawDisc(x + 15, y + 5, 3);
+}
+
+// ─── update ──────────────────────────────────────────────────────────────────
+void DinoGame::update(InputManager& input, Sound& sound) {
+
+    bool jumpPressed = input.justPressed(Btn::UP)  || input.justPressed(Btn::A);
+    bool wantDuck    = input.held(Btn::DOWN)        || input.held(Btn::B);
+    bool menuPressed = input.justPressed(Btn::MENU1);
+
     switch (_state) {
 
-        // ── Running ──────────────────────────────────────────────────────────
+        // ── RUNNING ──────────────────────────────────────────────────────────
         case DinoState::RUNNING: {
+
+            // Duck — only valid on ground; suppresses jump input
+            _isDucking = wantDuck && _onGround;
+
             // Jump
-            if (jumpPressed && _onGround) {
-                _dinoVY  = JUMP_VY;
+            if (jumpPressed && _onGround && !_isDucking) {
+                _dinoVY   = JUMP_VY;
                 _onGround = false;
+                SFX::jump(sound);
             }
 
             // Physics
             _dinoVY += GRAVITY;
             _dinoY  += _dinoVY;
-            float groundPos = (float)(GROUND_Y - DINO_H);
+            const float groundPos = (float)(GROUND_Y - DINO_H);
             if (_dinoY >= groundPos) {
                 _dinoY    = groundPos;
                 _dinoVY   = 0.0f;
                 _onGround = true;
             }
 
-            // Ramp up speed
+            // Speed ramp
             if (_speed < MAX_SPEED) _speed += SPEED_INC;
 
-            // Move obstacles + recycle off-screen ones
+            // ── Obstacles ────────────────────────────────────────────────────
             for (auto& o : _obs) {
                 if (!o.active) continue;
                 o.x -= _speed;
                 if (o.x + (o.large ? LARGE_W : SMALL_W) < 0)
                     o.active = false;
             }
+            _spawnObsIfNeeded();
 
-            // Spawn next obstacle when needed
-            _spawnIfNeeded();
+            // ── Pterodactyls ─────────────────────────────────────────────────
+            for (auto& p : _ptero) {
+                if (!p.active) continue;
+                p.x -= _speed;
+                if (p.x + PTERO_W < 0) { p.active = false; continue; }
+                // Animate wings every 8 frames
+                if (++p.animTimer >= 8) {
+                    p.animTimer = 0;
+                    p.animFrame ^= 1;
+                }
+            }
+            _spawnPteroIfNeeded();
 
-            // Score
+            // ── Clouds ───────────────────────────────────────────────────────
+            for (auto& c : _clouds) {
+                c.x -= _speed * 0.25f;   // slow parallax
+                if (c.x < -22.0f) {
+                    c.x = (float)(SCREEN_W + random(10, 40));
+                    c.y = (int8_t)(12 + random(10));
+                }
+            }
+
+            // ── Score ────────────────────────────────────────────────────────
             _score++;
             if (_score > _hiScore) _hiScore = _score;
 
-            // Animate running legs (toggle every 8 frames)
+            // Milestone flash + beep every SCORE_MILESTONE points
+            if (_score % SCORE_MILESTONE == 0 && _score != _lastMilestone) {
+                _lastMilestone = _score;
+                _flashTimer    = FLASH_FRAMES;
+                SFX::point(sound);
+            }
+            if (_flashTimer > 0) _flashTimer--;
+
+            // ── Running animation (toggle every 8 frames) ────────────────────
             if (++_animTimer >= 8) {
                 _animTimer = 0;
                 _animFrame ^= 1;
             }
-
             _frameCnt++;
 
-            // Collision detection
+            // ── Collision detection ───────────────────────────────────────────
             for (auto& o : _obs) {
-                if (o.active && _checkCollision(o)) {
+                if (o.active && _checkObsCollision(o)) {
                     _state = DinoState::DEAD;
+                    SFX::death(sound);
                     break;
+                }
+            }
+            if (_state == DinoState::RUNNING) {
+                for (auto& p : _ptero) {
+                    if (p.active && _checkPteroCollision(p)) {
+                        _state = DinoState::DEAD;
+                        SFX::death(sound);
+                        break;
+                    }
                 }
             }
             break;
         }
 
-        // ── Dead ─────────────────────────────────────────────────────────────
+        // ── DEAD ─────────────────────────────────────────────────────────────
         case DinoState::DEAD:
-            if (jumpPressed) {
-                _initRound();
-            }
+            _isDucking = false;
+            if (jumpPressed) _initRound();
             break;
     }
 
-    // Exit to menu?
-    if (menuPressed) {
-        _running = false;
-    }
+    if (menuPressed) _running = false;
 }
 
+// ─── draw ────────────────────────────────────────────────────────────────────
 void DinoGame::draw(U8G2& disp) {
-    // ── Ground line ──────────────────────────────────────────────────────────
+
+    // ── Clouds (draw first — background layer) ────────────────────────────────
+    for (auto& c : _clouds)
+        _drawCloud(disp, (int)c.x, (int)c.y);
+
+    // ── Ground line ───────────────────────────────────────────────────────────
     disp.drawHLine(0, GROUND_Y, SCREEN_W);
 
-    // ── Scrolling ground texture ─────────────────────────────────────────────
+    // ── Scrolling ground texture ──────────────────────────────────────────────
     int offset = (int)((float)_frameCnt * _speed) % 20;
     for (int x = -offset; x < SCREEN_W; x += 20) {
-        disp.drawHLine(x + 3, GROUND_Y + 2, 6);
+        disp.drawHLine(x + 3,  GROUND_Y + 2, 6);
         disp.drawHLine(x + 13, GROUND_Y + 4, 3);
     }
 
-    // ── Dino sprite ──────────────────────────────────────────────────────────
-    int dy = (int)_dinoY;
+    // ── Dino sprite ───────────────────────────────────────────────────────────
     if (_state == DinoState::DEAD) {
-        disp.drawBitmap(DINO_X, dy, 2, DINO_H, spr_dead);
+        disp.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_dead);
+
+    } else if (_isDucking) {
+        // Duck: snap sprite to ground regardless of physics Y
+        int duckY = GROUND_Y - DUCK_H;
+        const uint8_t* duckSpr = (_animFrame == 0) ? spr_duck1 : spr_duck2;
+        disp.drawBitmap(DINO_X, duckY, 2, DUCK_H, duckSpr);
+
     } else if (!_onGround) {
-        disp.drawBitmap(DINO_X, dy, 2, DINO_H, spr_run1);
+        disp.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_run1);
+
     } else {
-        disp.drawBitmap(DINO_X, dy, 2, DINO_H,
-                        (_animFrame == 0) ? spr_run1 : spr_run2);
+        const uint8_t* runSpr = (_animFrame == 0) ? spr_run1 : spr_run2;
+        disp.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, runSpr);
     }
 
-    // ── Obstacles ────────────────────────────────────────────────────────────
+    // ── Obstacles ─────────────────────────────────────────────────────────────
     for (auto& o : _obs) {
         if (!o.active) continue;
         int ox = (int)o.x;
@@ -295,15 +460,36 @@ void DinoGame::draw(U8G2& disp) {
             disp.drawBitmap(ox, oy, 1, CACTUS_H, spr_cactus_s);
     }
 
-    // ── HUD: score ───────────────────────────────────────────────────────────
+    // ── Pterodactyls ──────────────────────────────────────────────────────────
+    for (auto& p : _ptero) {
+        if (!p.active) continue;
+        int py = (p.heightIdx == 0) ? PTERO_LOW_Y : PTERO_HIGH_Y;
+        const uint8_t* spr = (p.animFrame == 0) ? spr_ptero1 : spr_ptero2;
+        disp.drawBitmap((int)p.x, py, 2, PTERO_H, spr);
+    }
+
+    // ── HUD: score ────────────────────────────────────────────────────────────
     char buf[12];
     disp.setFont(u8g2_font_6x10_tf);
-    snprintf(buf, sizeof(buf), "HI:%05u", (unsigned)_hiScore);
-    disp.drawStr(68, 9, buf);
-    snprintf(buf, sizeof(buf), "%05u", (unsigned)_score);
-    disp.drawStr(86, 20, buf);
 
-    // ── Overlay: game over ───────────────────────────────────────────────────
+    if (_flashTimer > 0) {
+        // Flash: invert the score block
+        disp.setDrawColor(1);
+        disp.drawBox(64, 0, 64, 22);
+        disp.setDrawColor(0);
+        snprintf(buf, sizeof(buf), "HI:%05u", (unsigned)_hiScore);
+        disp.drawStr(68, 9, buf);
+        snprintf(buf, sizeof(buf), "%05u", (unsigned)_score);
+        disp.drawStr(86, 20, buf);
+        disp.setDrawColor(1);
+    } else {
+        snprintf(buf, sizeof(buf), "HI:%05u", (unsigned)_hiScore);
+        disp.drawStr(68, 9, buf);
+        snprintf(buf, sizeof(buf), "%05u", (unsigned)_score);
+        disp.drawStr(86, 20, buf);
+    }
+
+    // ── Overlay: GAME OVER ────────────────────────────────────────────────────
     if (_state == DinoState::DEAD) {
         disp.setDrawColor(0);
         disp.drawBox(18, 20, 92, 28);
@@ -316,14 +502,10 @@ void DinoGame::draw(U8G2& disp) {
     }
 }
 
-bool DinoGame::isRunning() const {
-    return _running;
-}
+// ─── GameBase interface ───────────────────────────────────────────────────────
 
-const char* DinoGame::getName() const {
-    return "Dino Run";
-}
+bool DinoGame::isRunning() const { return _running; }
 
-const uint8_t* DinoGame::getIcon() const {
-    return nullptr; // Use default placeholder
-}
+const char* DinoGame::getName() const { return "Dino Run"; }
+
+const uint8_t* DinoGame::getIcon() const { return nullptr; }
