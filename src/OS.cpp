@@ -53,11 +53,11 @@ void OS::run() {
         if (activeGame == nullptr) {
             // ── MENU ─────────────────────────────────────────────────────────
 
-            if (_input.justPressed(Btn::LEFT)) {
+            if (_input.repeat(Btn::LEFT)) {
                 _selected = (_selected == 0) ? _gameCount - 1 : _selected - 1;
                 SFX::menuNav(_sound);
             }
-            if (_input.justPressed(Btn::RIGHT)) {
+            if (_input.repeat(Btn::RIGHT)) {
                 _selected = (_selected + 1) % _gameCount;
                 SFX::menuNav(_sound);
             }

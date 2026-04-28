@@ -14,41 +14,35 @@ enum class Btn : uint8_t {
 // Call begin() once in setup(), update() once at the top of every frame.
 // All buttons are active-LOW (INPUT_PULLUP).
 //
-// ── Debounce ─────────────────────────────────────────────────────────────────
-// A state change is only committed once the pin has been stable for
-// DEBOUNCE_FRAMES consecutive frames (~33 ms at 30 fps). This filters
-// mechanical bounce without adding noticeable input lag.
+// ── Press vs Release debounce strategy ───────────────────────────────────────
 //
-// justPressed() / justReleased() fire on a single frame edge, so game
-// logic sees at most one event per physical button press.
+// PRESS   → registered on the FIRST LOW reading, zero delay.
+//           A tap as short as one polling cycle (~33 ms at 30 fps) is caught.
+//
+// RELEASE → committed only after the pin has been HIGH for RELEASE_FRAMES
+//           consecutive frames (~66 ms). This absorbs contact bounce on
+//           release without adding any lag to the press itself.
+//
+// This asymmetric approach gives maximum responsiveness for game actions
+// (jump, shoot) while still filtering the noise that matters most.
 //
 // ── Repeat ───────────────────────────────────────────────────────────────────
-// repeat() is intended for UI navigation (menu scroll, cursor movement).
-// It fires on the same frame as justPressed(), then again after
-// REPEAT_DELAY frames of holding, then every REPEAT_RATE frames.
-//
-//   Timeline (DELAY=20, RATE=6):
-//   Frame:  0  1 … 20  26  32  38 …
-//   Fire:   ✓          ✓   ✓   ✓
-//
-// Use justPressed() for physics actions (jump, shoot) — one event per press.
-// Use repeat()      for navigation — scrolls while held.
+// repeat() fires on justPressed, then after REPEAT_DELAY frames of holding,
+// then every REPEAT_RATE frames. Intended for UI navigation, not game physics.
 //
 // ── holdFrames() ─────────────────────────────────────────────────────────────
-// Returns consecutive frames in the pressed state; resets to 0 on release.
-// Useful for long-press actions, e.g.:
+// Counts consecutive pressed frames; resets to 0 on release.
+// Useful for long-press actions:
 //   if (input.holdFrames(Btn::MENU1) == 60) resetHiScore();
 
 class InputManager {
 public:
     static constexpr uint8_t NUM_BTNS = (uint8_t)Btn::COUNT;
 
-    // ── Tuning constants ──────────────────────────────────────────────────────
-    static constexpr uint8_t DEBOUNCE_FRAMES = 1;   // frames pin must be stable
-    static constexpr uint8_t REPEAT_DELAY    = 20;  // frames before first repeat  (~660 ms)
-    static constexpr uint8_t REPEAT_RATE     = 6;   // frames between repeats      (~200 ms)
-
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Tuning ────────────────────────────────────────────────────────────────
+    static constexpr uint8_t RELEASE_FRAMES = 2;   // frames HIGH before release commits (~66 ms)
+    static constexpr uint8_t REPEAT_DELAY   = 20;  // frames before first repeat  (~660 ms)
+    static constexpr uint8_t REPEAT_RATE    = 6;   // frames between repeats      (~200 ms)
 
     void begin() {
         for (uint8_t i = 0; i < NUM_BTNS; i++) {
@@ -57,21 +51,27 @@ public:
         }
     }
 
-    // Sample all pins. Call exactly once at the start of each frame.
+    // Call exactly once per frame before any input queries.
     void update() {
         for (uint8_t i = 0; i < NUM_BTNS; i++) {
             BtnState& s = _s[i];
 
-            bool raw = (digitalRead(_pins[i]) == LOW);  // LOW = pressed (active-LOW)
+            bool raw = (digitalRead(_pins[i]) == LOW);  // LOW = pressed
 
-            // ── Debounce ──────────────────────────────────────────────────────
-            if (raw == s.debounced) {
-                s.noiseFrames = 0;                      // stable — reset noise counter
+            // ── Asymmetric debounce ───────────────────────────────────────────
+            if (raw) {
+                // Pin is LOW → pressed: commit immediately, reset release counter
+                s.debounced   = true;
+                s.releaseFrames = 0;
             } else {
-                if (++s.noiseFrames >= DEBOUNCE_FRAMES) {
-                    s.noiseFrames = 0;
-                    s.debounced   = raw;                // commit the state change
+                // Pin is HIGH → might be released or just bouncing
+                if (s.debounced) {
+                    // Was pressed — wait for RELEASE_FRAMES of stability
+                    if (++s.releaseFrames >= RELEASE_FRAMES) {
+                        s.debounced = false;
+                    }
                 }
+                // If already not debounced, nothing to do
             }
 
             // ── Edge detection ────────────────────────────────────────────────
@@ -86,7 +86,7 @@ public:
 
             // ── Repeat ────────────────────────────────────────────────────────
             if (s.justPressed_) {
-                s.repeat_ = true;                       // always fire on initial press
+                s.repeat_ = true;
             } else if (s.debounced && s.holdFrames >= REPEAT_DELAY) {
                 uint16_t elapsed = s.holdFrames - REPEAT_DELAY;
                 s.repeat_ = (elapsed % REPEAT_RATE == 0);
@@ -115,26 +115,25 @@ public:
     }
 
     /// True on justPressed AND periodically while held.
-    /// Use for UI navigation: menu scroll, cursor movement.
+    /// Use for UI navigation — menu scroll, cursor move.
     bool repeat(Btn b) const {
         return _s[(uint8_t)b].repeat_;
     }
 
-    /// Frames the button has been continuously held (debounced).
-    /// Resets to 0 on release.
+    /// Consecutive frames the button has been held. Resets to 0 on release.
     uint16_t holdFrames(Btn b) const {
         return _s[(uint8_t)b].holdFrames;
     }
 
 private:
     struct BtnState {
-        bool     debounced     = false;
-        bool     prev          = false;
-        bool     justPressed_  = false;
-        bool     justReleased_ = false;
-        bool     repeat_       = false;
-        uint8_t  noiseFrames   = 0;
-        uint16_t holdFrames    = 0;
+        bool     debounced      = false;
+        bool     prev           = false;
+        bool     justPressed_   = false;
+        bool     justReleased_  = false;
+        bool     repeat_        = false;
+        uint8_t  releaseFrames  = 0;
+        uint16_t holdFrames     = 0;
     };
 
     const uint8_t _pins[NUM_BTNS] = {
