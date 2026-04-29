@@ -1,5 +1,6 @@
 #pragma once
 #include "GameBase.h"
+#include "GameUtils.h"   // Vec2, Rect, gclamp, lerpi, gsign, wrapIdx
 
 // ─── DinoGame ─────────────────────────────────────────────────────────────────
 // Chrome-style endless runner.
@@ -54,7 +55,9 @@ private:
         uint8_t      animTimer;   // counts up; resets at PTERO_ANIM_RATE
     };
 
-    struct Cloud { float x; int8_t y; };
+    // Cloud now carries its position as a Vec2 instead of separate float/int8_t
+    // members, so future games can reuse the same idiom without a custom struct.
+    struct Cloud { Vec2 pos; };
 
     // ── Constants ─────────────────────────────────────────────────────────────
     static constexpr int      GROUND_Y           = 52;

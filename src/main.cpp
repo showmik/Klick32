@@ -1,36 +1,43 @@
 /**
  * Game Console Firmware — Main Entry Point
  *
- * This file bootstraps the OS and registers available games.
- * The OS handles display, input, sound, battery, and the game menu.
- * Each game is a separate class inheriting from GameBase.
+ * Registering a new game:
+ *   1. Create lib/YourGame/YourGame.h + YourGame.cpp
+ *   2. #include "YourGame.h" below
+ *   3. Declare a global instance: YourGame yourGame;
+ *   4. Call os.registerGame(&yourGame);
  *
- * Build: PlatformIO, Arduino framework
+ * Removing a game: delete its lib/ folder and the three lines above.
+ * PlatformIO's LDF discovers lib/ automatically — no platformio.ini changes needed.
+ *
+ * Build: PlatformIO, Arduino framework, ESP32-S3
  */
 
 #include <Arduino.h>
 #include "OS.h"
-#include "DinoGame.h"
 
-// ─── Global Instances ───────────────────────────────────────────────────────
-OS       os;        // The firmware OS
-DinoGame dino;       // Chrome-style endless runner
+// ─── Game includes ────────────────────────────────────────────────────────────
+// Each game lives in lib/<GameName>/ as a self-contained PlatformIO library.
+#include "DinoGame.h"
+// #include "SnakeGame.h"
+// #include "PongGame.h"
+// ... add more here
+
+// ─── Global instances ────────────────────────────────────────────────────────
+OS       os;
+DinoGame dino;
+// SnakeGame snake;
+// PongGame  pong;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
-    // Initialize the OS (display, input, sound, battery)
     os.begin();
 
-    // Register all available games
     os.registerGame(&dino);
+    // os.registerGame(&snake);
+    // os.registerGame(&pong);
 
-    // Enter the main firmware loop (never returns)
-    os.run();
+    os.run();   // never returns
 }
 
-// ─── Loop ───────────────────────────────────────────────────────────────────
-// The OS::run() method never returns, so loop() is never called.
-// Include an empty loop to satisfy the Arduino framework.
-void loop() {
-    // Empty — firmware runs entirely within OS::run()
-}
+void loop() {}  // OS::run() never returns; loop() never called
