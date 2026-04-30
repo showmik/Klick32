@@ -49,6 +49,10 @@ public:
     // Called every frame after update: render the current frame.
     virtual void draw(Console& ctx)   = 0;
 
+    // Returns true if the screen needs to be redrawn this frame. 
+    // Defaults to true for standard games, but UI elements can override it.
+    virtual bool needsRedraw() const { return true; }
+
     // Returns false when the game wants to exit back to the menu.
     virtual bool isRunning() const = 0;
 
