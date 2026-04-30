@@ -1,5 +1,49 @@
 #include "DinoGame.h"
 #include "DinoSprites.h"
+// ─── DinoGame ────────────────────────────────────────────────────────────────
+// Chrome-style endless runner.
+//
+// Controls:
+//   UP  / A   → Jump
+//   DOWN      → Duck  (ground only; fast fall in air)
+//   MENU2 / B → Pause
+//   MENU1     → Return to OS menu
+//
+// Persistent save data (NVS key "hi"):
+//   Hi-score is loaded in onEnter() and saved immediately on death and on exit.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ═════════════════════════════════════════════════════════════════════════════
+// DinoTitleScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void DinoTitleScene::onEnter(Console& ctx) { _frame = 0; }
+
+void DinoTitleScene::update(Console& ctx, SceneManager& sm) {
+    _frame++;
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
+        ctx.sfxMenuEnter();
+        sm.replace(_play, ctx);
+    }
+}
+
+void DinoTitleScene::draw(Console& ctx) {
+    ctx.setFont(u8g2_font_7x13B_tf);
+    ctx.drawStr(36, 24, "DINO RUN");
+    ctx.drawHLine(0, 30, Console::W);
+
+    // Draw the Dino standing near the start line
+    ctx.drawBitmap(10, 52 - 16, 2, 16, spr_run1); 
+
+    // Blinking prompt
+    if ((_frame / 15) % 2 == 0) {
+        ctx.setFont(u8g2_font_5x7_tf);
+        int w = ctx.strWidth("Press A to play");
+        ctx.drawStr((Console::W - w) / 2, 54, "Press A to play");
+    }
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // DinoPlayScene
@@ -46,6 +90,7 @@ void DinoPlayScene::_initRound() {
     _animFrame      = 0;
 
     for (auto& o : _obs) o.active = false;
+    for (auto& d : _dust) d.life = 0;
 
     _clouds[0] = {{ 15.0f, 14.0f }};
     _clouds[1] = {{ 62.0f, 19.0f }};
@@ -101,12 +146,8 @@ bool DinoPlayScene::_checkCollision(const Obstacle& o) const {
     Rect obs {(int)o.x, _obsTopY(o.kind),
               _obsWidth(o.kind), _isPtero(o.kind) ? PTERO_H : CACTUS_H};
 
-    if (_isPtero(o.kind)) {
-        obs = obs.inset(2, 1);
-    } else {
-        obs = obs.inset(1, 0);
-        obs.h -= 1;
-    }
+    if (_isPtero(o.kind)) obs = obs.inset(2, 1);
+    else                  { obs = obs.inset(1, 0); obs.h -= 1; }
 
     return dino.overlaps(obs);
 }
@@ -119,9 +160,18 @@ void DinoPlayScene::_drawCloud(Console& ctx, int x, int y) const {
 
 void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    
+    // Pause Overlay Trigger
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+        ctx.sfxMenuNav();
+        sm.push(_pause, ctx);
+        return;
+    }
 
-    bool jumpPressed = ctx.justPressed(Btn::UP)  || ctx.justPressed(Btn::A);
-    bool wantDuck    = ctx.pressed(Btn::DOWN)     || ctx.pressed(Btn::B);
+    bool jumpPressed = ctx.justPressed(Btn::UP) || ctx.justPressed(Btn::A);
+    bool jumpHeld    = ctx.pressed(Btn::UP)     || ctx.pressed(Btn::A);
+    bool wantDuck    = ctx.pressed(Btn::DOWN);
+    bool wasOnGround = _onGround;
 
     _isDucking = wantDuck && _onGround;
 
@@ -142,6 +192,18 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
         ctx.sfxJump();
     }
 
+    // ── Variable Jump & Fast Fall ─────────────────────────────────────────────
+    if (!_onGround) {
+        // Cut jump height if button is released early
+        if (_dinoVY < 0.0f && !jumpHeld) {
+            _dinoVY += GRAVITY * 1.5f; 
+        }
+        // Slam down if player ducks in mid-air
+        if (wantDuck) {
+            _dinoVY += GRAVITY * 2.5f;
+        }
+    }
+
     _dinoVY += GRAVITY;
     _dinoY  += _dinoVY;
     const float groundPos = (float)(GROUND_Y - DINO_H);
@@ -149,6 +211,20 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
         _dinoY    = groundPos;
         _dinoVY   = 0.0f;
         _onGround = true;
+    }
+
+    // ── Visual Polish: Landing Dust ──────────────────────────────────────────
+    if (!wasOnGround && _onGround) {
+        for(int i = 0; i < MAX_DUST; i++) {
+            _dust[i] = {{ (float)(DINO_X + random(2, 14)), (float)GROUND_Y }, (uint8_t)random(8, 16)};
+        }
+    }
+    for(auto& d : _dust) {
+        if (d.life > 0) {
+            d.pos.x -= (_speed * 0.4f);
+            d.pos.y -= 0.1f;
+            d.life--;
+        }
     }
 
     _speed = gclamp(_speed + SPEED_INC, INIT_SPEED, MAX_SPEED);
@@ -174,7 +250,9 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
 
     _data->score++;
     if (_data->score > _data->hiScore) _data->hiScore = _data->score;
-    if (_data->score % SCORE_MILESTONE == 0 && _data->score != _lastMilestone) {
+    
+    // Milestone blink trigger
+    if (_data->score > 0 && _data->score % SCORE_MILESTONE == 0 && _data->score != _lastMilestone) {
         _lastMilestone = _data->score;
         _flashTimer    = FLASH_FRAMES;
         ctx.sfxPoint();
@@ -188,7 +266,7 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
         if (o.active && _checkCollision(o)) {
             ctx.sfxDeath();
             ctx.saveHiScore(_data->hiScore);
-            sm.replace(_dead, ctx); // Hard cut to the game over scene
+            sm.replace(_dead, ctx); 
             return;
         }
     }
@@ -199,85 +277,124 @@ void DinoPlayScene::draw(Console& ctx) {
 }
 
 void DinoPlayScene::drawField(Console& ctx, bool isDead) const {
-    for (const auto& c : _clouds)
-        _drawCloud(ctx, c.pos.ix(), c.pos.iy());
+    // ── OLED Day/Night Inversion ──────────────────────────────────────────────
+    bool isNight = (_data->score / 500) % 2 != 0;
+    
+    if (isNight) {
+        ctx.setDrawColor(1);
+        ctx.drawBox(0, 0, Console::W, Console::H); // Fill entire background
+        ctx.setDrawColor(0); // Set draw color to black for all sprites
+    } else {
+        ctx.setDrawColor(0);
+        ctx.drawBox(0, 0, Console::W, Console::H);
+        ctx.setDrawColor(1);
+    }
 
+    // Clouds
+    for (const auto& c : _clouds) _drawCloud(ctx, c.pos.ix(), c.pos.iy());
+
+    // Ground
     ctx.drawHLine(0, GROUND_Y, SCREEN_W);
-
     int offset = (int)((float)_frameCnt * _speed) % 20;
     for (int x = -offset; x < SCREEN_W; x += 20) {
         ctx.drawHLine(x + 3,  GROUND_Y + 2, 6);
         ctx.drawHLine(x + 13, GROUND_Y + 4, 3);
     }
 
+    // Dust particles
+    for (const auto& d : _dust) {
+        if (d.life > 0) ctx.drawPixel(d.pos.ix(), d.pos.iy());
+    }
+
+    // Dino
     if (isDead) {
         ctx.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_dead);
     } else if (_isDucking) {
-        ctx.drawBitmap(DINO_X, GROUND_Y - DUCK_H, 2, DUCK_H,
-                       (_animFrame == 0) ? spr_duck1 : spr_duck2);
+        ctx.drawBitmap(DINO_X, GROUND_Y - DUCK_H, 2, DUCK_H, (_animFrame == 0) ? spr_duck1 : spr_duck2);
     } else if (!_onGround) {
         ctx.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_run1);
     } else {
-        ctx.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H,
-                       (_animFrame == 0) ? spr_run1 : spr_run2);
+        ctx.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, (_animFrame == 0) ? spr_run1 : spr_run2);
     }
 
+    // Obstacles
     for (const auto& o : _obs) {
         if (!o.active) continue;
         const int ox = (int)o.x;
         const int oy = _obsTopY(o.kind);
         switch (o.kind) {
-            case ObstacleKind::CACTUS_SMALL:
-                ctx.drawBitmap(ox, oy, 1, CACTUS_H, spr_cactus_s);
-                break;
-            case ObstacleKind::CACTUS_LARGE:
-                ctx.drawBitmap(ox, oy, 2, CACTUS_H, spr_cactus_l);
-                break;
+            case ObstacleKind::CACTUS_SMALL: ctx.drawBitmap(ox, oy, 1, CACTUS_H, spr_cactus_s); break;
+            case ObstacleKind::CACTUS_LARGE: ctx.drawBitmap(ox, oy, 2, CACTUS_H, spr_cactus_l); break;
             case ObstacleKind::PTERO_LOW:
             case ObstacleKind::PTERO_HIGH:
-                ctx.drawBitmap(ox, oy, 2, PTERO_H,
-                               (o.animFrame == 0) ? spr_ptero1 : spr_ptero2);
+                ctx.drawBitmap(ox, oy, 2, PTERO_H, (o.animFrame == 0) ? spr_ptero1 : spr_ptero2);
                 break;
         }
     }
 
+    // ── Milestone Blinking Score ──────────────────────────────────────────────
     char buf[12];
     ctx.setFont(u8g2_font_6x10_tf);
 
+    // If flashing, blink the text roughly every 10 frames
+    bool drawScore = true;
     if (_flashTimer > 0) {
-        ctx.setDrawColor(1);
-        ctx.drawBox(64, 0, 64, 22);
-        ctx.setDrawColor(0);
-        snprintf(buf, sizeof(buf), "HI:%05u", (unsigned)_data->hiScore);
-        ctx.drawStr(68, 9, buf);
-        snprintf(buf, sizeof(buf), "%05u", (unsigned)_data->score);
-        ctx.drawStr(86, 20, buf);
-        ctx.setDrawColor(1);
-    } else {
+        drawScore = ((_flashTimer / 10) % 2 == 0);
+    }
+
+    if (drawScore) {
         snprintf(buf, sizeof(buf), "HI:%05u", (unsigned)_data->hiScore);
         ctx.drawStr(68, 9, buf);
         snprintf(buf, sizeof(buf), "%05u", (unsigned)_data->score);
         ctx.drawStr(86, 20, buf);
     }
+
+    // IMPORTANT: Reset the draw color back to default white for the UI overlays (Pause/Death menus)
+    ctx.setDrawColor(1); 
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// DinoPauseScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void DinoPauseScene::onEnter(Console& ctx) {}
+
+void DinoPauseScene::update(Console& ctx, SceneManager& sm) {
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
+        ctx.sfxMenuNav();
+        sm.pop(ctx);
+    }
+}
+
+void DinoPauseScene::draw(Console& ctx) {
+    _play->drawField(ctx, false);
+
+    ctx.setDrawColor(0);
+    ctx.drawBox(34, 22, 60, 22);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(34, 22, 60, 22);
+    ctx.setFont(u8g2_font_7x13B_tf);
+    ctx.drawStr(42, 37, "PAUSED");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // DinoDeadScene
 // ═════════════════════════════════════════════════════════════════════════════
 
-void DinoDeadScene::onEnter(Console& ctx) {}
+void DinoDeadScene::onEnter(Console& ctx) { _frame = 0; }
 
 void DinoDeadScene::update(Console& ctx, SceneManager& sm) {
+    _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
     
-    // Jump straight back into the action!
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         sm.replace(_play, ctx);
     }
 }
 
 void DinoDeadScene::draw(Console& ctx) {
-    // Render the frozen gameplay background, signaling true flag so dead sprite generates
     _play->drawField(ctx, true);
 
     ctx.setDrawColor(0);
@@ -286,8 +403,11 @@ void DinoDeadScene::draw(Console& ctx) {
     ctx.drawFrame(18, 20, 92, 28);
     ctx.setFont(u8g2_font_7x13B_tf);
     ctx.drawStr(22, 36, "GAME  OVER");
-    ctx.setFont(u8g2_font_6x10_tf);
-    ctx.drawStr(26, 46, "A to restart");
+
+    if ((_frame / 15) % 2 == 0) {
+        ctx.setFont(u8g2_font_6x10_tf);
+        ctx.drawStr(26, 46, "A to restart");
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -298,26 +418,26 @@ void DinoGame::onEnter(Console& ctx) {
     _data.hiScore = ctx.loadHiScore();
 
     // Wire up sibling pointers
+    _title.setPlayScene(&_play);
+    
     _play.setData(&_data);
+    _play.setPauseScene(&_pause);
     _play.setDeadScene(&_dead);
+
+    _pause.setPlayScene(&_play);
 
     _dead.setData(&_data);
     _dead.setPlayScene(&_play);
 
-    _sm.replace(&_play, ctx);
+    _sm.replace(&_title, ctx); // Boot into Title Screen instead of Play Screen
 }
 
 void DinoGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
 }
 
-void DinoGame::update(Console& ctx) {
-    _sm.update(ctx);
-}
-
-void DinoGame::draw(Console& ctx) {
-    _sm.draw(ctx);
-}
+void DinoGame::update(Console& ctx) { _sm.update(ctx); }
+void DinoGame::draw(Console& ctx)   { _sm.draw(ctx); }
 
 bool           DinoGame::isRunning() const { return !_sm.empty(); }
 const char*    DinoGame::getName()   const { return "Dino Run"; }

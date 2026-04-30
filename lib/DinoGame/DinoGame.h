@@ -4,8 +4,8 @@
 #include "SceneManager.h"
 #include "Scene.h"
 
-// Forward declarations for scenes
 class DinoPlayScene;
+class DinoPauseScene;
 class DinoDeadScene;
 
 // ─── Shared Game State ───────────────────────────────────────────────────────
@@ -14,26 +14,35 @@ struct DinoSharedData {
     uint32_t hiScore = 0;
 };
 
-// ─── DinoPlayScene ───────────────────────────────────────────────────────────
-class DinoPlayScene : public Scene {
+// ─── DinoTitleScene ──────────────────────────────────────────────────────────
+class DinoTitleScene : public Scene {
 public:
-    void setData(DinoSharedData* d)   { _data = d; }
-    void setDeadScene(DinoDeadScene* d) { _dead = d; }
+    void setPlayScene(DinoPlayScene* p) { _play = p; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
-    // Called by the Dead scene to draw the frozen background
+private:
+    DinoPlayScene* _play  = nullptr;
+    uint8_t        _frame = 0;
+};
+
+// ─── DinoPlayScene ───────────────────────────────────────────────────────────
+class DinoPlayScene : public Scene {
+public:
+    void setData      (DinoSharedData* d) { _data = d; }
+    void setPauseScene(DinoPauseScene* p) { _pause = p; }
+    void setDeadScene (DinoDeadScene* d)  { _dead = d; }
+
+    void onEnter(Console& ctx) override;
+    void update (Console& ctx, SceneManager& sm) override;
+    void draw   (Console& ctx) override;
+
     void drawField(Console& ctx, bool isDead) const;
 
 private:
-    enum class ObstacleKind : uint8_t {
-        CACTUS_SMALL,
-        CACTUS_LARGE,
-        PTERO_LOW,
-        PTERO_HIGH
-    };
+    enum class ObstacleKind : uint8_t { CACTUS_SMALL, CACTUS_LARGE, PTERO_LOW, PTERO_HIGH };
 
     struct Obstacle {
         float        x;
@@ -44,6 +53,7 @@ private:
     };
 
     struct Cloud { Vec2 pos; };
+    struct Dust  { Vec2 pos; uint8_t life; };
 
     // ── Constants ─────────────────────────────────────────────────────────────
     static constexpr int      GROUND_Y           = 52;
@@ -64,6 +74,7 @@ private:
     static constexpr uint8_t  PTERO_W_WEIGHT     = 1;
     static constexpr uint8_t  CACTUS_W_WEIGHT    = 3;
     static constexpr uint8_t  MAX_CLOUDS         = 3;
+    static constexpr uint8_t  MAX_DUST           = 4;
     static constexpr float    GRAVITY            = 0.55f;
     static constexpr float    JUMP_VY            = -8.0f;
     static constexpr float    INIT_SPEED         = 2.5f;
@@ -72,13 +83,14 @@ private:
     static constexpr int      MIN_GAP            = 55;
     static constexpr int      MAX_GAP            = 120;
     static constexpr uint32_t SCORE_MILESTONE    = 100;
-    static constexpr uint8_t  FLASH_FRAMES       = 12;
+    static constexpr uint8_t  FLASH_FRAMES       = 60;
     static constexpr uint8_t  COYOTE_FRAMES      = 6;
     static constexpr uint8_t  JUMP_BUFFER_FRAMES = 8;
 
     // ── Members ───────────────────────────────────────────────────────────────
-    DinoSharedData* _data = nullptr;
-    DinoDeadScene*  _dead = nullptr;
+    DinoSharedData* _data   = nullptr;
+    DinoPauseScene* _pause  = nullptr;
+    DinoDeadScene*  _dead   = nullptr;
 
     bool       _isDucking     = false;
     float      _dinoY         = 0.0f;
@@ -91,6 +103,7 @@ private:
     float      _speed         = INIT_SPEED;
     Obstacle   _obs[MAX_OBS]       = {};
     Cloud      _clouds[MAX_CLOUDS] = {};
+    Dust       _dust[MAX_DUST]     = {};
     uint32_t   _frameCnt  = 0;
     uint8_t    _animTimer = 0;
     uint8_t    _animFrame = 0;
@@ -103,6 +116,19 @@ private:
     static int  _obsTopY (ObstacleKind k);
     static bool _isPtero (ObstacleKind k);
     void _drawCloud(Console& ctx, int x, int y) const;
+};
+
+// ─── DinoPauseScene ──────────────────────────────────────────────────────────
+class DinoPauseScene : public Scene {
+public:
+    void setPlayScene(DinoPlayScene* p) { _play = p; }
+
+    void onEnter(Console& ctx) override;
+    void update (Console& ctx, SceneManager& sm) override;
+    void draw   (Console& ctx) override;
+
+private:
+    DinoPlayScene* _play = nullptr;
 };
 
 // ─── DinoDeadScene ───────────────────────────────────────────────────────────
@@ -118,6 +144,7 @@ public:
 private:
     DinoSharedData* _data = nullptr;
     DinoPlayScene*  _play = nullptr;
+    uint8_t         _frame = 0;
 };
 
 // ─── DinoGame ────────────────────────────────────────────────────────────────
@@ -135,6 +162,8 @@ public:
 private:
     DinoSharedData _data;
     SceneManager   _sm;
+    DinoTitleScene _title;
     DinoPlayScene  _play;
+    DinoPauseScene _pause;
     DinoDeadScene  _dead;
 };
