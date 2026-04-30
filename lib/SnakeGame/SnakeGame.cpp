@@ -1,36 +1,26 @@
 #include "SnakeGame.h"
 #include <Preferences.h>
 
-// ─── Lifecycle ───────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// SnakePlayScene
+// ═════════════════════════════════════════════════════════════════════════════
 
-void SnakeGame::onEnter(Console& ctx) {
-    Preferences prefs;
-    prefs.begin("snake", true);
-    _hiScore = prefs.getUInt("hiscore", 0);
-    String name = prefs.getString("hiname", "AAA");
-    strncpy(_hiName, name.c_str(), 4);
-    _hiName[3] = '\0'; // Ensure null termination
-    prefs.end();
-
+void SnakePlayScene::onEnter(Console& ctx) {
     _initRound();
-    _running = true;
 }
 
-void SnakeGame::onExit(Console& ctx) {}
-
-void SnakeGame::_initRound() {
-    _state       = State::PLAYING;
+void SnakePlayScene::_initRound() {
     _dir         = Dir::RIGHT;
     _queueLen    = 0;
     _len         = 4;
     _score       = 0;
     _speed       = START_SPEED;
     _moveTimer   = 0;
-    _newHiScore  = false;
     _bonusActive = false;
     _poisonActive = false;
     _numWalls    = 0;
     _shakeFrames = 0;
+    _data->newHiScore = false;
 
     for (int i = 0; i < _len; i++) {
         _sx[i] = (GRID_W / 2) - i;
@@ -40,9 +30,7 @@ void SnakeGame::_initRound() {
     _spawnApple();
 }
 
-// ─── Spawners ────────────────────────────────────────────────────────────────
-
-bool SnakeGame::_isOccupied(int x, int y) const {
+bool SnakePlayScene::_isOccupied(int x, int y) const {
     for (int i = 0; i < _len; i++)      if (_sx[i] == x && _sy[i] == y) return true;
     for (int i = 0; i < _numWalls; i++) if (_wx[i] == x && _wy[i] == y) return true;
     if (x == _ax && y == _ay) return true;
@@ -51,13 +39,13 @@ bool SnakeGame::_isOccupied(int x, int y) const {
     return false;
 }
 
-void SnakeGame::_spawnApple() {
+void SnakePlayScene::_spawnApple() {
     int nx, ny;
     do { nx = random(GRID_W); ny = random(GRID_H); } while (_isOccupied(nx, ny));
     _ax = nx; _ay = ny;
 }
 
-void SnakeGame::_spawnBonus() {
+void SnakePlayScene::_spawnBonus() {
     int nx, ny;
     do { nx = random(GRID_W); ny = random(GRID_H); } while (_isOccupied(nx, ny));
     _bx = nx; _by = ny;
@@ -65,7 +53,7 @@ void SnakeGame::_spawnBonus() {
     _bonusTimer  = BONUS_DURATION;
 }
 
-void SnakeGame::_spawnPoison() {
+void SnakePlayScene::_spawnPoison() {
     int nx, ny;
     do { nx = random(GRID_W); ny = random(GRID_H); } while (_isOccupied(nx, ny));
     _px = nx; _py = ny;
@@ -73,7 +61,7 @@ void SnakeGame::_spawnPoison() {
     _poisonTimer  = POISON_DURATION;
 }
 
-void SnakeGame::_spawnWall() {
+void SnakePlayScene::_spawnWall() {
     if (_numWalls >= MAX_WALLS) return;
     int nx, ny;
     do { nx = random(GRID_W); ny = random(GRID_H); } while (_isOccupied(nx, ny));
@@ -82,196 +70,128 @@ void SnakeGame::_spawnWall() {
     _numWalls++;
 }
 
-void SnakeGame::_pushInput(Dir d) {
+void SnakePlayScene::_pushInput(Dir d) {
     if (_queueLen < 2) _inputQueue[_queueLen++] = d;
 }
 
-void SnakeGame::_saveHighScore() {
-    strncpy(_hiName, _currName, 4);
-    _hiName[3] = '\0';
-    
-    Preferences prefs;
-    prefs.begin("snake", false);
-    prefs.putUInt("hiscore", _hiScore);
-    prefs.putString("hiname", _hiName);
-    prefs.end();
-}
+void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
-// ─── Update Logic ────────────────────────────────────────────────────────────
-
-void SnakeGame::update(Console& ctx) {
-    // Global Menu Return Handle
-    if (ctx.justPressed(Btn::MENU1)) { 
-        if (_state == State::NAME_ENTRY) _saveHighScore(); // Auto-save if they bail early
-        _running = false; 
-        return; 
+    if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
+        ctx.sfxMenuNav();
+        sm.push(_pause, ctx);
+        return;
     }
 
     if (_shakeFrames > 0) _shakeFrames--;
 
-    // Pause Toggle
-    if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
-        if (_state == State::PLAYING) _state = State::PAUSED;
-        else if (_state == State::PAUSED) _state = State::PLAYING;
-    }
+    Dir checkDir = (_queueLen > 0) ? _inputQueue[_queueLen - 1] : _dir;
 
-    if (_state == State::PAUSED) return;
+    if (ctx.justPressed(Btn::UP)    && checkDir != Dir::DOWN && checkDir != Dir::UP)    _pushInput(Dir::UP);
+    if (ctx.justPressed(Btn::DOWN)  && checkDir != Dir::UP   && checkDir != Dir::DOWN)  _pushInput(Dir::DOWN);
+    if (ctx.justPressed(Btn::LEFT)  && checkDir != Dir::RIGHT && checkDir != Dir::LEFT) _pushInput(Dir::LEFT);
+    if (ctx.justPressed(Btn::RIGHT) && checkDir != Dir::LEFT  && checkDir != Dir::RIGHT) _pushInput(Dir::RIGHT);
 
-    switch (_state) {
-        case State::PLAYING: {
-            Dir checkDir = (_queueLen > 0) ? _inputQueue[_queueLen - 1] : _dir;
+    if (++_moveTimer >= _speed) {
+        _moveTimer = 0;
 
-            if (ctx.justPressed(Btn::UP)    && checkDir != Dir::DOWN && checkDir != Dir::UP)    _pushInput(Dir::UP);
-            if (ctx.justPressed(Btn::DOWN)  && checkDir != Dir::UP   && checkDir != Dir::DOWN)  _pushInput(Dir::DOWN);
-            if (ctx.justPressed(Btn::LEFT)  && checkDir != Dir::RIGHT && checkDir != Dir::LEFT) _pushInput(Dir::LEFT);
-            if (ctx.justPressed(Btn::RIGHT) && checkDir != Dir::LEFT  && checkDir != Dir::RIGHT) _pushInput(Dir::RIGHT);
+        if (_queueLen > 0) {
+            _dir = _inputQueue[0];
+            _inputQueue[0] = _inputQueue[1];
+            _queueLen--;
+        }
 
-            if (++_moveTimer >= _speed) {
-                _moveTimer = 0;
+        int nx = _sx[0];
+        int ny = _sy[0];
 
-                if (_queueLen > 0) {
-                    _dir = _inputQueue[0];
-                    _inputQueue[0] = _inputQueue[1];
-                    _queueLen--;
-                }
+        if (_dir == Dir::UP)    ny--;
+        if (_dir == Dir::DOWN)  ny++;
+        if (_dir == Dir::LEFT)  nx--;
+        if (_dir == Dir::RIGHT) nx++;
 
-                int nx = _sx[0];
-                int ny = _sy[0];
+        // 1. Screen Wrapping
+        if (nx < 0) nx = GRID_W - 1;
+        else if (nx >= GRID_W) nx = 0;
+        
+        if (ny < 0) ny = GRID_H - 1;
+        else if (ny >= GRID_H) ny = 0;
 
-                if (_dir == Dir::UP)    ny--;
-                if (_dir == Dir::DOWN)  ny++;
-                if (_dir == Dir::LEFT)  nx--;
-                if (_dir == Dir::RIGHT) nx++;
+        // 2. Wall & Self Collision
+        bool crashed = false;
+        for (int i = 0; i < _len - 1; i++)      if (nx == _sx[i] && ny == _sy[i]) crashed = true;
+        for (int i = 0; i < _numWalls; i++)     if (nx == _wx[i] && ny == _wy[i]) crashed = true;
 
-                // 1. Screen Wrapping
-                if (nx < 0) nx = GRID_W - 1;
-                else if (nx >= GRID_W) nx = 0;
-                
-                if (ny < 0) ny = GRID_H - 1;
-                else if (ny >= GRID_H) ny = 0;
-
-                // 2. Wall & Self Collision
-                bool crashed = false;
-                for (int i = 0; i < _len - 1; i++)      if (nx == _sx[i] && ny == _sy[i]) crashed = true;
-                for (int i = 0; i < _numWalls; i++)     if (nx == _wx[i] && ny == _wy[i]) crashed = true;
-
-                if (crashed) {
-                    _shakeFrames = 15;
-                    
-                    if (_score > _hiScore) {
-                        _newHiScore = true;
-                        _hiScore = _score;
-                        _nameIdx = 0;
-                        _currName[0] = 'A'; _currName[1] = 'A'; _currName[2] = 'A'; _currName[3] = '\0';
-                        _state = State::NAME_ENTRY;
-                        ctx.beep(1200, 100); // Triumphant sound!
-                    } else {
-                        _state = State::DEAD;
-                        ctx.sfxDeath();
-                    }
-                    break;
-                }
-
-                // 3. Apple Collection
-                if (nx == _ax && ny == _ay) {
-                    if (_len < MAX_SNAKE) _len++;
-                    _score += 10;
-                    
-                    if (_score % 100 == 0) {
-                        if (_speed > 2) _speed--;
-                        _spawnWall();
-                    }
-                    
-                    ctx.sfxPoint();
-                    _spawnApple();
-                    
-                    if (!_bonusActive && random(100) < 15) _spawnBonus();
-                    if (!_poisonActive && random(100) < 20) _spawnPoison();
-                }
-                
-                // 4. Bonus Collection
-                if (_bonusActive) {
-                    if (nx == _bx && ny == _by) {
-                        _score += BONUS_POINTS;
-                        _bonusActive = false;
-                        ctx.beep(1500, 80); 
-                    } else if (--_bonusTimer == 0) {
-                        _bonusActive = false;
-                    }
-                }
-
-                // 5. Poison Collection
-                if (_poisonActive) {
-                    if (nx == _px && ny == _py) {
-                        _score = (_score >= 20) ? _score - 20 : 0;
-                        if (_len > 4) _len -= 2; 
-                        _shakeFrames = 8;        
-                        _poisonActive = false;
-                        ctx.beep(200, 100);      
-                    } else if (--_poisonTimer == 0) {
-                        _poisonActive = false;
-                    }
-                }
-
-                // Shift Body
-                for (int i = _len - 1; i > 0; i--) {
-                    _sx[i] = _sx[i - 1];
-                    _sy[i] = _sy[i - 1];
-                }
-
-                // Update Head
-                _sx[0] = nx;
-                _sy[0] = ny;
+        if (crashed) {
+            _shakeFrames = 15;
+            _data->lastScore = _score;
+            
+            if (_score > _data->hiScore) {
+                _data->newHiScore = true;
+                _data->hiScore = _score;
+                ctx.beep(1200, 100); // Triumphant sound!
+                sm.push(_nameEntry, ctx);
+            } else {
+                _data->newHiScore = false;
+                ctx.sfxDeath();
+                sm.push(_dead, ctx);
             }
-            break;
+            return;
+        }
+
+        // 3. Apple Collection
+        if (nx == _ax && ny == _ay) {
+            if (_len < MAX_SNAKE) _len++;
+            _score += 10;
+            
+            if (_score % 100 == 0) {
+                if (_speed > 2) _speed--;
+                _spawnWall();
+            }
+            
+            ctx.sfxPoint();
+            _spawnApple();
+            
+            if (!_bonusActive && random(100) < 15) _spawnBonus();
+            if (!_poisonActive && random(100) < 20) _spawnPoison();
         }
         
-        case State::NAME_ENTRY: {
-            // Using repeat() makes it easy to scroll quickly by holding the button
-            if (ctx.justPressed(Btn::UP) || ctx.repeat(Btn::UP)) {
-                _currName[_nameIdx]++;
-                if (_currName[_nameIdx] > 'Z') _currName[_nameIdx] = 'A';
-                ctx.sfxMenuNav();
+        // 4. Bonus Collection
+        if (_bonusActive) {
+            if (nx == _bx && ny == _by) {
+                _score += BONUS_POINTS;
+                _bonusActive = false;
+                ctx.beep(1500, 80); 
+            } else if (--_bonusTimer == 0) {
+                _bonusActive = false;
             }
-            if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) {
-                _currName[_nameIdx]--;
-                if (_currName[_nameIdx] < 'A') _currName[_nameIdx] = 'Z';
-                ctx.sfxMenuNav();
-            }
-            if (ctx.justPressed(Btn::LEFT) || ctx.repeat(Btn::LEFT)) {
-                if (_nameIdx > 0) _nameIdx--;
-                else _nameIdx = 2; // Wrap left
-                ctx.sfxMenuNav();
-            }
-            if (ctx.justPressed(Btn::RIGHT) || ctx.repeat(Btn::RIGHT)) {
-                if (_nameIdx < 2) _nameIdx++;
-                else _nameIdx = 0; // Wrap right
-                ctx.sfxMenuNav();
-            }
-            if (ctx.justPressed(Btn::A)) {
-                _saveHighScore();
-                _state = State::DEAD;
-                ctx.sfxMenuEnter();
-            }
-            break;
         }
 
-        case State::DEAD: {
-            if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) _initRound();
-            break;
+        // 5. Poison Collection
+        if (_poisonActive) {
+            if (nx == _px && ny == _py) {
+                _score = (_score >= 20) ? _score - 20 : 0;
+                if (_len > 4) _len -= 2; 
+                _shakeFrames = 8;        
+                _poisonActive = false;
+                ctx.beep(200, 100);      
+            } else if (--_poisonTimer == 0) {
+                _poisonActive = false;
+            }
         }
+
+        // Shift Body
+        for (int i = _len - 1; i > 0; i--) {
+            _sx[i] = _sx[i - 1];
+            _sy[i] = _sy[i - 1];
+        }
+
+        // Update Head
+        _sx[0] = nx;
+        _sy[0] = ny;
     }
 }
 
-// ─── Drawing ─────────────────────────────────────────────────────────────────
-
-void SnakeGame::draw(Console& ctx) {
-    int ox = 0, oy = 0;
-    if (_shakeFrames > 0) {
-        ox = random(-1, 2);
-        oy = random(-1, 2);
-    }
-
+void SnakePlayScene::drawField(Console& ctx, int ox, int oy) const {
     // Top UI bar
     ctx.drawHLine(0, TOP_OFFSET - 1, Console::W);
     ctx.setFont(u8g2_font_5x7_tf);
@@ -280,8 +200,9 @@ void SnakeGame::draw(Console& ctx) {
     snprintf(buf, sizeof(buf), "SCR:%04u", (unsigned)_score);
     ctx.drawStr(2, 6, buf);
     
-    if (!(_newHiScore && _state == State::PLAYING && (millis() / 200) % 2 == 0)) {
-        snprintf(buf, sizeof(buf), "%s:%04u", _hiName, (unsigned)_hiScore);
+    // Blink hi-score if a new record was just achieved
+    if (!(_data->newHiScore && (millis() / 200) % 2 == 0)) {
+        snprintf(buf, sizeof(buf), "%s:%04u", _data->hiName, (unsigned)_data->hiScore);
         int w = ctx.strWidth(buf);
         ctx.drawStr(Console::W - w - 2, 6, buf);
     }
@@ -324,58 +245,202 @@ void SnakeGame::draw(Console& ctx) {
             ctx.drawFrame(px + 1, py + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
         }
     }
+}
 
-    // Overlays
-    if (_state == State::NAME_ENTRY) {
-        // Background Box
-        ctx.setDrawColor(0);
-        ctx.drawBox(14, 12, 100, 42);
-        ctx.setDrawColor(1);
-        ctx.drawFrame(14, 12, 100, 42);
-        
-        // Title
-        ctx.setFont(u8g2_font_5x7_tf);
-        int w = ctx.strWidth("NEW HIGH SCORE!");
-        ctx.drawStr(64 - w/2, 22, "NEW HIGH SCORE!");
-        
-        // Interactive Letters
-        ctx.setFont(u8g2_font_7x13B_tf);
-        for(int i = 0; i < 3; i++) {
-            char c[2] = {_currName[i], '\0'};
-            int lx = 42 + (i * 14); // Spacing the letters out
-            ctx.drawStr(lx, 38, c);
-            
-            // Blinking underline for the currently selected letter
-            if (i == _nameIdx && (millis() / 250) % 2 == 0) {
-                ctx.drawHLine(lx, 40, 7);
-            }
-        }
-        
-        // Footer prompt
-        ctx.setFont(u8g2_font_5x7_tf);
-        w = ctx.strWidth("Press A to save");
-        ctx.drawStr(64 - w/2, 50, "Press A to save");
-        
-    } else if (_state == State::DEAD) {
-        ctx.setDrawColor(0);
-        ctx.drawBox(20, 20, 88, 28);
-        ctx.setDrawColor(1);
-        ctx.drawFrame(20, 20, 88, 28);
-        ctx.setFont(u8g2_font_7x13B_tf);
-        ctx.drawStr(28, 36, "GAME OVER");
-        ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStr(28, 45, "Press A to restart");
-        
-    } else if (_state == State::PAUSED) {
-        ctx.setDrawColor(0);
-        ctx.drawBox(34, 24, 60, 18);
-        ctx.setDrawColor(1);
-        ctx.drawFrame(34, 24, 60, 18);
-        ctx.setFont(u8g2_font_7x13B_tf);
-        ctx.drawStr(44, 38, "PAUSED");
+void SnakePlayScene::draw(Console& ctx) {
+    int ox = 0, oy = 0;
+    if (_shakeFrames > 0) {
+        ox = random(-1, 2);
+        oy = random(-1, 2);
+    }
+    drawField(ctx, ox, oy);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SnakePauseScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void SnakePauseScene::onEnter(Console& ctx) {}
+
+void SnakePauseScene::update(Console& ctx, SceneManager& sm) {
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
+        ctx.sfxMenuNav();
+        sm.pop(ctx);
     }
 }
 
-// ─── Interface ────────────────────────────────────────────────────────────────
-bool        SnakeGame::isRunning() const { return _running; }
-const char* SnakeGame::getName()   const { return "Snake"; }
+void SnakePauseScene::draw(Console& ctx) {
+    _play->drawField(ctx, 0, 0);
+
+    ctx.setDrawColor(0);
+    ctx.drawBox(34, 24, 60, 18);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(34, 24, 60, 18);
+    ctx.setFont(u8g2_font_7x13B_tf);
+    ctx.drawStr(44, 38, "PAUSED");
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SnakeNameEntryScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void SnakeNameEntryScene::onEnter(Console& ctx) {
+    _nameIdx = 0;
+    _currName[0] = 'A'; _currName[1] = 'A'; _currName[2] = 'A'; _currName[3] = '\0';
+    _frame = 0;
+}
+
+void SnakeNameEntryScene::_saveToNVS(Console& ctx) {
+    strncpy(_data->hiName, _currName, 4);
+    _data->hiName[3] = '\0';
+    
+    Preferences prefs;
+    prefs.begin("snake", false);
+    prefs.putUInt("hiscore", _data->hiScore);
+    prefs.putString("hiname", _data->hiName);
+    prefs.end();
+}
+
+void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm) {
+    _frame++;
+    
+    if (ctx.justPressed(Btn::MENU1)) { 
+        _saveToNVS(ctx); 
+        sm.clear(ctx); 
+        return; 
+    }
+
+    if (ctx.justPressed(Btn::UP) || ctx.repeat(Btn::UP)) {
+        _currName[_nameIdx]++;
+        if (_currName[_nameIdx] > 'Z') _currName[_nameIdx] = 'A';
+        ctx.sfxMenuNav();
+    }
+    if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) {
+        _currName[_nameIdx]--;
+        if (_currName[_nameIdx] < 'A') _currName[_nameIdx] = 'Z';
+        ctx.sfxMenuNav();
+    }
+    if (ctx.justPressed(Btn::LEFT) || ctx.repeat(Btn::LEFT)) {
+        if (_nameIdx > 0) _nameIdx--;
+        else _nameIdx = 2; // Wrap left
+        ctx.sfxMenuNav();
+    }
+    if (ctx.justPressed(Btn::RIGHT) || ctx.repeat(Btn::RIGHT)) {
+        if (_nameIdx < 2) _nameIdx++;
+        else _nameIdx = 0; // Wrap right
+        ctx.sfxMenuNav();
+    }
+    if (ctx.justPressed(Btn::A)) {
+        _saveToNVS(ctx);
+        ctx.sfxMenuEnter();
+        sm.replace(_dead, ctx);
+    }
+}
+
+void SnakeNameEntryScene::draw(Console& ctx) {
+    _play->drawField(ctx, 0, 0);
+
+    ctx.setDrawColor(0);
+    ctx.drawBox(14, 12, 100, 42);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(14, 12, 100, 42);
+    
+    ctx.setFont(u8g2_font_5x7_tf);
+    int w = ctx.strWidth("NEW HIGH SCORE!");
+    ctx.drawStr(64 - w/2, 22, "NEW HIGH SCORE!");
+    
+    ctx.setFont(u8g2_font_7x13B_tf);
+    for(int i = 0; i < 3; i++) {
+        char c[2] = {_currName[i], '\0'};
+        int lx = 42 + (i * 14); 
+        ctx.drawStr(lx, 38, c);
+        
+        if (i == _nameIdx && (millis() / 250) % 2 == 0) {
+            ctx.drawHLine(lx, 40, 7);
+        }
+    }
+    
+    ctx.setFont(u8g2_font_5x7_tf);
+    w = ctx.strWidth("Press A to save");
+    ctx.drawStr(64 - w/2, 50, "Press A to save");
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SnakeDeadScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void SnakeDeadScene::onEnter(Console& ctx) {
+    _frame = 0;
+}
+
+void SnakeDeadScene::update(Console& ctx, SceneManager& sm) {
+    _frame++;
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
+        ctx.sfxMenuEnter();
+        sm.replace(_play, ctx);
+    }
+}
+
+void SnakeDeadScene::draw(Console& ctx) {
+    _play->drawField(ctx, 0, 0);
+
+    ctx.setDrawColor(0);
+    ctx.drawBox(20, 20, 88, 28);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(20, 20, 88, 28);
+    ctx.setFont(u8g2_font_7x13B_tf);
+    ctx.drawStr(28, 36, "GAME OVER");
+    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.drawStr(28, 45, "Press A to restart");
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SnakeGame — Framework Integration
+// ═════════════════════════════════════════════════════════════════════════════
+
+void SnakeGame::onEnter(Console& ctx) {
+    // Keep raw Preferences here to ensure backward compatibility with saved strings
+    Preferences prefs;
+    prefs.begin("snake", true);
+    _data.hiScore = prefs.getUInt("hiscore", 0);
+    String name = prefs.getString("hiname", "AAA");
+    strncpy(_data.hiName, name.c_str(), 4);
+    _data.hiName[3] = '\0';
+    prefs.end();
+
+    // Wire sibling pointers
+    _play.setData(&_data);
+    _play.setPauseScene(&_pause);
+    _play.setNameScene(&_nameEntry);
+    _play.setDeadScene(&_dead);
+
+    _pause.setPlayScene(&_play);
+
+    _nameEntry.setData(&_data);
+    _nameEntry.setDeadScene(&_dead);
+    _nameEntry.setPlayScene(&_play);
+
+    _dead.setData(&_data);
+    _dead.setPlayScene(&_play);
+
+    _sm.replace(&_play, ctx);
+}
+
+void SnakeGame::onExit(Console& ctx) {
+    // Clean up if needed. sm.clear() handles exiting individual scenes.
+}
+
+void SnakeGame::update(Console& ctx) {
+    _sm.update(ctx);
+}
+
+void SnakeGame::draw(Console& ctx) {
+    _sm.draw(ctx);
+}
+
+bool        SnakeGame::isRunning()   const { return !_sm.empty(); }
+bool        SnakeGame::needsRedraw() const { return _sm.needsRedraw(); }
+const char* SnakeGame::getName()     const { return "Snake"; }
