@@ -111,6 +111,8 @@ private:
     uint8_t _shakeFrames = 0;
     uint8_t _leftHitTimer = 0;   
     uint8_t _rightHitTimer = 0;
+    uint8_t _rallyCount = 0;
+    uint8_t _hitStopFrames = 0;
 
     void _resetBall(bool serveLeft);
     void _updateAI();

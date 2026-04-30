@@ -111,7 +111,7 @@ void PongPlayScene::_handlePaddleCollision(Console& ctx) {
         _shakeFrames = 3;
         _leftHitTimer = 4;
         _spawnSparks(s.ballPos.x, s.ballPos.y, 1.0f);
-        ctx.beep(600 + abs((int)s.ballVel.y) * 50, 30); // Dynamic pitch based on spin
+        ctx.beep(600 + (_rallyCount * 40) + abs((int)s.ballVel.y) * 50, 30);
     }
 
     // Right paddle (AI) - Hitbox expanded by BALL_R
@@ -144,12 +144,16 @@ void PongPlayScene::drawField(Console& ctx, int ox, int oy) const {
     
     // HUD line + scores
     ctx.setFont(u8g2_font_5x7_tf);
+    
+    // If the serve timer is high (just scored), jump the numbers up by 3 pixels
+    int scoreOffsetY = (_serveTimer > 70) ? -3 : 0; 
+
     char buf[4];
     snprintf(buf, sizeof(buf), "%u", s.scoreL);
-    ctx.drawStr(55 + ox, 8 + oy, buf);
+    ctx.drawStr(55 + ox, 8 + oy + scoreOffsetY, buf);
+    
     snprintf(buf, sizeof(buf), "%u", s.scoreR);
-    ctx.drawStr(70 + ox, 8 + oy, buf);
-    ctx.drawHLine(0, PongState::FIELD_TOP - 1 + oy, Console::W);
+    ctx.drawStr(70 + ox, 8 + oy + scoreOffsetY, buf);
 
     // Centre dashes
     for (int y = PongState::FIELD_TOP + 2; y < Console::H; y += 7)
@@ -186,6 +190,12 @@ void PongPlayScene::drawField(Console& ctx, int ox, int oy) const {
 }
 
 void PongPlayScene::update(Console& ctx, SceneManager& sm) {
+    // If we are in hit-stop, freeze time! (Don't update ball, paddles, or timers)
+    if (_hitStopFrames > 0) {
+        _hitStopFrames--;
+        return; 
+    }
+
     // MENU1 → hard exit back to OS
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
