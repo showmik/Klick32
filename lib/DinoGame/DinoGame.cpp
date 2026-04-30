@@ -1,11 +1,12 @@
 #include "DinoGame.h"
 #include "DinoSprites.h"
+
 // ─── DinoGame ────────────────────────────────────────────────────────────────
 // Chrome-style endless runner.
 //
 // Controls:
-//   UP  / A   → Jump
-//   DOWN      → Duck  (ground only; fast fall in air)
+//   UP / A    → Jump
+//   DOWN      → Duck (ground only; fast fall in air)
 //   MENU2 / B → Pause
 //   MENU1     → Return to OS menu
 //
@@ -17,11 +18,17 @@
 // DinoTitleScene
 // ═════════════════════════════════════════════════════════════════════════════
 
-void DinoTitleScene::onEnter(Console& ctx) { _frame = 0; }
+void DinoTitleScene::onEnter(Console& ctx) { 
+    _frame = 0; 
+}
 
 void DinoTitleScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    
+    if (ctx.justPressed(Btn::MENU1)) { 
+        sm.clear(ctx); 
+        return; 
+    }
 
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
@@ -43,6 +50,7 @@ void DinoTitleScene::draw(Console& ctx) {
     }
 }
 
+
 // ═════════════════════════════════════════════════════════════════════════════
 // DinoPlayScene
 // ═════════════════════════════════════════════════════════════════════════════
@@ -52,7 +60,7 @@ void DinoTitleScene::draw(Console& ctx) {
         case ObstacleKind::CACTUS_LARGE: return LARGE_W;
         case ObstacleKind::PTERO_LOW:
         case ObstacleKind::PTERO_HIGH:   return PTERO_W;
-        default:                          return SMALL_W;
+        default:                         return SMALL_W;
     }
 }
 
@@ -60,7 +68,7 @@ void DinoTitleScene::draw(Console& ctx) {
     switch (k) {
         case ObstacleKind::PTERO_LOW:  return PTERO_LOW_Y;
         case ObstacleKind::PTERO_HIGH: return PTERO_HIGH_Y;
-        default:                        return GROUND_Y - CACTUS_H;
+        default:                       return GROUND_Y - CACTUS_H;
     }
 }
 
@@ -73,20 +81,20 @@ void DinoPlayScene::onEnter(Console& ctx) {
 }
 
 void DinoPlayScene::_initRound() {
-    _dinoY          = (float)(GROUND_Y - DINO_H);
-    _dinoVY         = 0.0f;
-    _onGround       = true;
-    _isDucking      = false;
-    _coyoteFrames   = 0;
-    _jumpBuffer     = 0;
-    _data->score    = 0;
-    _lastMilestone  = 0;
-    _flashTimer     = 0;
-    _blinkTimer     = 100;
-    _speed          = INIT_SPEED;
-    _frameCnt       = 0;
-    _animTimer      = 0;
-    _animFrame      = 0;
+    _dinoY         = (float)(GROUND_Y - DINO_H);
+    _dinoVY        = 0.0f;
+    _onGround      = true;
+    _isDucking     = false;
+    _coyoteFrames  = 0;
+    _jumpBuffer    = 0;
+    _data->score   = 0;
+    _lastMilestone = 0;
+    _flashTimer    = 0;
+    _blinkTimer    = 100;
+    _speed         = INIT_SPEED;
+    _frameCnt      = 0;
+    _animTimer     = 0;
+    _animFrame     = 0;
 
     for (auto& o : _obs) o.active = false;
     for (auto& d : _dust) d.life = 0;
@@ -108,17 +116,19 @@ void DinoPlayScene::_spawnObsIfNeeded() {
         if (!o.active) continue;
         ++nActive;
         float edge = o.x + (float)_obsWidth(o.kind);
-        if (edge > rightmost) { rightmost = edge; rightKind = o.kind; }
+        if (edge > rightmost) { 
+            rightmost = edge; 
+            rightKind = o.kind; 
+        }
     }
 
-    bool shouldSpawn = (nActive == 0) ||
-                       (nActive < MAX_OBS && rightmost < (float)(SCREEN_W + MAX_GAP));
+    bool shouldSpawn = (nActive == 0) || (nActive < MAX_OBS && rightmost < (float)(SCREEN_W + MAX_GAP));
     if (!shouldSpawn) return;
 
     for (auto& o : _obs) {
         if (o.active) continue;
 
-        float base = (rightmost < (float)SCREEN_W) ? (float)SCREEN_W : rightmost;
+        float base  = (rightmost < (float)SCREEN_W) ? (float)SCREEN_W : rightmost;
         o.x         = base + (float)random(MIN_GAP, MAX_GAP + 1);
         o.active    = true;
         o.animFrame = 0;
@@ -155,7 +165,10 @@ void DinoPlayScene::_drawCloud(Console& ctx, int x, int y) const {
 }
 
 void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { 
+        sm.clear(ctx); 
+        return; 
+    }
     
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
@@ -192,6 +205,7 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
     _dinoVY += GRAVITY;
     _dinoY  += _dinoVY;
     const float groundPos = (float)(GROUND_Y - DINO_H);
+    
     if (_dinoY >= groundPos) {
         _dinoY    = groundPos;
         _dinoVY   = 0.0f;
@@ -205,7 +219,11 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
         }
     }
     for(auto& d : _dust) {
-        if (d.life > 0) { d.pos.x -= (_speed * 0.4f); d.pos.y -= 0.1f; d.life--; }
+        if (d.life > 0) { 
+            d.pos.x -= (_speed * 0.4f); 
+            d.pos.y -= 0.1f; 
+            d.life--; 
+        }
     }
 
     // Sweat particles at high speeds
@@ -218,19 +236,29 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
         }
     }
     for(auto& s : _sweat) {
-        if (s.life > 0) { s.pos.x -= (_speed * 0.6f); s.pos.y += 0.2f; s.life--; }
+        if (s.life > 0) { 
+            s.pos.x -= (_speed * 0.6f); 
+            s.pos.y += 0.2f; 
+            s.life--; 
+        }
     }
 
     _speed = gclamp(_speed + SPEED_INC, INIT_SPEED, MAX_SPEED);
 
-    
-
     for (auto& o : _obs) {
         if (!o.active) continue;
         o.x -= _speed;
-        if (o.x + (float)_obsWidth(o.kind) < 0.0f) { o.active = false; continue; }
+        
+        if (o.x + (float)_obsWidth(o.kind) < 0.0f) { 
+            o.active = false; 
+            continue; 
+        }
+        
         if (_isPtero(o.kind)) {
-            if (++o.animTimer >= PTERO_ANIM_RATE) { o.animTimer = 0; o.animFrame ^= 1; }
+            if (++o.animTimer >= PTERO_ANIM_RATE) { 
+                o.animTimer = 0; 
+                o.animFrame ^= 1; 
+            }
         }
     }
 
@@ -258,7 +286,10 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
     if (_blinkTimer > 0) _blinkTimer--;
     else _blinkTimer = random(80, 200);
 
-    if (++_animTimer >= 8) { _animTimer = 0; _animFrame ^= 1; }
+    if (++_animTimer >= 8) { 
+        _animTimer = 0; 
+        _animFrame ^= 1; 
+    }
     _frameCnt++;
 
     for (auto& o : _obs) {
@@ -305,8 +336,8 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
             }
         }
         // Sun rays (dotted)
-        ctx.drawPixel(cx, cy - 8); ctx.drawPixel(cx, cy + 8);
-        ctx.drawPixel(cx - 8, cy); ctx.drawPixel(cx + 8, cy);
+        ctx.drawPixel(cx, cy - 8);     ctx.drawPixel(cx, cy + 8);
+        ctx.drawPixel(cx - 8, cy);     ctx.drawPixel(cx + 8, cy);
         ctx.drawPixel(cx - 6, cy - 6); ctx.drawPixel(cx + 6, cy + 6);
         ctx.drawPixel(cx - 6, cy + 6); ctx.drawPixel(cx + 6, cy - 6);
     } else {
@@ -333,10 +364,13 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
         ctx.drawPixel(cx + 15, cy - 12);
     }
 
-    for (const auto& c : _clouds) _drawCloud(ctx, c.pos.ix() + ox, c.pos.iy() + oy);
+    for (const auto& c : _clouds) {
+        _drawCloud(ctx, c.pos.ix() + ox, c.pos.iy() + oy);
+    }
 
     ctx.drawHLine(0, GROUND_Y + oy, SCREEN_W);
     int offset = (int)((float)_frameCnt * _speed) % 20;
+    
     for (int x = -offset; x < SCREEN_W; x += 20) {
         ctx.drawHLine(x + 3 + ox,  GROUND_Y + 2 + oy, 6);
         ctx.drawHLine(x + 13 + ox, GROUND_Y + 4 + oy, 3);
@@ -371,11 +405,17 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
 
     for (const auto& o : _obs) {
         if (!o.active) continue;
+        
         const int obx = (int)o.x + ox;
         const int oby = _obsTopY(o.kind) + oy;
+        
         switch (o.kind) {
-            case ObstacleKind::CACTUS_SMALL: ctx.drawBitmap(obx, oby, 1, CACTUS_H, spr_cactus_s); break;
-            case ObstacleKind::CACTUS_LARGE: ctx.drawBitmap(obx, oby, 2, CACTUS_H, spr_cactus_l); break;
+            case ObstacleKind::CACTUS_SMALL: 
+                ctx.drawBitmap(obx, oby, 1, CACTUS_H, spr_cactus_s); 
+                break;
+            case ObstacleKind::CACTUS_LARGE: 
+                ctx.drawBitmap(obx, oby, 2, CACTUS_H, spr_cactus_l); 
+                break;
             case ObstacleKind::PTERO_LOW:
             case ObstacleKind::PTERO_HIGH:
                 ctx.drawBitmap(obx, oby, 2, PTERO_H, (o.animFrame == 0) ? spr_ptero1 : spr_ptero2);
@@ -399,6 +439,7 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
     ctx.setDrawColor(1); // Force reset for standard UI elements
 }
 
+
 // ═════════════════════════════════════════════════════════════════════════════
 // DinoPauseScene
 // ═════════════════════════════════════════════════════════════════════════════
@@ -406,7 +447,10 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
 void DinoPauseScene::onEnter(Console& ctx) {}
 
 void DinoPauseScene::update(Console& ctx, SceneManager& sm) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { 
+        sm.clear(ctx); 
+        return; 
+    }
 
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
@@ -424,6 +468,7 @@ void DinoPauseScene::draw(Console& ctx) {
     ctx.setFont(u8g2_font_7x13B_tf);
     ctx.drawStr(42, 37, "PAUSED");
 }
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // DinoDeadScene
@@ -454,7 +499,10 @@ void DinoDeadScene::update(Console& ctx, SceneManager& sm) {
         d.vy += 0.55f; // Gravity
     }
 
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { 
+        sm.clear(ctx); 
+        return; 
+    }
     
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         sm.replace(_play, ctx);
@@ -489,6 +537,7 @@ void DinoDeadScene::draw(Console& ctx) {
     }
 }
 
+
 // ═════════════════════════════════════════════════════════════════════════════
 // DinoGame - Framework Integration
 // ═════════════════════════════════════════════════════════════════════════════
@@ -514,8 +563,13 @@ void DinoGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
 }
 
-void DinoGame::update(Console& ctx) { _sm.update(ctx); }
-void DinoGame::draw(Console& ctx)   { _sm.draw(ctx); }
+void DinoGame::update(Console& ctx) { 
+    _sm.update(ctx); 
+}
+
+void DinoGame::draw(Console& ctx) { 
+    _sm.draw(ctx); 
+}
 
 bool           DinoGame::isRunning() const { return !_sm.empty(); }
 const char*    DinoGame::getName()   const { return "Dino Run"; }
