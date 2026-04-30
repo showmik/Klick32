@@ -46,7 +46,6 @@ private:
     void _drawPagination(Console& ctx, uint8_t idx);            // Extracted static UI
     void _drawFooter(Console& ctx);
 
-    // ── Layout Design System ──────────────────────────────────────────────────
     struct Layout {
         // Header
         static constexpr int HDR_TEXT_Y     = 7;
@@ -57,23 +56,26 @@ private:
         static constexpr int BATT_BOX_H     = 7;
         static constexpr int BATT_TXT_X     = 74;
 
-        // Game Card (NEW & UPDATED)
-        static constexpr int CARD_FRAME_X   = 24;
-        static constexpr int CARD_FRAME_Y   = 12;
-        static constexpr int CARD_FRAME_W   = 80;
-        static constexpr int CARD_FRAME_H   = 36;
+        // Game Card (FULL SCREEN, NO MARGIN)
+        static constexpr int CARD_FRAME_X   = 0;     // Touch left edge
+        static constexpr int CARD_FRAME_Y   = 10;    // Touch header line
+        static constexpr int CARD_FRAME_W   = 128;   // Full screen width
+        static constexpr int CARD_FRAME_H   = 45;    // Extends down to footer line
+        
         static constexpr int CARD_ICON_X    = 56;
-        static constexpr int CARD_ICON_Y    = 16;
+        static constexpr int CARD_ICON_Y    = 20;
         static constexpr int CARD_ICON_SIZE = 16;
-        static constexpr int CARD_NAME_Y    = 43;
-        static constexpr int CARD_PAGE_Y    = 51;
-        static constexpr int ARROW_L_X      = 8;    // Moved in slightly
-        static constexpr int ARROW_R_X      = 114;  // Moved in slightly
-        static constexpr int ARROW_Y        = 30;
-        static constexpr int CARD_COVER_W   = 76;
-        static constexpr int CARD_COVER_H   = 32;
-        static constexpr int CARD_COVER_BPR = 10; // bytesPerRow (ceil(76/8))
-
+        static constexpr int CARD_NAME_Y    = 42;
+        
+        static constexpr int ARROW_L_X      = 2;     // Floating left arrow
+        static constexpr int ARROW_R_X      = 120;   // Floating right arrow
+        static constexpr int ARROW_Y        = 34;
+        
+        // Cover Art exactly matches the frame
+        static constexpr int CARD_COVER_W   = 128;
+        static constexpr int CARD_COVER_H   = 45;
+        static constexpr int CARD_COVER_BPR = 16;    // ceil(128 / 8)
+        
         // Footer
         static constexpr int FTR_LINE_Y     = 55;
         static constexpr int FTR_TEXT_X     = 4;

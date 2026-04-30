@@ -64,8 +64,8 @@ public:
     // Return nullptr to use the OS placeholder (initial letter in a box).
     virtual const uint8_t* getIcon() const { return nullptr; }
 
-    // Optional 76x20 PROGMEM cover art bitmap for the menu card.
-    // Dimensions: 76px wide (10 bytes per row) x 20px high.
+    // Optional 128x45 PROGMEM cover art bitmap for the menu card.
+    // Dimensions: 128px wide (16 bytes per row) x 45px high.
     // Return nullptr to fall back to the standard icon.
     virtual const uint8_t* getCoverArt() const { return nullptr; }
 };

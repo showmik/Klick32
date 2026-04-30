@@ -191,10 +191,10 @@ void PongPlayScene::drawField(Console& ctx, int ox, int oy) const {
 
 void PongPlayScene::update(Console& ctx, SceneManager& sm) {
     // If we are in hit-stop, freeze time! (Don't update ball, paddles, or timers)
-    if (_hitStopFrames > 0) {
-        _hitStopFrames--;
-        return; 
-    }
+if (_hitStopFrames > 0) {
+    _hitStopFrames--;
+    return; 
+}
 
     // MENU1 → hard exit back to OS
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }

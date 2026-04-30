@@ -157,6 +157,7 @@ public:
     bool           isRunning()   const override;
     bool           needsRedraw() const override;
     const char*    getName()     const override;
+    
 
 private:
     SceneManager       _sm;

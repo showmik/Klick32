@@ -143,17 +143,16 @@ void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
     const uint8_t* cover = g->getCoverArt();
     const uint8_t* icon = g->getIcon();
 
-    // 1. Sleek Card Frame (Slides)
-    ctx.drawRFrame(Layout::CARD_FRAME_X + offsetX, Layout::CARD_FRAME_Y, Layout::CARD_FRAME_W, Layout::CARD_FRAME_H, 4);
+    // 1. Sharp Card Frame (Slides)
+    ctx.drawFrame(Layout::CARD_FRAME_X + offsetX, Layout::CARD_FRAME_Y, Layout::CARD_FRAME_W, Layout::CARD_FRAME_H);
 
     if (cover) {
-        // 2. Full-Card Cover Art (Slides)
-        // Draw the 76x32 cover art with a 2px padding from the top-left of the card frame
-        int coverX = Layout::CARD_FRAME_X + 2 + offsetX;
-        int coverY = Layout::CARD_FRAME_Y + 2; 
+        // 2. Full-Card Cover Art (Slides) - Padding removed!
+        int coverX = Layout::CARD_FRAME_X + offsetX;
+        int coverY = Layout::CARD_FRAME_Y; 
         ctx.drawBitmap(coverX, coverY, Layout::CARD_COVER_BPR, Layout::CARD_COVER_H, cover);
     } else {
-        // 2. Fallback Icon (Slides)
+        // ... Keep existing fallback Icon & Text logic here ...
         int bounce = (millis() / 200) % 4;
         int floatOffset = (bounce == 3) ? 1 : bounce; 
         int iconY = Layout::CARD_ICON_Y - floatOffset;
@@ -167,8 +166,6 @@ void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
             ctx.drawStr(Layout::CARD_ICON_X + 4 + offsetX, iconY + 12, ini);
         }
 
-        // 3. Fallback Title Text (Slides)
-        // Only drawn if there is no cover art
         ctx.setFont(u8g2_font_7x13B_tf);
         const char* name = g->getName();
         uint8_t nameW = ctx.strWidth(name);
@@ -177,20 +174,7 @@ void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
 }
 
 void SystemMenu::_drawPagination(Console& ctx, uint8_t idx) {
-    // 4. Pagination Dots (Static)
-    int dotSpacing = 8;
-    int totalW = (*_gameCount - 1) * dotSpacing;
-    int startX = (Console::W - totalW) / 2;
-    
-    for (uint8_t i = 0; i < *_gameCount; i++) {
-        if (i == idx) {
-            ctx.drawDisc(startX + (i * dotSpacing), Layout::CARD_PAGE_Y - 2, 2); 
-        } else {
-            ctx.drawCircle(startX + (i * dotSpacing), Layout::CARD_PAGE_Y - 2, 2); 
-        }
-    }
-
-    // 5. Breathing Navigation Arrows (Static)
+    // 4. Breathing Navigation Arrows (Static Overlay)
     ctx.setFont(u8g2_font_6x10_tf);
     int arrowPulse = (millis() / 250) % 2; 
     
@@ -205,7 +189,15 @@ void SystemMenu::_drawPagination(Console& ctx, uint8_t idx) {
 void SystemMenu::_drawFooter(Console& ctx) {
     ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
     ctx.setFont(u8g2_font_5x7_tf);
-    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[A]Launch  [<>]Browse");
+    
+    // Left Text
+    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[A]Launch");
+
+    // Right Text (Game Count) - Uses the class member _selected
+    char countBuf[10];
+    snprintf(countBuf, sizeof(countBuf), "%u/%u", _selected + 1, *_gameCount);
+    int w = ctx.strWidth(countBuf);
+    ctx.drawStr(Console::W - w - Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, countBuf);
 }
 
 void SystemMenu::_enterDeepSleep(Console& ctx) {
