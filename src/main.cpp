@@ -14,6 +14,8 @@
  */
 
 #include <Arduino.h>
+#include <U8g2lib.h>
+#include <Preferences.h>
 #include "OS.h"
 
 // ─── Game includes ────────────────────────────────────────────────────────────
