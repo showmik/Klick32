@@ -68,6 +68,16 @@ void OS::run() {
             _battTimer = millis();
         }
 
+        // ── Optimize Battery Polling ──
+        if (millis() - _battTimer >= 15000UL) {
+            uint8_t newPct = _batt.readPercent();
+            if (newPct != _battPct) {      // Check if the percentage actually changed
+                _battPct = newPct;
+                _menuDirty = true;         // Flag the screen for a redraw
+            }
+            _battTimer = millis();
+        }
+
         // ════════════════════════════════════════════════════════════════════
         if (activeGame == nullptr) {
             // ── MENU ─────────────────────────────────────────────────────────
@@ -77,17 +87,20 @@ void OS::run() {
                 _enterDeepSleep();
             }
 
-            if (_input.repeat(Btn::LEFT)) {
+           if (_input.repeat(Btn::LEFT)) {
                 _selected = (_selected == 0) ? _gameCount - 1 : _selected - 1;
+                _menuDirty = true;        
                 SFX::menuNav(_sound);
             }
             if (_input.repeat(Btn::RIGHT)) {
                 _selected = (_selected + 1) % _gameCount;
+                _menuDirty = true;        
                 SFX::menuNav(_sound);
             }
 
             if (_input.justPressed(Btn::MENU2)) {
                 _sound.toggleMute();
+                _menuDirty = true;         
                 if (!_sound.isMuted()) SFX::unmute(_sound);
             }
 
@@ -106,7 +119,10 @@ void OS::run() {
                 continue;
             }
 
-            _drawMenu();
+            if (_menuDirty) {
+                _drawMenu();
+                _menuDirty = false;        // Reset the flag so it doesn't draw next frame
+            }
 
         } else {
             // ── IN GAME ──────────────────────────────────────────────────────
@@ -127,6 +143,14 @@ void OS::run() {
                 _save.end();
 
                 activeGame = nullptr;
+                if (!activeGame->isRunning()) {
+                activeGame->onExit(_console);
+                _save.end();
+
+                activeGame = nullptr;
+                _menuDirty = true;         // <-- ADD THIS
+                SFX::menuBack(_sound);
+            }
                 SFX::menuBack(_sound);
             }
         }

@@ -67,6 +67,7 @@ private:
     // ── Cached state ──────────────────────────────────────────────────────────
     uint8_t  _battPct   = 0;
     uint32_t _battTimer = 0;
+    bool     _menuDirty = true;
 
     // ── Menu rendering helpers ────────────────────────────────────────────────
     void _drawMenu();
