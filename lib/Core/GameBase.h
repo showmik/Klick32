@@ -5,10 +5,13 @@
 // Every game inherits from this class and implements all pure-virtual methods.
 //
 // Lifecycle managed by the OS:
-//   1. OS calls onEnter(ctx) when the game is launched.
-//   2. OS calls update(ctx) + draw(ctx) every frame while the game is active.
-//   3. When isRunning() returns false, the OS calls onExit(ctx) and returns
-//      to the menu.
+//   1. OS opens the NVS namespace for this game.
+//   2. OS calls onEnter(ctx)                   — game loads saved data and resets state.
+//   3. OS calls update(ctx) + draw(ctx) every frame while the game is active.
+//   4. When isRunning() returns false:
+//        OS calls onExit(ctx)                  — game flushes any remaining saves.
+//        OS closes the NVS namespace.
+//        OS returns to the menu.
 //
 // Frame contract:
 //   update(ctx) — advance logic, read input, trigger sounds.
@@ -17,21 +20,28 @@
 //               games never call either themselves.
 //
 // Both methods receive a Console& — the single context object that wraps
-// the display, input, and sound systems.  Games never include U8g2lib.h,
-// InputManager.h, or Sound.h directly.
+// the display, input, sound, and save systems.  Games never include U8g2lib.h,
+// InputManager.h, Sound.h, or SaveManager.h directly.
+//
+// Save / load pattern:
+//   onEnter → ctx.loadHiScore() / ctx.loadUInt("level") / etc.
+//   onExit  → ctx.saveHiScore(_hi) / ctx.saveUInt("level", _lvl) / etc.
+//   On death (mid-session) → ctx.saveHiScore(_hi) guards against power loss.
 //
 // To exit back to the menu: set your internal _running flag to false.
-// The OS detects it via isRunning() and calls onExit() before returning.
+// The OS detects it via isRunning(), calls onExit(ctx), then returns to menu.
 // ─────────────────────────────────────────────────────────────────────────────
 class GameBase {
 public:
     virtual ~GameBase() = default;
 
     // Called once when the game is launched from the menu.
-    virtual void onEnter() = 0;
+    // NVS namespace is already open — safe to call ctx.load*() here.
+    virtual void onEnter(Console& ctx) = 0;
 
     // Called once when the game exits back to the menu.
-    virtual void onExit()  = 0;
+    // NVS namespace is still open — safe to call ctx.save*() here.
+    virtual void onExit(Console& ctx) = 0;
 
     // Called every frame: advance game logic, read input, trigger sounds.
     virtual void update(Console& ctx) = 0;
@@ -43,6 +53,7 @@ public:
     virtual bool isRunning() const = 0;
 
     // Short display name shown in the OS menu (max ~12 chars).
+    // Also used as the NVS namespace key — keep it stable across firmware updates.
     virtual const char* getName() const = 0;
 
     // Optional 16×16 PROGMEM icon bitmap for the menu card.

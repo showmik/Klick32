@@ -1,12 +1,12 @@
 #include "OS.h"
 
 // ─── Constructor ─────────────────────────────────────────────────────────────
-// _console is initialised last, after _disp / _input / _sound, matching the
-// declaration order in OS.h.  The references it holds are valid from this
+// _console is initialised last, after _disp / _input / _sound / _save, matching
+// the declaration order in OS.h.  The references it holds are valid from this
 // point forward even though begin() has not been called yet.
 OS::OS()
     : _disp(U8G2_R0, U8X8_PIN_NONE, PIN_SCL, PIN_SDA)
-    , _console(_disp, _input, _sound)
+    , _console(_disp, _input, _sound, _save)
 {}
 
 // ─── begin ───────────────────────────────────────────────────────────────────
@@ -20,6 +20,7 @@ void OS::begin() {
     randomSeed(esp_random());
     _battPct   = _batt.readPercent();
     _battTimer = millis();
+    // SaveManager uses NVS; no explicit begin() needed until a game launches.
 }
 
 // ─── registerGame ────────────────────────────────────────────────────────────
@@ -72,7 +73,13 @@ void OS::run() {
             if (_input.justPressed(Btn::A) || _input.justPressed(Btn::MENU1)) {
                 SFX::menuEnter(_sound);
                 activeGame = _games[_selected];
-                activeGame->onEnter();
+
+                // ── Open NVS namespace for this game ──────────────────────────
+                // Must happen BEFORE onEnter() so the game can load its saved
+                // data (e.g. hi-score) during initialisation.
+                _save.begin(activeGame->getName());
+
+                activeGame->onEnter(_console);
                 uint32_t elapsed = millis() - t0;
                 if (elapsed < FRAME_MS) delay(FRAME_MS - elapsed);
                 continue;
@@ -90,7 +97,14 @@ void OS::run() {
             _disp.sendBuffer();
 
             if (!activeGame->isRunning()) {
-                activeGame->onExit();
+                activeGame->onExit(_console);
+
+                // ── Close NVS namespace ───────────────────────────────────────
+                // Flushes any pending writes and frees the NVS handle.
+                // Must happen AFTER onExit() so the game can flush its final
+                // saves (e.g. hi-score) before the namespace closes.
+                _save.end();
+
                 activeGame = nullptr;
                 SFX::menuBack(_sound);
             }

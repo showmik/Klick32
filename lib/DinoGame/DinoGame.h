@@ -9,13 +9,16 @@
 //   UP  / A   → Jump
 //   DOWN / B  → Duck  (ground only; suppresses jump)
 //   MENU1     → Return to OS menu
+//
+// Persistent save data (NVS key "hi"):
+//   Hi-score is loaded in onEnter() and saved immediately on death and on exit.
 // ─────────────────────────────────────────────────────────────────────────────
 class DinoGame : public GameBase {
 public:
-    void onEnter() override;
-    void onExit()  override;
-    void update(Console& ctx) override;
-    void draw(Console& ctx)   override;
+    void onEnter(Console& ctx) override;
+    void onExit (Console& ctx) override;
+    void update(Console& ctx)  override;
+    void draw(Console& ctx)    override;
     bool           isRunning() const override;
     const char*    getName()   const override;
     const uint8_t* getIcon()   const override;
@@ -81,7 +84,7 @@ private:
     uint8_t    _coyoteFrames  = 0;
     uint8_t    _jumpBuffer    = 0;
     uint32_t   _score         = 0;
-    uint32_t   _hiScore       = 0;
+    uint32_t   _hiScore       = 0;   // loaded from NVS in onEnter()
     uint32_t   _lastMilestone = 0;
     uint8_t    _flashTimer    = 0;
     float      _speed         = INIT_SPEED;

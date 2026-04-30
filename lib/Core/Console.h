@@ -2,14 +2,15 @@
 #include <U8g2lib.h>
 #include "InputManager.h"
 #include "Sound.h"
+#include "SaveManager.h"
 
 // ─── Console ──────────────────────────────────────────────────────────────────
 // The single context object passed to every game's update() and draw() calls.
 //
 // Purpose: decouple games from hardware entirely.
-//   • Games never #include U8g2lib.h, InputManager.h, or Sound.h directly.
-//   • Swapping the display driver, input backend, or sound system only
-//     requires editing Console — zero game files change.
+//   • Games never #include U8g2lib.h, InputManager.h, Sound.h, or
+//     SaveManager.h directly.
+//   • Swapping any driver only requires editing Console — zero game files change.
 //
 // Construction: only OS may construct a Console (private ctor + friend).
 // Games receive it by reference each frame and never store it.
@@ -88,6 +89,68 @@ public:
     void sfxMenuBack()  { SFX::menuBack(_sound);  }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // SAVE / LOAD   (NVS — persists across power cycles)
+    // ══════════════════════════════════════════════════════════════════════════
+    //
+    // The OS automatically opens and closes the correct NVS namespace when a
+    // game is launched or exits.  Games only call these methods; they never
+    // manage namespaces themselves.
+    //
+    // Key rules:
+    //   • Max 15 characters per key (NVS limit).
+    //   • Use short, stable names: "hi", "level", "coins", "cfg_sfx".
+    //   • Keys are per-game — two games can both use "hi" with no conflict.
+    //
+    // Typical usage in a game:
+    //
+    //   void onEnter() override {
+    //       _hiScore = ctx.loadUInt("hi");      // load once on launch
+    //   }
+    //
+    //   void onExit() override {
+    //       ctx.saveUInt("hi", _hiScore);       // flush on exit
+    //   }
+    //
+    //   // — or use the shortcut —
+    //   void onExit() override {
+    //       ctx.updateHiScore(_hiScore);        // only writes if new record
+    //   }
+
+    // ── Write ─────────────────────────────────────────────────────────────────
+    void saveUInt (const char* key, uint32_t v) { _save.putUInt (key, v); }
+    void saveInt  (const char* key, int32_t  v) { _save.putInt  (key, v); }
+    void saveFloat(const char* key, float    v) { _save.putFloat(key, v); }
+    void saveBool (const char* key, bool     v) { _save.putBool (key, v); }
+    void saveByte (const char* key, uint8_t  v) { _save.putByte (key, v); }
+
+    // ── Read ──────────────────────────────────────────────────────────────────
+    uint32_t loadUInt (const char* key, uint32_t def = 0)    { return _save.getUInt (key, def); }
+    int32_t  loadInt  (const char* key, int32_t  def = 0)    { return _save.getInt  (key, def); }
+    float    loadFloat(const char* key, float    def = 0.0f) { return _save.getFloat(key, def); }
+    bool     loadBool (const char* key, bool     def = false) { return _save.getBool (key, def); }
+    uint8_t  loadByte (const char* key, uint8_t  def = 0)    { return _save.getByte (key, def); }
+
+    // True if the key has been written at least once.
+    bool hasSave(const char* key) { return _save.hasKey(key); }
+
+    // ── Hi-score shortcut ─────────────────────────────────────────────────────
+    // updateHiScore() only writes to NVS when score beats the stored value.
+    // Returns true when a new record is set — useful for triggering a fanfare.
+    //
+    //   if (ctx.updateHiScore(_score)) ctx.sfxPoint();
+    bool     updateHiScore(uint32_t score)  { return _save.updateHiScore(score); }
+    void     saveHiScore  (uint32_t score)  { _save.saveHiScore(score); }
+    uint32_t loadHiScore  ()                { return _save.loadHiScore(); }
+
+    // ── Erase ─────────────────────────────────────────────────────────────────
+    // Wipe ALL saved data for the current game.
+    // Typically surfaced as "Clear Data" in a game's settings screen.
+    void clearSaveData() { _save.clearAll(); }
+
+    // Remove a single key.
+    void removeSave(const char* key) { _save.remove(key); }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // DRAWING
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -133,8 +196,8 @@ public:
     U8G2& gfx() { return _disp; }
 
 private:
-    Console(U8G2& disp, InputManager& input, Sound& sound)
-        : _disp(disp), _input(input), _sound(sound)
+    Console(U8G2& disp, InputManager& input, Sound& sound, SaveManager& save)
+        : _disp(disp), _input(input), _sound(sound), _save(save)
     {}
 
     friend class OS;
@@ -142,4 +205,5 @@ private:
     U8G2&         _disp;
     InputManager& _input;
     Sound&        _sound;
+    SaveManager&  _save;
 };

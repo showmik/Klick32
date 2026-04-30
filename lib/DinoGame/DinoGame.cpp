@@ -26,8 +26,20 @@
 
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
-void DinoGame::onEnter() { _initRound(); _running = true; }
-void DinoGame::onExit()  {}
+void DinoGame::onEnter(Console& ctx) {
+    // Load the persistent hi-score before the first round starts.
+    // SaveManager namespace is already open at this point (OS opens it first).
+    _hiScore = ctx.loadHiScore();
+
+    _initRound();
+    _running = true;
+}
+
+void DinoGame::onExit(Console& ctx) {
+    // Flush the hi-score to NVS.
+    // OS closes the namespace after this returns.
+    ctx.saveHiScore(_hiScore);
+}
 
 void DinoGame::_initRound() {
     _dinoY          = (float)(GROUND_Y - DINO_H);
@@ -198,6 +210,9 @@ void DinoGame::update(Console& ctx) {
                 if (o.active && _checkCollision(o)) {
                     _state = DinoState::DEAD;
                     ctx.sfxDeath();
+                    // ── Persist hi-score immediately on death ─────────────────
+                    // This guards against power loss between death and menu exit.
+                    ctx.saveHiScore(_hiScore);
                     break;
                 }
             }

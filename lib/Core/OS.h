@@ -7,6 +7,7 @@
 #include "InputManager.h"
 #include "Sound.h"
 #include "Battery.h"
+#include "SaveManager.h"
 #include "Console.h"
 #include "GameBase.h"
 
@@ -17,18 +18,19 @@
 // Usage in main.cpp:
 //   OS os;
 //   DinoGame dino;
-//   void setup() { os.begin(); os.registerGame(&dino); }
-//   void loop()  { os.run(); }  // never returns
+//   void setup() { os.begin(); os.registerGame(&dino); os.run(); }
+//   // os.run() never returns; loop() is empty.
 //
 // Declaration order in the private section is load-bearing:
-//   _disp, _input, _sound must be declared BEFORE _console so they are
-//   fully constructed before _console's reference-initialiser runs.
+//   _disp, _input, _sound, _save must be declared BEFORE _console so they
+//   are fully constructed before _console's reference-initialisers run.
 // ─────────────────────────────────────────────────────────────────────────────
 class OS {
 public:
     OS();
 
-    // Initialise display, input, sound, and battery. Call once in setup().
+    // Initialise display, input, sound, battery, and save system.
+    // Call once in setup().
     void begin();
 
     // Add a game to the menu. Call before run().
@@ -39,14 +41,15 @@ public:
 
 private:
     // ── Hardware ──────────────────────────────────────────────────────────────
-    // IMPORTANT: _console holds references to the three members below.
+    // IMPORTANT: _console holds references to the members below.
     // Do not reorder these declarations.
     U8G2_SH1106_128X64_NONAME_F_HW_I2C _disp;
     InputManager _input;
     Sound        _sound;
     Battery      _batt;
+    SaveManager  _save;     // ← declared before _console; opened per game
 
-    // Constructed after _disp / _input / _sound — safe to reference them.
+    // Constructed after _disp / _input / _sound / _save — safe to reference all.
     Console      _console;
 
     // ── Game registry ─────────────────────────────────────────────────────────
