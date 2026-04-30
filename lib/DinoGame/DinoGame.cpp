@@ -1,6 +1,5 @@
 #include "DinoGame.h"
-#include "DinoSprites.h"   // all PROGMEM bitmaps for this game
-#include <U8g2lib.h>
+#include "DinoSprites.h"
 
 // ─── Per-kind static queries ─────────────────────────────────────────────────
 
@@ -56,6 +55,7 @@ void DinoGame::_initRound() {
 }
 
 // ─── _spawnObsIfNeeded ────────────────────────────────────────────────────────
+
 void DinoGame::_spawnObsIfNeeded() {
     float        rightmost = -1.0f;
     uint8_t      nActive   = 0;
@@ -93,6 +93,7 @@ void DinoGame::_spawnObsIfNeeded() {
 }
 
 // ─── _checkCollision ─────────────────────────────────────────────────────────
+
 bool DinoGame::_checkCollision(const Obstacle& o) const {
     Rect dino;
     if (_isDucking) {
@@ -115,26 +116,27 @@ bool DinoGame::_checkCollision(const Obstacle& o) const {
 }
 
 // ─── _drawCloud ───────────────────────────────────────────────────────────────
-void DinoGame::_drawCloud(U8G2& disp, int x, int y) const {
-    disp.drawDisc(x + 4,  y + 5, 3);
-    disp.drawDisc(x + 9,  y + 3, 4);
-    disp.drawDisc(x + 15, y + 5, 3);
+
+void DinoGame::_drawCloud(Console& ctx, int x, int y) const {
+    ctx.drawDisc(x + 4,  y + 5, 3);
+    ctx.drawDisc(x + 9,  y + 3, 4);
+    ctx.drawDisc(x + 15, y + 5, 3);
 }
 
 // ─── update ──────────────────────────────────────────────────────────────────
-void DinoGame::update(InputManager& input, Sound& sound) {
 
-    bool jumpPressed = input.justPressed(Btn::UP)  || input.justPressed(Btn::A);
-    bool wantDuck    = input.held(Btn::DOWN)        || input.held(Btn::B);
-    bool menuPressed = input.justPressed(Btn::MENU1);
+void DinoGame::update(Console& ctx) {
+    bool jumpPressed = ctx.justPressed(Btn::UP)  || ctx.justPressed(Btn::A);
+    bool wantDuck    = ctx.pressed(Btn::DOWN)     || ctx.pressed(Btn::B);
+    bool menuPressed = ctx.justPressed(Btn::MENU1);
 
     switch (_state) {
 
         case DinoState::RUNNING: {
             _isDucking = wantDuck && _onGround;
 
-            if (jumpPressed)       _jumpBuffer = JUMP_BUFFER_FRAMES;
-            if (_jumpBuffer > 0)   _jumpBuffer--;
+            if (jumpPressed)     _jumpBuffer = JUMP_BUFFER_FRAMES;
+            if (_jumpBuffer > 0) _jumpBuffer--;
 
             if (_onGround) {
                 _coyoteFrames = COYOTE_FRAMES;
@@ -147,7 +149,7 @@ void DinoGame::update(InputManager& input, Sound& sound) {
                 _onGround     = false;
                 _coyoteFrames = 0;
                 _jumpBuffer   = 0;
-                SFX::jump(sound);
+                ctx.sfxJump();
             }
 
             _dinoVY += GRAVITY;
@@ -185,7 +187,7 @@ void DinoGame::update(InputManager& input, Sound& sound) {
             if (_score % SCORE_MILESTONE == 0 && _score != _lastMilestone) {
                 _lastMilestone = _score;
                 _flashTimer    = FLASH_FRAMES;
-                SFX::point(sound);
+                ctx.sfxPoint();
             }
             if (_flashTimer > 0) _flashTimer--;
 
@@ -195,7 +197,7 @@ void DinoGame::update(InputManager& input, Sound& sound) {
             for (auto& o : _obs) {
                 if (o.active && _checkCollision(o)) {
                     _state = DinoState::DEAD;
-                    SFX::death(sound);
+                    ctx.sfxDeath();
                     break;
                 }
             }
@@ -212,28 +214,30 @@ void DinoGame::update(InputManager& input, Sound& sound) {
 }
 
 // ─── draw ────────────────────────────────────────────────────────────────────
-void DinoGame::draw(U8G2& disp) {
+
+void DinoGame::draw(Console& ctx) {
 
     for (const auto& c : _clouds)
-        _drawCloud(disp, c.pos.ix(), c.pos.iy());
+        _drawCloud(ctx, c.pos.ix(), c.pos.iy());
 
-    disp.drawHLine(0, GROUND_Y, SCREEN_W);
+    ctx.drawHLine(0, GROUND_Y, SCREEN_W);
 
     int offset = (int)((float)_frameCnt * _speed) % 20;
     for (int x = -offset; x < SCREEN_W; x += 20) {
-        disp.drawHLine(x + 3,  GROUND_Y + 2, 6);
-        disp.drawHLine(x + 13, GROUND_Y + 4, 3);
+        ctx.drawHLine(x + 3,  GROUND_Y + 2, 6);
+        ctx.drawHLine(x + 13, GROUND_Y + 4, 3);
     }
 
     if (_state == DinoState::DEAD) {
-        disp.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_dead);
+        ctx.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_dead);
     } else if (_isDucking) {
-        int duckY = GROUND_Y - DUCK_H;
-        disp.drawBitmap(DINO_X, duckY, 2, DUCK_H, (_animFrame == 0) ? spr_duck1 : spr_duck2);
+        ctx.drawBitmap(DINO_X, GROUND_Y - DUCK_H, 2, DUCK_H,
+                       (_animFrame == 0) ? spr_duck1 : spr_duck2);
     } else if (!_onGround) {
-        disp.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_run1);
+        ctx.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, spr_run1);
     } else {
-        disp.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H, (_animFrame == 0) ? spr_run1 : spr_run2);
+        ctx.drawBitmap(DINO_X, (int)_dinoY, 2, DINO_H,
+                       (_animFrame == 0) ? spr_run1 : spr_run2);
     }
 
     for (const auto& o : _obs) {
@@ -241,47 +245,52 @@ void DinoGame::draw(U8G2& disp) {
         const int ox = (int)o.x;
         const int oy = _obsTopY(o.kind);
         switch (o.kind) {
-            case ObstacleKind::CACTUS_SMALL: disp.drawBitmap(ox, oy, 1, CACTUS_H, spr_cactus_s); break;
-            case ObstacleKind::CACTUS_LARGE: disp.drawBitmap(ox, oy, 2, CACTUS_H, spr_cactus_l); break;
+            case ObstacleKind::CACTUS_SMALL:
+                ctx.drawBitmap(ox, oy, 1, CACTUS_H, spr_cactus_s);
+                break;
+            case ObstacleKind::CACTUS_LARGE:
+                ctx.drawBitmap(ox, oy, 2, CACTUS_H, spr_cactus_l);
+                break;
             case ObstacleKind::PTERO_LOW:
             case ObstacleKind::PTERO_HIGH:
-                disp.drawBitmap(ox, oy, 2, PTERO_H, (o.animFrame == 0) ? spr_ptero1 : spr_ptero2);
+                ctx.drawBitmap(ox, oy, 2, PTERO_H,
+                               (o.animFrame == 0) ? spr_ptero1 : spr_ptero2);
                 break;
         }
     }
 
     char buf[12];
-    disp.setFont(u8g2_font_6x10_tf);
+    ctx.setFont(u8g2_font_6x10_tf);
 
     if (_flashTimer > 0) {
-        disp.setDrawColor(1);
-        disp.drawBox(64, 0, 64, 22);
-        disp.setDrawColor(0);
+        ctx.setDrawColor(1);
+        ctx.drawBox(64, 0, 64, 22);
+        ctx.setDrawColor(0);
         snprintf(buf, sizeof(buf), "HI:%05u", (unsigned)_hiScore);
-        disp.drawStr(68, 9, buf);
+        ctx.drawStr(68, 9, buf);
         snprintf(buf, sizeof(buf), "%05u", (unsigned)_score);
-        disp.drawStr(86, 20, buf);
-        disp.setDrawColor(1);
+        ctx.drawStr(86, 20, buf);
+        ctx.setDrawColor(1);
     } else {
         snprintf(buf, sizeof(buf), "HI:%05u", (unsigned)_hiScore);
-        disp.drawStr(68, 9, buf);
+        ctx.drawStr(68, 9, buf);
         snprintf(buf, sizeof(buf), "%05u", (unsigned)_score);
-        disp.drawStr(86, 20, buf);
+        ctx.drawStr(86, 20, buf);
     }
 
     if (_state == DinoState::DEAD) {
-        disp.setDrawColor(0);
-        disp.drawBox(18, 20, 92, 28);
-        disp.setDrawColor(1);
-        disp.drawFrame(18, 20, 92, 28);
-        disp.setFont(u8g2_font_7x13B_tf);
-        disp.drawStr(22, 36, "GAME  OVER");
-        disp.setFont(u8g2_font_6x10_tf);
-        disp.drawStr(26, 46, "A to restart");
+        ctx.setDrawColor(0);
+        ctx.drawBox(18, 20, 92, 28);
+        ctx.setDrawColor(1);
+        ctx.drawFrame(18, 20, 92, 28);
+        ctx.setFont(u8g2_font_7x13B_tf);
+        ctx.drawStr(22, 36, "GAME  OVER");
+        ctx.setFont(u8g2_font_6x10_tf);
+        ctx.drawStr(26, 46, "A to restart");
     }
 }
 
 // ─── GameBase interface ───────────────────────────────────────────────────────
-bool DinoGame::isRunning()         const { return _running; }
-const char* DinoGame::getName()    const { return "Dino Run"; }
-const uint8_t* DinoGame::getIcon() const { return nullptr; }
+bool           DinoGame::isRunning() const { return _running; }
+const char*    DinoGame::getName()   const { return "Dino Run"; }
+const uint8_t* DinoGame::getIcon()   const { return nullptr; }

@@ -1,0 +1,145 @@
+#pragma once
+#include <U8g2lib.h>
+#include "InputManager.h"
+#include "Sound.h"
+
+// ─── Console ──────────────────────────────────────────────────────────────────
+// The single context object passed to every game's update() and draw() calls.
+//
+// Purpose: decouple games from hardware entirely.
+//   • Games never #include U8g2lib.h, InputManager.h, or Sound.h directly.
+//   • Swapping the display driver, input backend, or sound system only
+//     requires editing Console — zero game files change.
+//
+// Construction: only OS may construct a Console (private ctor + friend).
+// Games receive it by reference each frame and never store it.
+//
+// Escape hatch: call ctx.gfx() to get the raw U8G2& for anything not
+// covered by the drawing API below.  Use sparingly.
+//
+// Screen origin (0, 0) is top-left.
+// For text, y is the glyph BASELINE, not the top of the character.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class OS;
+
+class Console {
+public:
+
+    // ── Screen constants ──────────────────────────────────────────────────────
+    static constexpr int W = 128;
+    static constexpr int H = 64;
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // INPUT
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // True every frame the button is held (debounced).
+    // Use for continuous actions: walking, charging a shot.
+    bool pressed(Btn b) const {
+        return _input.held(b);
+    }
+
+    // True on the ONE frame the button transitions unpressed → pressed.
+    // Use for one-shot actions: jump, shoot, menu confirm.
+    bool justPressed(Btn b) const {
+        return _input.justPressed(b);
+    }
+
+    // True on the ONE frame the button transitions pressed → unpressed.
+    bool justReleased(Btn b) const {
+        return _input.justReleased(b);
+    }
+
+    // True on justPressed AND periodically while held.
+    // Use for menu navigation: scroll, cursor move.
+    bool repeat(Btn b) const {
+        return _input.repeat(b);
+    }
+
+    // Consecutive frames the button has been held. Resets to 0 on release.
+    // Useful for charge mechanics and long-press detection.
+    //   if (ctx.holdFrames(Btn::A) == 60) { /* held for ~2 s */ }
+    uint16_t holdFrames(Btn b) const {
+        return _input.holdFrames(b);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SOUND
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Play a raw tone at freqHz for durationMs milliseconds (non-blocking).
+    void beep(uint16_t freqHz, uint32_t durationMs = 50) {
+        _sound.beep(freqHz, durationMs);
+    }
+
+    void stopSound()      { _sound.stop();        }
+    void setMuted(bool m) { _sound.setMuted(m);   }
+    void toggleMute()     { _sound.toggleMute();  }
+    bool isMuted()  const { return _sound.isMuted(); }
+
+    // ── Predefined sound effects ───────────────────────────────────────────────
+    // Prefer these over raw beep() so effects stay consistent across games.
+    void sfxJump()      { SFX::jump(_sound);      }
+    void sfxDeath()     { SFX::death(_sound);     }
+    void sfxPoint()     { SFX::point(_sound);     }
+    void sfxMenuNav()   { SFX::menuNav(_sound);   }
+    void sfxMenuEnter() { SFX::menuEnter(_sound); }
+    void sfxMenuBack()  { SFX::menuBack(_sound);  }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // DRAWING
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // color: 0 = clear/black, 1 = set/white, 2 = XOR
+    void setDrawColor(uint8_t color)  { _disp.setDrawColor(color); }
+    void setFont(const uint8_t* font) { _disp.setFont(font);       }
+
+    // Pixel width of str in the currently-set font.
+    int strWidth(const char* str) { return (int)_disp.getStrWidth(str); }
+
+    // ── Pixels and lines ──────────────────────────────────────────────────────
+    void drawPixel(int x, int y)                    { _disp.drawPixel(x, y);           }
+    void drawHLine(int x, int y, int w)             { _disp.drawHLine(x, y, w);        }
+    void drawVLine(int x, int y, int h)             { _disp.drawVLine(x, y, h);        }
+    void drawLine (int x1, int y1, int x2, int y2) { _disp.drawLine(x1, y1, x2, y2); }
+
+    // ── Rectangles ────────────────────────────────────────────────────────────
+    void drawFrame (int x, int y, int w, int h)        { _disp.drawFrame(x, y, w, h);     }
+    void drawBox   (int x, int y, int w, int h)        { _disp.drawBox(x, y, w, h);       }
+    void drawRFrame(int x, int y, int w, int h, int r) { _disp.drawRFrame(x, y, w, h, r); }
+    void drawRBox  (int x, int y, int w, int h, int r) { _disp.drawRBox(x, y, w, h, r);   }
+
+    // ── Circles ───────────────────────────────────────────────────────────────
+    void drawCircle(int cx, int cy, int r) { _disp.drawCircle(cx, cy, r); }
+    void drawDisc  (int cx, int cy, int r) { _disp.drawDisc(cx, cy, r);   }
+
+    // ── Text ──────────────────────────────────────────────────────────────────
+    // y is the baseline, not the top of the character.
+    void drawStr(int x, int y, const char* str) { _disp.drawStr(x, y, str); }
+
+    // ── Bitmaps ───────────────────────────────────────────────────────────────
+    // bytesPerRow = ceil(spriteWidthPx / 8).
+    //   8 px wide  → bytesPerRow = 1
+    //   16 px wide → bytesPerRow = 2
+    // bmp must be in PROGMEM.
+    void drawBitmap(int x, int y, int bytesPerRow, int h, const uint8_t* bmp) {
+        _disp.drawBitmap(x, y, bytesPerRow, h, bmp);
+    }
+
+    // ── Escape hatch ──────────────────────────────────────────────────────────
+    // Returns the raw U8G2 reference for features not covered above.
+    // Avoid where possible — coupling your game to U8G2 makes driver swaps harder.
+    U8G2& gfx() { return _disp; }
+
+private:
+    Console(U8G2& disp, InputManager& input, Sound& sound)
+        : _disp(disp), _input(input), _sound(sound)
+    {}
+
+    friend class OS;
+
+    U8G2&         _disp;
+    InputManager& _input;
+    Sound&        _sound;
+};
