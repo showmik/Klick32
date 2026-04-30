@@ -594,3 +594,4 @@ void SnakeGame::draw(Console& ctx) {
 bool        SnakeGame::isRunning()   const { return !_sm.empty(); }
 bool        SnakeGame::needsRedraw() const { return _sm.needsRedraw(); }
 const char* SnakeGame::getName()     const { return "Snake"; }
+const uint8_t* SnakeGame::getCoverArt() const { return spr_snake_cover; }
