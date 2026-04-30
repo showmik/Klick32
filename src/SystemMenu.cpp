@@ -82,61 +82,69 @@ void SystemMenu::draw(Console& ctx) {
 
 void SystemMenu::_drawHeader(Console& ctx) {
     ctx.setFont(u8g2_font_5x7_tf);
-    ctx.drawStr(0, 7, FW_NAME);
+    ctx.drawStr(0, Layout::HDR_TEXT_Y, FW_NAME);
 
+    // Mute Indicator
     if (ctx.isMuted()) {
         uint8_t nameW = ctx.strWidth(FW_NAME);
-        ctx.drawStr(nameW + 3, 7, "[M]");
+        ctx.drawStr(nameW + 3, Layout::HDR_TEXT_Y, "[M]");
     }
 
-    const uint8_t bx = 98, by = 1, bw = 28, bh = 7;
-    ctx.drawFrame(bx, by, bw, bh);
-    ctx.drawBox(bx + bw, by + 2, 2, 3);
+    // Battery Outline
+    ctx.drawFrame(Layout::BATT_BOX_X, Layout::BATT_BOX_Y, Layout::BATT_BOX_W, Layout::BATT_BOX_H);
+    ctx.drawBox(Layout::BATT_BOX_X + Layout::BATT_BOX_W, Layout::BATT_BOX_Y + 2, 2, 3);
 
-    uint8_t fill = (uint8_t)((uint16_t)_battPct * (bw - 2) / 100);
-    if (fill > 0) ctx.drawBox(bx + 1, by + 1, fill, bh - 2);
-    if (_batt->isCharging()) ctx.drawStr(bx + 10, by + 6, "+");
+    // Battery Fill Level
+    uint8_t fill = (uint8_t)((uint16_t)_battPct * (Layout::BATT_BOX_W - 2) / 100);
+    if (fill > 0) ctx.drawBox(Layout::BATT_BOX_X + 1, Layout::BATT_BOX_Y + 1, fill, Layout::BATT_BOX_H - 2);
+    if (_batt->isCharging()) ctx.drawStr(Layout::BATT_BOX_X + 10, Layout::BATT_BOX_Y + 6, "+");
 
+    // Battery Text
     char pctBuf[5];
     snprintf(pctBuf, sizeof(pctBuf), "%3u%%", _battPct);
-    ctx.drawStr(74, 7, pctBuf);
-    ctx.drawHLine(0, 9, Console::W);
+    ctx.drawStr(Layout::BATT_TXT_X, Layout::HDR_TEXT_Y, pctBuf);
+    
+    // Bottom Border
+    ctx.drawHLine(0, Layout::HDR_LINE_Y, Console::W);
 }
 
 void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx) {
     const GameBase* g = _games[idx];
-    const uint8_t iconX = 56, iconY = 12;
     const uint8_t* icon = g->getIcon();
 
+    // Icon rendering
     if (icon) {
-        ctx.drawBitmap(iconX, iconY, 2, 16, icon);
+        ctx.drawBitmap(Layout::CARD_ICON_X, Layout::CARD_ICON_Y, 2, Layout::CARD_ICON_SIZE, icon);
     } else {
-        ctx.drawRFrame(iconX, iconY, 16, 16, 3);
+        ctx.drawRFrame(Layout::CARD_ICON_X, Layout::CARD_ICON_Y, Layout::CARD_ICON_SIZE, Layout::CARD_ICON_SIZE, 3);
         char ini[2] = { g->getName()[0], '\0' };
         ctx.setFont(u8g2_font_7x13B_tf);
-        ctx.drawStr(iconX + 4, iconY + 12, ini);
+        ctx.drawStr(Layout::CARD_ICON_X + 4, Layout::CARD_ICON_Y + 12, ini);
     }
 
+    // Title
     ctx.setFont(u8g2_font_7x13B_tf);
     const char* name = g->getName();
     uint8_t nameW = ctx.strWidth(name);
-    ctx.drawStr((Console::W - nameW) / 2, 41, name);
+    ctx.drawStr((Console::W - nameW) / 2, Layout::CARD_NAME_Y, name);
 
+    // Pagination
     ctx.setFont(u8g2_font_5x7_tf);
     char pg[8];
     snprintf(pg, sizeof(pg), "%u / %u", (unsigned)(idx + 1), (unsigned)*_gameCount);
     uint8_t pgW = ctx.strWidth(pg);
-    ctx.drawStr((Console::W - pgW) / 2, 50, pg);
+    ctx.drawStr((Console::W - pgW) / 2, Layout::CARD_PAGE_Y, pg);
 
+    // Navigation Arrows
     ctx.setFont(u8g2_font_6x10_tf);
-    if (idx > 0)                ctx.drawStr(0,   32, "<");
-    if (idx < *_gameCount - 1)  ctx.drawStr(122, 32, ">");
+    if (idx > 0)                ctx.drawStr(Layout::ARROW_L_X, Layout::ARROW_Y, "<");
+    if (idx < *_gameCount - 1)  ctx.drawStr(Layout::ARROW_R_X, Layout::ARROW_Y, ">");
 }
 
 void SystemMenu::_drawFooter(Console& ctx) {
-    ctx.drawHLine(0, 53, Console::W);
+    ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
     ctx.setFont(u8g2_font_5x7_tf);
-    ctx.drawStr(4, 61, "[A]Launch  [<>]Browse");
+    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[A]Launch  [<>]Browse");
 }
 
 void SystemMenu::_enterDeepSleep(Console& ctx) {

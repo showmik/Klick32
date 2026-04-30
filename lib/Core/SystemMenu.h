@@ -36,8 +36,36 @@ private:
     static constexpr uint32_t IDLE_SLEEP_MS = 60000;
     uint32_t       _lastInputTime = 0;
 
+    // These should only appear ONCE in the class
     void _enterDeepSleep(Console& ctx);
     void _drawHeader(Console& ctx);
     void _drawGameCard(Console& ctx, uint8_t idx);
     void _drawFooter(Console& ctx);
+
+    // ── Layout Design System ──────────────────────────────────────────────────
+    struct Layout {
+        // Header
+        static constexpr int HDR_TEXT_Y     = 7;
+        static constexpr int HDR_LINE_Y     = 9;
+        static constexpr int BATT_BOX_X     = 98;
+        static constexpr int BATT_BOX_Y     = 1;
+        static constexpr int BATT_BOX_W     = 28;
+        static constexpr int BATT_BOX_H     = 7;
+        static constexpr int BATT_TXT_X     = 74;
+
+        // Game Card
+        static constexpr int CARD_ICON_X    = 56;
+        static constexpr int CARD_ICON_Y    = 12;
+        static constexpr int CARD_ICON_SIZE = 16;
+        static constexpr int CARD_NAME_Y    = 41;
+        static constexpr int CARD_PAGE_Y    = 50;
+        static constexpr int ARROW_L_X      = 0;
+        static constexpr int ARROW_R_X      = 122;
+        static constexpr int ARROW_Y        = 32;
+
+        // Footer
+        static constexpr int FTR_LINE_Y     = 53;
+        static constexpr int FTR_TEXT_X     = 4;
+        static constexpr int FTR_TEXT_Y     = 61;
+    };
 };
