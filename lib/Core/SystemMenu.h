@@ -33,13 +33,17 @@ private:
     uint8_t        _battPct   = 0;
     uint32_t       _battTimer = 0;
 
+    int            _slideOffset  = 0;
+    uint8_t        _prevSelected = 0;
+
     static constexpr uint32_t IDLE_SLEEP_MS = 60000;
     uint32_t       _lastInputTime = 0;
 
     // These should only appear ONCE in the class
     void _enterDeepSleep(Console& ctx);
     void _drawHeader(Console& ctx);
-    void _drawGameCard(Console& ctx, uint8_t idx);
+    void _drawGameCard(Console& ctx, uint8_t idx, int offsetX); // Now takes an offset
+    void _drawPagination(Console& ctx, uint8_t idx);            // Extracted static UI
     void _drawFooter(Console& ctx);
 
     // ── Layout Design System ──────────────────────────────────────────────────
@@ -53,19 +57,23 @@ private:
         static constexpr int BATT_BOX_H     = 7;
         static constexpr int BATT_TXT_X     = 74;
 
-        // Game Card
+        // Game Card (NEW & UPDATED)
+        static constexpr int CARD_FRAME_X   = 24;
+        static constexpr int CARD_FRAME_Y   = 12;
+        static constexpr int CARD_FRAME_W   = 80;
+        static constexpr int CARD_FRAME_H   = 36;
         static constexpr int CARD_ICON_X    = 56;
-        static constexpr int CARD_ICON_Y    = 12;
+        static constexpr int CARD_ICON_Y    = 16;
         static constexpr int CARD_ICON_SIZE = 16;
-        static constexpr int CARD_NAME_Y    = 41;
-        static constexpr int CARD_PAGE_Y    = 50;
-        static constexpr int ARROW_L_X      = 0;
-        static constexpr int ARROW_R_X      = 122;
-        static constexpr int ARROW_Y        = 32;
+        static constexpr int CARD_NAME_Y    = 43;
+        static constexpr int CARD_PAGE_Y    = 51;
+        static constexpr int ARROW_L_X      = 8;    // Moved in slightly
+        static constexpr int ARROW_R_X      = 114;  // Moved in slightly
+        static constexpr int ARROW_Y        = 30;
 
         // Footer
-        static constexpr int FTR_LINE_Y     = 53;
+        static constexpr int FTR_LINE_Y     = 55;
         static constexpr int FTR_TEXT_X     = 4;
-        static constexpr int FTR_TEXT_Y     = 61;
+        static constexpr int FTR_TEXT_Y     = 63;
     };
 };

@@ -20,7 +20,9 @@ bool        SystemMenu::needsRedraw() const { return _dirty; }
 GameBase*   SystemMenu::getLaunchedGame() const { return _launchedGame; }
 
 void SystemMenu::update(Console& ctx) {
-    if (*_gameCount == 0) return; // Wait for games to register
+    if (*_gameCount == 0) return;
+
+    _dirty = true; // Force redraw every frame for animations
 
     // ── Check Input & Auto-Sleep ──
     bool anyInput = false;
@@ -36,35 +38,49 @@ void SystemMenu::update(Console& ctx) {
         uint8_t newPct = _batt->readPercent();
         if (newPct != _battPct) {
             _battPct = newPct;
-            _dirty = true;
         }
         _battTimer = millis();
     }
 
-    // ── Navigation ──
+    // ── Navigation (UPDATED FOR SLIDING) ──
     if (ctx.repeat(Btn::LEFT)) {
+        _prevSelected = _selected;
         _selected = (_selected == 0) ? *_gameCount - 1 : _selected - 1;
-        _dirty = true;
+        _slideOffset = -Console::W; // Start off-screen left
         ctx.sfxMenuNav();
     }
     if (ctx.repeat(Btn::RIGHT)) {
+        _prevSelected = _selected;
         _selected = (_selected + 1) % *_gameCount;
-        _dirty = true;
+        _slideOffset = Console::W;  // Start off-screen right
         ctx.sfxMenuNav();
+    }
+
+    // ── Animation Physics ──
+    if (_slideOffset != 0) {
+        int step = abs(_slideOffset) / 3; // Move 33% of remaining distance
+        if (step < 4) step = 4;           // Minimum speed to snap to 0 cleanly
+        
+        if (_slideOffset > 0) {
+            _slideOffset -= step;
+            if (_slideOffset < 0) _slideOffset = 0;
+        } else {
+            _slideOffset += step;
+            if (_slideOffset > 0) _slideOffset = 0;
+        }
     }
 
     // ── Mute Toggle ──
     if (ctx.justPressed(Btn::MENU2)) {
         ctx.toggleMute();
-        _dirty = true;
-        if (!ctx.isMuted()) ctx.beep(800, 40); // unmute sfx
+        if (!ctx.isMuted()) ctx.beep(800, 40); 
     }
 
     // ── Launch Game ──
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
         ctx.sfxMenuEnter();
         _launchedGame = _games[_selected];
-        _running = false; // Exits the menu, triggering the OS to launch the game
+        _running = false; 
     }
 }
 
@@ -74,10 +90,24 @@ void SystemMenu::draw(Console& ctx) {
         ctx.drawStr(4, 30, "No games loaded!");
         return;
     }
+    
     _drawHeader(ctx);
-    _drawGameCard(ctx, _selected);
+
+    // If sliding, draw the outgoing card
+    if (_slideOffset != 0) {
+        // Calculate the opposite offset for the old card
+        int prevOffset = (_slideOffset > 0) ? _slideOffset - Console::W : _slideOffset + Console::W;
+        _drawGameCard(ctx, _prevSelected, prevOffset);
+    }
+    
+    // Draw the incoming/current card
+    _drawGameCard(ctx, _selected, _slideOffset);
+
+    // Draw the static UI elements on top
+    _drawPagination(ctx, _selected);
     _drawFooter(ctx);
-    _dirty = false; // Reset dirty flag after drawing
+    
+    _dirty = false; 
 }
 
 void SystemMenu::_drawHeader(Console& ctx) {
@@ -108,37 +138,58 @@ void SystemMenu::_drawHeader(Console& ctx) {
     ctx.drawHLine(0, Layout::HDR_LINE_Y, Console::W);
 }
 
-void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx) {
+void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
     const GameBase* g = _games[idx];
     const uint8_t* icon = g->getIcon();
 
-    // Icon rendering
+    // 1. Sleek Card Frame (Slides)
+    ctx.drawRFrame(Layout::CARD_FRAME_X + offsetX, Layout::CARD_FRAME_Y, Layout::CARD_FRAME_W, Layout::CARD_FRAME_H, 4);
+
+    // 2. Animated Floating Icon (Slides)
+    int bounce = (millis() / 200) % 4;
+    int floatOffset = (bounce == 3) ? 1 : bounce; 
+    int iconY = Layout::CARD_ICON_Y - floatOffset;
+
     if (icon) {
-        ctx.drawBitmap(Layout::CARD_ICON_X, Layout::CARD_ICON_Y, 2, Layout::CARD_ICON_SIZE, icon);
+        ctx.drawBitmap(Layout::CARD_ICON_X + offsetX, iconY, 2, Layout::CARD_ICON_SIZE, icon);
     } else {
-        ctx.drawRFrame(Layout::CARD_ICON_X, Layout::CARD_ICON_Y, Layout::CARD_ICON_SIZE, Layout::CARD_ICON_SIZE, 3);
+        ctx.drawRFrame(Layout::CARD_ICON_X + offsetX, iconY, Layout::CARD_ICON_SIZE, Layout::CARD_ICON_SIZE, 3);
         char ini[2] = { g->getName()[0], '\0' };
         ctx.setFont(u8g2_font_7x13B_tf);
-        ctx.drawStr(Layout::CARD_ICON_X + 4, Layout::CARD_ICON_Y + 12, ini);
+        ctx.drawStr(Layout::CARD_ICON_X + 4 + offsetX, iconY + 12, ini);
     }
 
-    // Title
+    // 3. Title (Slides)
     ctx.setFont(u8g2_font_7x13B_tf);
     const char* name = g->getName();
     uint8_t nameW = ctx.strWidth(name);
-    ctx.drawStr((Console::W - nameW) / 2, Layout::CARD_NAME_Y, name);
+    ctx.drawStr((Console::W - nameW) / 2 + offsetX, Layout::CARD_NAME_Y, name);
+}
 
-    // Pagination
-    ctx.setFont(u8g2_font_5x7_tf);
-    char pg[8];
-    snprintf(pg, sizeof(pg), "%u / %u", (unsigned)(idx + 1), (unsigned)*_gameCount);
-    uint8_t pgW = ctx.strWidth(pg);
-    ctx.drawStr((Console::W - pgW) / 2, Layout::CARD_PAGE_Y, pg);
+void SystemMenu::_drawPagination(Console& ctx, uint8_t idx) {
+    // 4. Pagination Dots (Static)
+    int dotSpacing = 8;
+    int totalW = (*_gameCount - 1) * dotSpacing;
+    int startX = (Console::W - totalW) / 2;
+    
+    for (uint8_t i = 0; i < *_gameCount; i++) {
+        if (i == idx) {
+            ctx.drawDisc(startX + (i * dotSpacing), Layout::CARD_PAGE_Y - 2, 2); 
+        } else {
+            ctx.drawCircle(startX + (i * dotSpacing), Layout::CARD_PAGE_Y - 2, 2); 
+        }
+    }
 
-    // Navigation Arrows
+    // 5. Breathing Navigation Arrows (Static)
     ctx.setFont(u8g2_font_6x10_tf);
-    if (idx > 0)                ctx.drawStr(Layout::ARROW_L_X, Layout::ARROW_Y, "<");
-    if (idx < *_gameCount - 1)  ctx.drawStr(Layout::ARROW_R_X, Layout::ARROW_Y, ">");
+    int arrowPulse = (millis() / 250) % 2; 
+    
+    if (idx > 0) {
+        ctx.drawStr(Layout::ARROW_L_X - arrowPulse, Layout::ARROW_Y, "<");
+    }
+    if (idx < *_gameCount - 1) {
+        ctx.drawStr(Layout::ARROW_R_X + arrowPulse, Layout::ARROW_Y, ">");
+    }
 }
 
 void SystemMenu::_drawFooter(Console& ctx) {

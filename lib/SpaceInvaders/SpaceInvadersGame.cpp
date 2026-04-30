@@ -88,14 +88,6 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.pressed(Btn::RIGHT)) _playerX += 2.0f;
     _playerX = gclamp(_playerX, 2.0f, (float)(Console::W - 10));
 
-    // Player Shooting
-    if (ctx.justPressed(Btn::A) && !_pbActive) {
-        _pbActive = true;
-        _pbX = _playerX + 3;
-        _pbY = 52.0f;
-        ctx.beep(1200, 20);
-    }
-
     if (_pbActive) {
         _pbY -= 4.0f;
         if (_pbY < 0) _pbActive = false;
@@ -251,9 +243,6 @@ void SIPlayScene::drawField(Console& ctx) const {
     if (_respawnTimer == 0 || (_respawnTimer / 4) % 2 == 0) {
         ctx.drawBitmap((int)_playerX, 56, 1, 5, spr_si_player);
     }
-
-    // Player (now Y=56 to give more headroom, height=5)
-    ctx.drawBitmap((int)_playerX, 56, 1, 5, spr_si_player);
 
     // Player Bullet (skinny 1x3)
     if (_pbActive) ctx.drawBox((int)_pbX, (int)_pbY, 1, 3);
