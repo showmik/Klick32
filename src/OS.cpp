@@ -64,6 +64,12 @@ void OS::run() {
 
         // 4. FRAME TIMING
         uint32_t elapsed = millis() - t0;
-        if (elapsed < FRAME_MS) delay(FRAME_MS - elapsed);
+        if (elapsed < FRAME_MS) {
+            // Yield the core to FreeRTOS background tasks instead of spin-blocking
+            vTaskDelay(pdMS_TO_TICKS(FRAME_MS - elapsed));
+        } else {
+            // If we dropped a frame, just yield for 1 tick to feed the watchdog
+            vTaskDelay(1); 
+        }
     }
 }
