@@ -223,6 +223,8 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
 
     _speed = gclamp(_speed + SPEED_INC, INIT_SPEED, MAX_SPEED);
 
+    
+
     for (auto& o : _obs) {
         if (!o.active) continue;
         o.x -= _speed;
