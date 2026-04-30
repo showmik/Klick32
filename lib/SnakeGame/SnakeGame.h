@@ -87,6 +87,20 @@ private:
     static constexpr uint32_t BONUS_POINTS   = 50;
     static constexpr uint16_t BONUS_DURATION = 40;
     static constexpr uint16_t POISON_DURATION = 50;
+    static constexpr uint8_t MAX_PARTICLES = 20; 
+
+    enum class SparkType { NORMAL, POISON, BONUS };
+
+    struct Particle { 
+        float x, y, vx, vy; 
+        uint8_t life; 
+        bool isBonus; // Track if this is a high-value spark
+    };
+
+    Particle _particles[MAX_PARTICLES] = {}; 
+    
+    // Update the helper signature
+    void _spawnSparks(int gridX, int gridY, SparkType type);
 
     // ── Round state (reset on every new game) ─────────────────────────────────
     enum class Dir : uint8_t { UP, DOWN, LEFT, RIGHT };

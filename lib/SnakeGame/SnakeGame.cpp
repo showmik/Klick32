@@ -1,4 +1,5 @@
 #include "SnakeGame.h"
+#include "SnakeSprites.h"
 #include <Preferences.h>
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -31,11 +32,39 @@ void SnakePlayScene::_initRound() {
 }
 
 bool SnakePlayScene::_isOccupied(int x, int y) const {
-    for (int i = 0; i < _len; i++)      if (_sx[i] == x && _sy[i] == y) return true;
-    for (int i = 0; i < _numWalls; i++) if (_wx[i] == x && _wy[i] == y) return true;
+    // 1. Check existing items
+    for (int i = 0; i < _len; i++) {
+        if (_sx[i] == x && _sy[i] == y) return true;
+    }
+    
+    // Expand the "occupied" footprint of the walls to match their new 8x8 hitbox
+    for (int i = 0; i < _numWalls; i++) {
+        if (abs(x - _wx[i]) <= 1 && abs(y - _wy[i]) <= 1) return true;
+    }
+    
     if (x == _ax && y == _ay) return true;
-    if (_bonusActive && x == _bx && y == _by) return true;
+    if (_bonusActive && abs(x - _bx) <= 1 && abs(y - _by) <= 1) return true;
     if (_poisonActive && x == _px && y == _py) return true;
+    
+    // 2. Protect the space exactly 1 step in front of the head
+    int nextX = _sx[0];
+    int nextY = _sy[0];
+    
+    // Check where the snake is currently heading
+    Dir checkDir = (_queueLen > 0) ? _inputQueue[0] : _dir;
+    if (checkDir == Dir::UP)    nextY--;
+    if (checkDir == Dir::DOWN)  nextY++;
+    if (checkDir == Dir::LEFT)  nextX--;
+    if (checkDir == Dir::RIGHT) nextX++;
+    
+    // Apply screen wrap to the projected step
+    if (nextX < 0) nextX = GRID_W - 1;
+    else if (nextX >= GRID_W) nextX = 0;
+    if (nextY < 0) nextY = GRID_H - 1;
+    else if (nextY >= GRID_H) nextY = 0;
+    
+    if (x == nextX && y == nextY) return true;
+
     return false;
 }
 
@@ -47,7 +76,11 @@ void SnakePlayScene::_spawnApple() {
 
 void SnakePlayScene::_spawnBonus() {
     int nx, ny;
-    do { nx = random(GRID_W); ny = random(GRID_H); } while (_isOccupied(nx, ny));
+    do { 
+        // Restrict bounds so the 8x8 sprite doesn't clip the screen edges or UI
+        nx = random(1, GRID_W - 1); 
+        ny = random(1, GRID_H - 1); 
+    } while (_isOccupied(nx, ny));
     _bx = nx; _by = ny;
     _bonusActive = true;
     _bonusTimer  = BONUS_DURATION;
@@ -64,7 +97,11 @@ void SnakePlayScene::_spawnPoison() {
 void SnakePlayScene::_spawnWall() {
     if (_numWalls >= MAX_WALLS) return;
     int nx, ny;
-    do { nx = random(GRID_W); ny = random(GRID_H); } while (_isOccupied(nx, ny));
+    do { 
+        // Restrict bounds so the 8x8 wall sprite doesn't clip the screen edges or UI
+        nx = random(1, GRID_W - 1); 
+        ny = random(1, GRID_H - 1); 
+    } while (_isOccupied(nx, ny));
     _wx[_numWalls] = nx;
     _wy[_numWalls] = ny;
     _numWalls++;
@@ -118,8 +155,31 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
 
         // 2. Wall & Self Collision
         bool crashed = false;
-        for (int i = 0; i < _len - 1; i++)      if (nx == _sx[i] && ny == _sy[i]) crashed = true;
-        for (int i = 0; i < _numWalls; i++)     if (nx == _wx[i] && ny == _wy[i]) crashed = true;
+        
+        // Self-collision remains grid-based (the body moves strictly on the grid)
+        for (int i = 0; i < _len - 1; i++) {
+            if (nx == _sx[i] && ny == _sy[i]) crashed = true;
+        }
+
+        // Wall collision upgraded to pixel-perfect AABB for 1-pixel forgiveness
+        Rect snakeHead = {nx * BLOCK_SIZE, ny * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
+        
+        for (int i = 0; i < _numWalls; i++) {
+            // The wall sprite is 8x8, offset by -2 from the grid block's top-left
+            Rect wall = {
+                (_wx[i] * BLOCK_SIZE) - 2, 
+                (_wy[i] * BLOCK_SIZE) - 2, 
+                8, 
+                8
+            };
+            
+            // Shave exactly 1 pixel off every side of the wall's hitbox
+            wall = wall.inset(1, 1); 
+            
+            if (snakeHead.overlaps(wall)) {
+                crashed = true;
+            }
+        }
 
         if (crashed) {
             _shakeFrames = 15;
@@ -157,7 +217,10 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
         
         // 4. Bonus Collection
         if (_bonusActive) {
-            if (nx == _bx && ny == _by) {
+            if (abs(nx - _bx) <= 1 && abs(ny - _by) <= 1) {
+                // Trigger the massive bonus explosion exactly where the apple was
+                _spawnSparks(_bx, _by, SparkType::BONUS); 
+                
                 _score += BONUS_POINTS;
                 _bonusActive = false;
                 ctx.beep(1500, 80); 
@@ -188,6 +251,54 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
         // Update Head
         _sx[0] = nx;
         _sy[0] = ny;
+    } // <--- THIS IS THE END OF THE _moveTimer BLOCK
+
+    // ── Update Particle Physics (Runs every frame) ──
+    for (auto& p : _particles) {
+        if (p.life > 0) {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.2f; // Subtle gravity pulls them down
+            p.life--;
+        }
+    }
+}
+
+void SnakePlayScene::_spawnSparks(int gridX, int gridY, SparkType type) {
+    int px = (gridX * BLOCK_SIZE) + (BLOCK_SIZE / 2);
+    int py = (gridY * BLOCK_SIZE) + TOP_OFFSET + (BLOCK_SIZE / 2);
+
+    // Bonus uses the entire pool; normal/poison only use a few sparks
+    uint8_t targetSpawn = (type == SparkType::BONUS) ? MAX_PARTICLES : 6;
+    uint8_t spawned = 0;
+
+    for (auto& p : _particles) {
+        if (spawned >= targetSpawn) break;
+        
+        // Overwrite dead particles (or force overwrite everything for a bonus boom)
+        if (p.life == 0 || type == SparkType::BONUS) {
+            p.x = (float)px;
+            p.y = (float)py;
+            p.isBonus = (type == SparkType::BONUS);
+            
+            if (type == SparkType::BONUS) {
+                // Massive 360-degree high-speed burst
+                p.vx = (random(-30, 31) / 10.0f);
+                p.vy = (random(-30, 31) / 10.0f);
+                p.life = random(15, 35);
+            } else if (type == SparkType::NORMAL) {
+                // Small upward pop
+                p.vx = (random(-10, 11) / 5.0f);
+                p.vy = (random(-15, -5) / 5.0f);
+                p.life = random(10, 20);
+            } else { // POISON
+                // Small downward sludge
+                p.vx = (random(-10, 11) / 5.0f);
+                p.vy = (random(5, 15) / 5.0f);
+                p.life = random(10, 20);
+            }
+            spawned++;
+        }
     }
 }
 
@@ -207,31 +318,49 @@ void SnakePlayScene::drawField(Console& ctx, int ox, int oy) const {
         ctx.drawStr(Console::W - w - 2, 6, buf);
     }
 
-    // Draw Walls
+    // Draw Walls (8x8)
+    // Offset by -2 pixels to center the 8x8 sprite over the 4x4 block
     for (int i = 0; i < _numWalls; i++) {
-        int px = (_wx[i] * BLOCK_SIZE) + ox;
-        int py = (_wy[i] * BLOCK_SIZE) + TOP_OFFSET + oy;
-        ctx.drawFrame(px, py, BLOCK_SIZE, BLOCK_SIZE);
-        ctx.drawPixel(px + 1, py + 1);
-        ctx.drawPixel(px + 2, py + 2);
+        int px = (_wx[i] * BLOCK_SIZE) + ox - 2;
+        int py = (_wy[i] * BLOCK_SIZE) + TOP_OFFSET + oy - 2;
+        ctx.drawBitmap(px, py, 1, 8, spr_snake_wall);
     }
 
-    // Draw Normal Apple
-    ctx.drawDisc((_ax * BLOCK_SIZE) + (BLOCK_SIZE / 2) + ox, 
-                 (_ay * BLOCK_SIZE) + (BLOCK_SIZE / 2) + TOP_OFFSET + oy, 1);
+    for (const auto& p : _particles) {
+        if (p.life > 0) {
+            if (p.isBonus) {
+                // Draw bonus sparks as 2x2 blocks.
+                // The modulo math makes them aggressively flicker as they die out.
+                if (p.life % 3 != 0) {
+                    ctx.drawBox((int)p.x + ox, (int)p.y + oy, 2, 2);
+                }
+            } else {
+                // Normal 1-pixel sparks
+                ctx.drawPixel((int)p.x + ox, (int)p.y + oy);
+            }
+        }
+    }
+
+    // Draw Normal Apple (4x4)
+    // No offset needed, fits perfectly in the 4x4 grid block
+    int ax_px = (_ax * BLOCK_SIZE) + ox; 
+    int ay_py = (_ay * BLOCK_SIZE) + TOP_OFFSET + oy;
+    ctx.drawBitmap(ax_px, ay_py, 1, 4, spr_snake_apple);
                  
-    // Draw Bonus Apple
+    // Draw Bonus Apple (8x8)
+    // Offset by -2 pixels to center the 8x8 sprite over the 4x4 block
     if (_bonusActive && (millis() / 150) % 2 == 0) {
-        ctx.drawDisc((_bx * BLOCK_SIZE) + (BLOCK_SIZE / 2) + ox, 
-                     (_by * BLOCK_SIZE) + (BLOCK_SIZE / 2) + TOP_OFFSET + oy, 2);
+        int bx_px = (_bx * BLOCK_SIZE) + ox - 2;
+        int by_py = (_by * BLOCK_SIZE) + TOP_OFFSET + oy - 2;
+        ctx.drawBitmap(bx_px, by_py, 1, 8, spr_snake_bonus);
     }
 
-    // Draw Poison Apple
+    // Draw Poison Apple (4x4)
+    // No offset needed
     if (_poisonActive) {
-        int px = (_px * BLOCK_SIZE) + (BLOCK_SIZE / 2) + ox;
-        int py = (_py * BLOCK_SIZE) + (BLOCK_SIZE / 2) + TOP_OFFSET + oy;
-        ctx.drawLine(px - 1, py - 1, px + 1, py + 1);
-        ctx.drawLine(px + 1, py - 1, px - 1, py + 1);
+        int px_px = (_px * BLOCK_SIZE) + ox;
+        int py_py = (_py * BLOCK_SIZE) + TOP_OFFSET + oy;
+        ctx.drawBitmap(px_px, py_py, 1, 4, spr_snake_poison);
     }
 
     // Draw Snake Body
@@ -239,10 +368,31 @@ void SnakePlayScene::drawField(Console& ctx, int ox, int oy) const {
         int px = (_sx[i] * BLOCK_SIZE) + ox;
         int py = (_sy[i] * BLOCK_SIZE) + TOP_OFFSET + oy;
         
+        // 1. Draw the segment itself
         if (i == 0) {
-            ctx.drawBox(px, py, BLOCK_SIZE, BLOCK_SIZE);
+            ctx.drawBox(px, py, BLOCK_SIZE, BLOCK_SIZE); // Head is always solid
         } else {
-            ctx.drawFrame(px + 1, py + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+            ctx.drawBox(px + 1, py + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2); // Thinner body for a sleek look
+        }
+
+        // 2. Draw the connector to the PREVIOUS segment (the one closer to the head)
+        if (i > 0) {
+            int prevX = (_sx[i-1] * BLOCK_SIZE) + ox;
+            int prevY = (_sy[i-1] * BLOCK_SIZE) + TOP_OFFSET + oy;
+
+            // Skip connection if wrapping around screen edges
+            if (abs(_sx[i] - _sx[i-1]) <= 1 && abs(_sy[i] - _sy[i-1]) <= 1) {
+                // Horizontal connection
+                if (_sx[i] != _sx[i-1]) {
+                    int connX = min(px, prevX) + 1;
+                    ctx.drawBox(connX, py + 1, BLOCK_SIZE, BLOCK_SIZE - 2);
+                }
+                // Vertical connection
+                else if (_sy[i] != _sy[i-1]) {
+                    int connY = min(py, prevY) + 1;
+                    ctx.drawBox(px + 1, connY, BLOCK_SIZE - 2, BLOCK_SIZE);
+                }
+            }
         }
     }
 }
