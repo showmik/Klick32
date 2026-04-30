@@ -1,31 +1,33 @@
 #pragma once
 #include "GameBase.h"
 #include "GameUtils.h"
+#include "SceneManager.h"
+#include "Scene.h"
 
-// ─── DinoGame ─────────────────────────────────────────────────────────────────
-// Chrome-style endless runner.
-//
-// Controls:
-//   UP  / A   → Jump
-//   DOWN / B  → Duck  (ground only; suppresses jump)
-//   MENU1     → Return to OS menu
-//
-// Persistent save data (NVS key "hi"):
-//   Hi-score is loaded in onEnter() and saved immediately on death and on exit.
-// ─────────────────────────────────────────────────────────────────────────────
-class DinoGame : public GameBase {
+// Forward declarations for scenes
+class DinoPlayScene;
+class DinoDeadScene;
+
+// ─── Shared Game State ───────────────────────────────────────────────────────
+struct DinoSharedData {
+    uint32_t score   = 0;
+    uint32_t hiScore = 0;
+};
+
+// ─── DinoPlayScene ───────────────────────────────────────────────────────────
+class DinoPlayScene : public Scene {
 public:
+    void setData(DinoSharedData* d)   { _data = d; }
+    void setDeadScene(DinoDeadScene* d) { _dead = d; }
+
     void onEnter(Console& ctx) override;
-    void onExit (Console& ctx) override;
-    void update(Console& ctx)  override;
-    void draw(Console& ctx)    override;
-    bool           isRunning() const override;
-    const char*    getName()   const override;
-    const uint8_t* getIcon()   const override;
+    void update (Console& ctx, SceneManager& sm) override;
+    void draw   (Console& ctx) override;
+
+    // Called by the Dead scene to draw the frozen background
+    void drawField(Console& ctx, bool isDead) const;
 
 private:
-    enum class DinoState { RUNNING, DEAD };
-
     enum class ObstacleKind : uint8_t {
         CACTUS_SMALL,
         CACTUS_LARGE,
@@ -75,16 +77,15 @@ private:
     static constexpr uint8_t  JUMP_BUFFER_FRAMES = 8;
 
     // ── Members ───────────────────────────────────────────────────────────────
-    DinoState  _state         = DinoState::RUNNING;
-    bool       _running       = false;
+    DinoSharedData* _data = nullptr;
+    DinoDeadScene*  _dead = nullptr;
+
     bool       _isDucking     = false;
     float      _dinoY         = 0.0f;
     float      _dinoVY        = 0.0f;
     bool       _onGround      = true;
     uint8_t    _coyoteFrames  = 0;
     uint8_t    _jumpBuffer    = 0;
-    uint32_t   _score         = 0;
-    uint32_t   _hiScore       = 0;   // loaded from NVS in onEnter()
     uint32_t   _lastMilestone = 0;
     uint8_t    _flashTimer    = 0;
     float      _speed         = INIT_SPEED;
@@ -102,4 +103,38 @@ private:
     static int  _obsTopY (ObstacleKind k);
     static bool _isPtero (ObstacleKind k);
     void _drawCloud(Console& ctx, int x, int y) const;
+};
+
+// ─── DinoDeadScene ───────────────────────────────────────────────────────────
+class DinoDeadScene : public Scene {
+public:
+    void setData     (DinoSharedData* d) { _data = d; }
+    void setPlayScene(DinoPlayScene*  p) { _play = p; }
+
+    void onEnter(Console& ctx) override;
+    void update (Console& ctx, SceneManager& sm) override;
+    void draw   (Console& ctx) override;
+
+private:
+    DinoSharedData* _data = nullptr;
+    DinoPlayScene*  _play = nullptr;
+};
+
+// ─── DinoGame ────────────────────────────────────────────────────────────────
+class DinoGame : public GameBase {
+public:
+    void onEnter(Console& ctx) override;
+    void onExit (Console& ctx) override;
+    void update (Console& ctx) override;
+    void draw   (Console& ctx) override;
+    
+    bool           isRunning() const override;
+    const char*    getName()   const override;
+    const uint8_t* getIcon()   const override;
+
+private:
+    DinoSharedData _data;
+    SceneManager   _sm;
+    DinoPlayScene  _play;
+    DinoDeadScene  _dead;
 };
