@@ -70,6 +70,9 @@ private:
         static constexpr int ARROW_L_X      = 8;    // Moved in slightly
         static constexpr int ARROW_R_X      = 114;  // Moved in slightly
         static constexpr int ARROW_Y        = 30;
+        static constexpr int CARD_COVER_W   = 76;
+        static constexpr int CARD_COVER_H   = 32;
+        static constexpr int CARD_COVER_BPR = 10; // bytesPerRow (ceil(76/8))
 
         // Footer
         static constexpr int FTR_LINE_Y     = 55;

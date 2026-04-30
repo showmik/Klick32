@@ -171,6 +171,7 @@ public:
     bool           isRunning() const override;
     const char*    getName()   const override;
     const uint8_t* getIcon()   const override;
+    const uint8_t* getCoverArt() const override;
 
 private:
     DinoSharedData _data;

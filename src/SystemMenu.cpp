@@ -140,30 +140,40 @@ void SystemMenu::_drawHeader(Console& ctx) {
 
 void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
     const GameBase* g = _games[idx];
+    const uint8_t* cover = g->getCoverArt();
     const uint8_t* icon = g->getIcon();
 
     // 1. Sleek Card Frame (Slides)
     ctx.drawRFrame(Layout::CARD_FRAME_X + offsetX, Layout::CARD_FRAME_Y, Layout::CARD_FRAME_W, Layout::CARD_FRAME_H, 4);
 
-    // 2. Animated Floating Icon (Slides)
-    int bounce = (millis() / 200) % 4;
-    int floatOffset = (bounce == 3) ? 1 : bounce; 
-    int iconY = Layout::CARD_ICON_Y - floatOffset;
-
-    if (icon) {
-        ctx.drawBitmap(Layout::CARD_ICON_X + offsetX, iconY, 2, Layout::CARD_ICON_SIZE, icon);
+    if (cover) {
+        // 2. Full-Card Cover Art (Slides)
+        // Draw the 76x32 cover art with a 2px padding from the top-left of the card frame
+        int coverX = Layout::CARD_FRAME_X + 2 + offsetX;
+        int coverY = Layout::CARD_FRAME_Y + 2; 
+        ctx.drawBitmap(coverX, coverY, Layout::CARD_COVER_BPR, Layout::CARD_COVER_H, cover);
     } else {
-        ctx.drawRFrame(Layout::CARD_ICON_X + offsetX, iconY, Layout::CARD_ICON_SIZE, Layout::CARD_ICON_SIZE, 3);
-        char ini[2] = { g->getName()[0], '\0' };
-        ctx.setFont(u8g2_font_7x13B_tf);
-        ctx.drawStr(Layout::CARD_ICON_X + 4 + offsetX, iconY + 12, ini);
-    }
+        // 2. Fallback Icon (Slides)
+        int bounce = (millis() / 200) % 4;
+        int floatOffset = (bounce == 3) ? 1 : bounce; 
+        int iconY = Layout::CARD_ICON_Y - floatOffset;
 
-    // 3. Title (Slides)
-    ctx.setFont(u8g2_font_7x13B_tf);
-    const char* name = g->getName();
-    uint8_t nameW = ctx.strWidth(name);
-    ctx.drawStr((Console::W - nameW) / 2 + offsetX, Layout::CARD_NAME_Y, name);
+        if (icon) {
+            ctx.drawBitmap(Layout::CARD_ICON_X + offsetX, iconY, 2, Layout::CARD_ICON_SIZE, icon);
+        } else {
+            ctx.drawRFrame(Layout::CARD_ICON_X + offsetX, iconY, Layout::CARD_ICON_SIZE, Layout::CARD_ICON_SIZE, 3);
+            char ini[2] = { g->getName()[0], '\0' };
+            ctx.setFont(u8g2_font_7x13B_tf);
+            ctx.drawStr(Layout::CARD_ICON_X + 4 + offsetX, iconY + 12, ini);
+        }
+
+        // 3. Fallback Title Text (Slides)
+        // Only drawn if there is no cover art
+        ctx.setFont(u8g2_font_7x13B_tf);
+        const char* name = g->getName();
+        uint8_t nameW = ctx.strWidth(name);
+        ctx.drawStr((Console::W - nameW) / 2 + offsetX, Layout::CARD_NAME_Y, name);
+    }
 }
 
 void SystemMenu::_drawPagination(Console& ctx, uint8_t idx) {

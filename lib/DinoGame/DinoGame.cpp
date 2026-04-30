@@ -574,3 +574,4 @@ void DinoGame::draw(Console& ctx) {
 bool           DinoGame::isRunning() const { return !_sm.empty(); }
 const char*    DinoGame::getName()   const { return "Dino Run"; }
 const uint8_t* DinoGame::getIcon()   const { return nullptr; }
+const uint8_t* DinoGame::getCoverArt() const { return spr_dino_cover; }
