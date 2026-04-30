@@ -20,7 +20,11 @@ void OS::begin() {
     randomSeed(esp_random());
     _battPct   = _batt.readPercent();
     _battTimer = millis();
-    // SaveManager uses NVS; no explicit begin() needed until a game launches.
+    
+    // ── Power Management Init ──
+    _lastInputTime = millis();
+    // Wake up when MENU1 goes LOW (button pressed to ground)
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_MENU1, 0); 
 }
 
 // ─── registerGame ────────────────────────────────────────────────────────────
@@ -47,6 +51,18 @@ void OS::run() {
         uint32_t t0 = millis();
         _input.update();
 
+        // ── Check for any input to reset the sleep timer ──
+        bool anyInput = false;
+        for (uint8_t i = 0; i < (uint8_t)Btn::COUNT; i++) {
+            if (_input.held((Btn)i)) {
+                anyInput = true;
+                break;
+            }
+        }
+        if (anyInput) {
+            _lastInputTime = millis();
+        }
+
         if (millis() - _battTimer >= 15000UL) {
             _battPct   = _batt.readPercent();
             _battTimer = millis();
@@ -55,6 +71,11 @@ void OS::run() {
         // ════════════════════════════════════════════════════════════════════
         if (activeGame == nullptr) {
             // ── MENU ─────────────────────────────────────────────────────────
+            
+            // ── Auto-Sleep Check (Only sleep from the menu, not mid-game) ──
+            if (millis() - _lastInputTime >= IDLE_SLEEP_MS) {
+                _enterDeepSleep();
+            }
 
             if (_input.repeat(Btn::LEFT)) {
                 _selected = (_selected == 0) ? _gameCount - 1 : _selected - 1;
@@ -187,4 +208,23 @@ void OS::_drawFooter() {
     _disp.drawHLine(0, 53, SCREEN_W);
     _disp.setFont(u8g2_font_5x7_tf);
     _disp.drawStr(4, 61, "[A]Launch  [<>]Browse");
+}
+
+// ─── Power Management ────────────────────────────────────────────────────────
+
+void OS::_enterDeepSleep() {
+    // 1. Give the user visual feedback that it's shutting down
+    _disp.clearBuffer();
+    _disp.setFont(u8g2_font_6x10_tf);
+    uint8_t w = _disp.getStrWidth("Sleeping...");
+    _disp.drawStr((SCREEN_W - w) / 2, 34, "Sleeping...");
+    _disp.sendBuffer();
+    delay(1000);
+
+    // 2. Safely shut down peripherals
+    _sound.stop();
+    _disp.setPowerSave(1); // Turns off the OLED panel entirely to save power
+
+    // 3. Go to sleep. Code execution stops here.
+    esp_deep_sleep_start();
 }

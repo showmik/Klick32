@@ -52,6 +52,12 @@ private:
     // Constructed after _disp / _input / _sound / _save — safe to reference all.
     Console      _console;
 
+    // ── Power Management ──────────────────────────────────────────────────────
+    static constexpr uint32_t IDLE_SLEEP_MS = 60000; // 60 seconds of inactivity
+    uint32_t _lastInputTime = 0;
+    
+    void _enterDeepSleep();
+
     // ── Game registry ─────────────────────────────────────────────────────────
     static constexpr uint8_t MAX_GAMES = 12;
     GameBase* _games[MAX_GAMES] = {};
