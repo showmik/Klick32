@@ -39,7 +39,11 @@ public:
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
-    void drawField(Console& ctx, bool isDead) const;
+    // Added ox and oy parameters to support Screen Shake from the DeadScene
+    void drawField(Console& ctx, bool isDead, int ox = 0, int oy = 0) const;
+
+    // Expose speed so the DeadScene can inherit momentum for debris
+    float getSpeed() const { return _speed; }
 
 private:
     enum class ObstacleKind : uint8_t { CACTUS_SMALL, CACTUS_LARGE, PTERO_LOW, PTERO_HIGH };
@@ -54,6 +58,7 @@ private:
 
     struct Cloud { Vec2 pos; };
     struct Dust  { Vec2 pos; uint8_t life; };
+    struct Sweat { Vec2 pos; uint8_t life; };
 
     // ── Constants ─────────────────────────────────────────────────────────────
     static constexpr int      GROUND_Y           = 52;
@@ -75,6 +80,7 @@ private:
     static constexpr uint8_t  CACTUS_W_WEIGHT    = 3;
     static constexpr uint8_t  MAX_CLOUDS         = 3;
     static constexpr uint8_t  MAX_DUST           = 4;
+    static constexpr uint8_t  MAX_SWEAT          = 3;
     static constexpr float    GRAVITY            = 0.55f;
     static constexpr float    JUMP_VY            = -8.0f;
     static constexpr float    INIT_SPEED         = 2.5f;
@@ -100,10 +106,12 @@ private:
     uint8_t    _jumpBuffer    = 0;
     uint32_t   _lastMilestone = 0;
     uint8_t    _flashTimer    = 0;
+    uint8_t    _blinkTimer    = 0;
     float      _speed         = INIT_SPEED;
     Obstacle   _obs[MAX_OBS]       = {};
     Cloud      _clouds[MAX_CLOUDS] = {};
     Dust       _dust[MAX_DUST]     = {};
+    Sweat      _sweat[MAX_SWEAT]   = {};
     uint32_t   _frameCnt  = 0;
     uint8_t    _animTimer = 0;
     uint8_t    _animFrame = 0;
@@ -142,9 +150,14 @@ public:
     void draw   (Console& ctx) override;
 
 private:
+    struct Debris { float x, y, vx, vy; };
+
     DinoSharedData* _data = nullptr;
     DinoPlayScene*  _play = nullptr;
-    uint8_t         _frame = 0;
+    
+    uint8_t         _frame       = 0;
+    uint8_t         _shakeFrames = 0;
+    Debris          _debris[8]   = {};
 };
 
 // ─── DinoGame ────────────────────────────────────────────────────────────────
