@@ -22,14 +22,14 @@
 // Each game lives in lib/<GameName>/ as a self-contained PlatformIO library.
 #include "DinoGame.h"
 #include "SnakeGame.h"
-// #include "PongGame.h"
+#include "PongGame.h"
 // ... add more here
 
 // ─── Global instances ────────────────────────────────────────────────────────
 OS       os;
 DinoGame dino;
 SnakeGame snake;
-// PongGame  pong;
+PongGame  pong;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
@@ -37,7 +37,7 @@ void setup() {
 
     os.registerGame(&dino);
     os.registerGame(&snake);
-    // os.registerGame(&pong);
+    os.registerGame(&pong);
 
     os.run();   // never returns
 }

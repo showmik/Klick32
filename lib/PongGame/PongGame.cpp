@@ -1,0 +1,315 @@
+// Target path: lib/PongGame/PongGame.cpp
+#include "PongGame.h"
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PongTitleScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void PongTitleScene::onEnter(Console& ctx) {
+    _frame = 0;
+}
+
+void PongTitleScene::update(Console& ctx, SceneManager& sm) {
+    _frame++;
+
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
+        ctx.sfxMenuEnter();
+        sm.replace(_play, ctx);
+    }
+}
+
+void PongTitleScene::draw(Console& ctx) {
+    // Title
+    ctx.setFont(u8g2_font_7x13B_tf);
+    ctx.drawStr(48, 22, "PONG");
+
+    // Divider
+    ctx.drawHLine(0, 28, Console::W);
+
+    // Mini court preview — two paddles and a centre line
+    ctx.drawVLine(64, 32, 24);        // centre dashes (approximate)
+    ctx.drawBox(8,  38, PongState::PAD_W, PongState::PAD_H);
+    ctx.drawBox(Console::W - 8 - PongState::PAD_W, 38, PongState::PAD_W, PongState::PAD_H);
+
+    // Blinking prompt
+    if ((_frame / 15) % 2 == 0) {
+        ctx.setFont(u8g2_font_5x7_tf);
+        ctx.drawStr(28, 58, "Press A to play");
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PongPlayScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void PongPlayScene::onEnter(Console& ctx) {
+    _st.scoreL    = 0;
+    _st.scoreR    = 0;
+    _playerWon    = false;
+    _st.leftY     = PongState::FIELD_TOP + (PongState::FIELD_H - PongState::PAD_H) / 2.0f;
+    _st.rightY    = _st.leftY;
+    _resetBall(true);
+}
+
+void PongPlayScene::_resetBall(bool serveLeft) {
+    _st.ballPos = {
+        Console::W / 2.0f,
+        PongState::FIELD_TOP + PongState::FIELD_H / 2.0f
+    };
+    float vx = serveLeft ? PongState::BALL_SPEED : -PongState::BALL_SPEED;
+    // Random-ish vertical angle using millis() parity
+    float vy = ((millis() & 1) ? 1.0f : -1.0f) * PongState::BALL_SPEED * 0.55f;
+    _st.ballVel = { vx, vy };
+}
+
+void PongPlayScene::_updateAI() {
+    float padCY  = _st.rightY + PongState::PAD_H / 2.0f;
+    float ballCY = _st.ballPos.y;
+    float diff   = ballCY - padCY;
+    // Clamp to AI speed so it can be beaten
+    float move = gclamp(diff, -PongState::AI_SPEED, PongState::AI_SPEED);
+    _st.rightY += move;
+    float topBound = (float)PongState::FIELD_TOP;
+    float botBound = (float)(PongState::FIELD_TOP + PongState::FIELD_H - PongState::PAD_H);
+    _st.rightY = gclamp(_st.rightY, topBound, botBound);
+}
+
+void PongPlayScene::_handlePaddleCollision() {
+    auto& s = _st;
+
+    // Left paddle (player)
+    float lpx = (float)(PongState::PAD_MARGIN);
+    if (s.ballVel.x < 0 &&
+        s.ballPos.x - PongState::BALL_R <= lpx + PongState::PAD_W &&
+        s.ballPos.x - PongState::BALL_R >= lpx - 2.0f &&
+        s.ballPos.y >= s.leftY &&
+        s.ballPos.y <= s.leftY + PongState::PAD_H) {
+
+        s.ballPos.x = lpx + PongState::PAD_W + PongState::BALL_R;
+        s.ballVel.x = -(s.ballVel.x) * 1.05f;  // slight speed-up each hit
+        // Spin: hit near top = upward angle, near bottom = downward
+        float rel  = (s.ballPos.y - s.leftY) / PongState::PAD_H - 0.5f;
+        s.ballVel.y = rel * PongState::BALL_SPEED * 2.2f;
+    }
+
+    // Right paddle (AI)
+    float rpx = (float)(Console::W - PongState::PAD_MARGIN - PongState::PAD_W);
+    if (s.ballVel.x > 0 &&
+        s.ballPos.x + PongState::BALL_R >= rpx &&
+        s.ballPos.x + PongState::BALL_R <= rpx + PongState::PAD_W + 2.0f &&
+        s.ballPos.y >= s.rightY &&
+        s.ballPos.y <= s.rightY + PongState::PAD_H) {
+
+        s.ballPos.x = rpx - PongState::BALL_R;
+        s.ballVel.x = -(s.ballVel.x) * 1.05f;
+        float rel  = (s.ballPos.y - s.rightY) / PongState::PAD_H - 0.5f;
+        s.ballVel.y = rel * PongState::BALL_SPEED * 2.2f;
+    }
+
+    // Clamp top speed so the ball never becomes untraceable
+    s.ballVel.x = gclamp(s.ballVel.x, -PongState::MAX_SPEED, PongState::MAX_SPEED);
+    s.ballVel.y = gclamp(s.ballVel.y, -PongState::MAX_SPEED, PongState::MAX_SPEED);
+}
+
+void PongPlayScene::update(Console& ctx, SceneManager& sm) {
+    // MENU1 → hard exit back to OS
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+
+    // MENU2 / B → pause
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+        ctx.sfxMenuNav();
+        sm.push(_pause, ctx);
+        return;
+    }
+
+    auto& s = _st;
+
+    // ── Player paddle ─────────────────────────────────────────────────────────
+    if (ctx.pressed(Btn::UP))   s.leftY -= PongState::PAD_SPEED;
+    if (ctx.pressed(Btn::DOWN)) s.leftY += PongState::PAD_SPEED;
+    s.leftY = gclamp(s.leftY,
+                     (float)PongState::FIELD_TOP,
+                     (float)(PongState::FIELD_TOP + PongState::FIELD_H - PongState::PAD_H));
+
+    // ── AI paddle ─────────────────────────────────────────────────────────────
+    _updateAI();
+
+    // ── Ball movement ─────────────────────────────────────────────────────────
+    s.ballPos += s.ballVel;
+
+    // Bounce off top / bottom walls
+    float topBound = (float)(PongState::FIELD_TOP + PongState::BALL_R);
+    float botBound = (float)(PongState::FIELD_TOP + PongState::FIELD_H - PongState::BALL_R);
+    if (s.ballPos.y <= topBound) { s.ballPos.y = topBound; if (s.ballVel.y < 0) s.ballVel.y = -s.ballVel.y; }
+    if (s.ballPos.y >= botBound) { s.ballPos.y = botBound; if (s.ballVel.y > 0) s.ballVel.y = -s.ballVel.y; }
+
+    _handlePaddleCollision();
+
+    // ── Scoring ───────────────────────────────────────────────────────────────
+    if (s.ballPos.x < 0) {
+        // Ball passed left edge — AI scores
+        s.scoreR++;
+        ctx.sfxDeath();
+        if (s.scoreR >= PongState::WIN_SCORE) {
+            _playerWon = false;
+            sm.replace(_gameover, ctx);
+            return;
+        }
+        _resetBall(false);   // serve toward player
+    }
+
+    if (s.ballPos.x > Console::W) {
+        // Ball passed right edge — player scores
+        s.scoreL++;
+        ctx.sfxPoint();
+        if (s.scoreL >= PongState::WIN_SCORE) {
+            _playerWon = true;
+            sm.replace(_gameover, ctx);
+            return;
+        }
+        _resetBall(true);    // serve toward AI
+    }
+}
+
+// Helper used by both PlayScene and PauseScene (the latter draws background).
+static void _drawPongField(Console& ctx, const PongState& s) {
+    // HUD line + scores
+    ctx.setFont(u8g2_font_5x7_tf);
+    char buf[4];
+    snprintf(buf, sizeof(buf), "%u", s.scoreL);
+    ctx.drawStr(55, 8, buf);
+    snprintf(buf, sizeof(buf), "%u", s.scoreR);
+    ctx.drawStr(70, 8, buf);
+    ctx.drawHLine(0, PongState::FIELD_TOP - 1, Console::W);
+
+    // Centre dashes
+    for (int y = PongState::FIELD_TOP + 2; y < Console::H; y += 7)
+        ctx.drawVLine(64, y, 4);
+
+    // Paddles
+    ctx.drawBox(PongState::PAD_MARGIN,
+                (int)s.leftY,
+                PongState::PAD_W,
+                PongState::PAD_H);
+    ctx.drawBox(Console::W - PongState::PAD_MARGIN - PongState::PAD_W,
+                (int)s.rightY,
+                PongState::PAD_W,
+                PongState::PAD_H);
+
+    // Ball
+    ctx.drawDisc(s.ballPos.ix(), s.ballPos.iy(), PongState::BALL_R);
+}
+
+void PongPlayScene::draw(Console& ctx) {
+    _drawPongField(ctx, _st);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PongPauseScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void PongPauseScene::onEnter(Console& ctx) {}
+
+void PongPauseScene::update(Console& ctx, SceneManager& sm) {
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
+        ctx.sfxMenuNav();
+        sm.pop(ctx);   // reveals PlayScene underneath
+    }
+}
+
+void PongPauseScene::draw(Console& ctx) {
+    // Draw the frozen game state as background
+    _drawPongField(ctx, _play->state());
+
+    // Overlay: filled box to obscure + border
+    ctx.setDrawColor(0);
+    ctx.drawBox(34, 22, 60, 22);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(34, 22, 60, 22);
+
+    ctx.setFont(u8g2_font_7x13B_tf);
+    ctx.drawStr(42, 37, "PAUSED");
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PongGameOverScene
+// ═════════════════════════════════════════════════════════════════════════════
+
+void PongGameOverScene::onEnter(Console& ctx) {
+    _frame = 0;
+    if (_play->playerWon()) ctx.sfxPoint();
+    else                    ctx.sfxDeath();
+}
+
+void PongGameOverScene::update(Console& ctx, SceneManager& sm) {
+    _frame++;
+    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
+        ctx.sfxMenuEnter();
+        sm.replace(_play, ctx);   // fresh match, scores reset in onEnter
+    }
+}
+
+void PongGameOverScene::draw(Console& ctx) {
+    const PongState& s = _play->state();
+
+    // Final scoreboard
+    ctx.setFont(u8g2_font_7x13B_tf);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%u  %u", s.scoreL, s.scoreR);
+    int w = ctx.strWidth(buf);
+    ctx.drawStr((Console::W - w) / 2, 16, buf);
+
+    ctx.drawHLine(0, PongState::FIELD_TOP - 1, Console::W);
+
+    // Winner banner
+    ctx.setDrawColor(0);
+    ctx.drawBox(14, 20, 100, 26);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(14, 20, 100, 26);
+    ctx.setFont(u8g2_font_7x13B_tf);
+    if (_play->playerWon()) ctx.drawStr(20, 36, "YOU  WIN!");
+    else                    ctx.drawStr(22, 36, "AI  WINS!");
+
+    // Blinking restart prompt
+    if ((_frame / 15) % 2 == 0) {
+        ctx.setFont(u8g2_font_5x7_tf);
+        ctx.drawStr(26, 56, "A: rematch  M1: menu");
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PongGame  — just wires scenes and delegates
+// ═════════════════════════════════════════════════════════════════════════════
+
+void PongGame::onEnter(Console& ctx) {
+    // Wire sibling pointers so scenes can reach each other for transitions
+    // and background-draw calls.  Do this ONCE here, never in scene onEnter.
+    _title.setPlayScene    (&_play);
+    _play .setPauseScene   (&_pause);
+    _play .setGameOverScene(&_gameover);
+    _pause.setPlayScene    (&_play);
+    _gameover.setPlayScene (&_play);
+
+    _sm.replace(&_title, ctx);
+}
+
+void PongGame::onExit(Console& ctx) {
+    // sm.clear() has already been called; nothing to flush.
+}
+
+void PongGame::update(Console& ctx) {
+    _sm.update(ctx);
+}
+
+void PongGame::draw(Console& ctx) {
+    _sm.draw(ctx);
+}
+
+bool        PongGame::isRunning()   const { return !_sm.empty(); }
+bool        PongGame::needsRedraw() const { return _sm.needsRedraw(); }
+const char* PongGame::getName()     const { return "Pong"; }
