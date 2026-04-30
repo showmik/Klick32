@@ -101,6 +101,7 @@ private:
     PongPauseScene*    _pause     = nullptr;
     PongGameOverScene* _gameover  = nullptr;
     bool               _playerWon = false;
+    uint8_t            _serveTimer = 0;
 
     void _resetBall(bool serveLeft);
     void _updateAI();

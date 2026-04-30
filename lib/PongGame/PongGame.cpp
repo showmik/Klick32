@@ -59,9 +59,11 @@ void PongPlayScene::_resetBall(bool serveLeft) {
         PongState::FIELD_TOP + PongState::FIELD_H / 2.0f
     };
     float vx = serveLeft ? PongState::BALL_SPEED : -PongState::BALL_SPEED;
-    // Random-ish vertical angle using millis() parity
     float vy = ((millis() & 1) ? 1.0f : -1.0f) * PongState::BALL_SPEED * 0.55f;
     _st.ballVel = { vx, vy };
+    
+    // Set 3-second delay (90 frames)
+    _serveTimer = 90;
 }
 
 void PongPlayScene::_updateAI() {
@@ -126,50 +128,57 @@ void PongPlayScene::update(Console& ctx, SceneManager& sm) {
 
     auto& s = _st;
 
-    // ── Player paddle ─────────────────────────────────────────────────────────
+    // ── Player paddle (Allow movement during countdown) ──────────────
     if (ctx.pressed(Btn::UP))   s.leftY -= PongState::PAD_SPEED;
     if (ctx.pressed(Btn::DOWN)) s.leftY += PongState::PAD_SPEED;
     s.leftY = gclamp(s.leftY,
                      (float)PongState::FIELD_TOP,
                      (float)(PongState::FIELD_TOP + PongState::FIELD_H - PongState::PAD_H));
 
-    // ── AI paddle ─────────────────────────────────────────────────────────────
+    // ── AI paddle (Allow movement during countdown) ──────────────────
     _updateAI();
 
-    // ── Ball movement ─────────────────────────────────────────────────────────
-    s.ballPos += s.ballVel;
+    // ── Timer & Ball movement ─────────────────────────────────────────
+    if (_serveTimer > 0) {
+        _serveTimer--;
+        
+        // Play countdown beeps
+        if (_serveTimer == 60 || _serveTimer == 30) ctx.beep(800, 30);
+        if (_serveTimer == 0) ctx.beep(1200, 60); // Go!
+    } else {
+        // Only move the ball and check collisions if timer is 0
+        s.ballPos += s.ballVel;
 
-    // Bounce off top / bottom walls
-    float topBound = (float)(PongState::FIELD_TOP + PongState::BALL_R);
-    float botBound = (float)(PongState::FIELD_TOP + PongState::FIELD_H - PongState::BALL_R);
-    if (s.ballPos.y <= topBound) { s.ballPos.y = topBound; if (s.ballVel.y < 0) s.ballVel.y = -s.ballVel.y; }
-    if (s.ballPos.y >= botBound) { s.ballPos.y = botBound; if (s.ballVel.y > 0) s.ballVel.y = -s.ballVel.y; }
+        // Bounce off top / bottom walls
+        float topBound = (float)(PongState::FIELD_TOP + PongState::BALL_R);
+        float botBound = (float)(PongState::FIELD_TOP + PongState::FIELD_H - PongState::BALL_R);
+        if (s.ballPos.y <= topBound) { s.ballPos.y = topBound; if (s.ballVel.y < 0) s.ballVel.y = -s.ballVel.y; }
+        if (s.ballPos.y >= botBound) { s.ballPos.y = botBound; if (s.ballVel.y > 0) s.ballVel.y = -s.ballVel.y; }
 
-    _handlePaddleCollision();
+        _handlePaddleCollision();
 
-    // ── Scoring ───────────────────────────────────────────────────────────────
-    if (s.ballPos.x < 0) {
-        // Ball passed left edge — AI scores
-        s.scoreR++;
-        ctx.sfxDeath();
-        if (s.scoreR >= PongState::WIN_SCORE) {
-            _playerWon = false;
-            sm.replace(_gameover, ctx);
-            return;
+        // ── Scoring ───────────────────────────────────────────────────────────────
+        if (s.ballPos.x < 0) {
+            s.scoreR++;
+            ctx.sfxDeath();
+            if (s.scoreR >= PongState::WIN_SCORE) {
+                _playerWon = false;
+                sm.replace(_gameover, ctx);
+                return;
+            }
+            _resetBall(false); 
         }
-        _resetBall(false);   // serve toward player
-    }
 
-    if (s.ballPos.x > Console::W) {
-        // Ball passed right edge — player scores
-        s.scoreL++;
-        ctx.sfxPoint();
-        if (s.scoreL >= PongState::WIN_SCORE) {
-            _playerWon = true;
-            sm.replace(_gameover, ctx);
-            return;
+        if (s.ballPos.x > Console::W) {
+            s.scoreL++;
+            ctx.sfxPoint();
+            if (s.scoreL >= PongState::WIN_SCORE) {
+                _playerWon = true;
+                sm.replace(_gameover, ctx);
+                return;
+            }
+            _resetBall(true); 
         }
-        _resetBall(true);    // serve toward AI
     }
 }
 
@@ -204,6 +213,24 @@ static void _drawPongField(Console& ctx, const PongState& s) {
 
 void PongPlayScene::draw(Console& ctx) {
     _drawPongField(ctx, _st);
+    
+    // Draw the countdown number
+    if (_serveTimer > 0) {
+        // Convert frames to seconds (1-3)
+        int sec = (_serveTimer - 1) / 30 + 1;
+        char buf[2] = { (char)('0' + sec), '\0' };
+        
+        ctx.setFont(u8g2_font_7x13B_tf);
+        int w = ctx.strWidth(buf);
+        
+        // Blank out the center line behind the text for readability
+        ctx.setDrawColor(0);
+        ctx.drawBox((Console::W - w) / 2 - 2, 20, w + 4, 16);
+        ctx.setDrawColor(1);
+        
+        // Draw the number
+        ctx.drawStr((Console::W - w) / 2, 32, buf);
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
