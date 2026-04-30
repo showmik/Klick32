@@ -52,18 +52,18 @@ struct PongState {
     uint8_t scoreR = 0;
 
     // ── Layout ───────────────────────────────────────────────────────────────
-    static constexpr int   FIELD_TOP   = 10;  // y below HUD line
+    static constexpr int   FIELD_TOP   = 10;
     static constexpr int   FIELD_H     = Console::H - FIELD_TOP;
     static constexpr int   PAD_W       = 3;
     static constexpr int   PAD_H       = 14;
-    static constexpr int   PAD_MARGIN  = 4;   // x distance from screen edge
-    static constexpr int   BALL_R      = 2;   // radius (drawn as filled disc)
+    static constexpr int   PAD_MARGIN  = 4;
+    static constexpr int   BALL_R      = 2;
 
     // ── Tuning ───────────────────────────────────────────────────────────────
     static constexpr uint8_t WIN_SCORE  = 5;
     static constexpr float   BALL_SPEED = 2.8f;
-    static constexpr float   PAD_SPEED  = 2.2f;
-    static constexpr float   AI_SPEED   = 1.7f; // AI is intentionally slower
+    static constexpr float   PAD_SPEED  = 3.2f;  // Increased from 2.2f for snappier control
+    static constexpr float   AI_SPEED   = 1.7f;
     static constexpr float   MAX_SPEED  = 6.5f;
 };
 
@@ -84,7 +84,6 @@ private:
 
 class PongPlayScene : public Scene {
 public:
-    // Wire sibling scenes in PongGame::onEnter before pushing this scene.
     void setPauseScene   (PongPauseScene*    p) { _pause    = p; }
     void setGameOverScene(PongGameOverScene* g) { _gameover = g; }
 
@@ -92,7 +91,9 @@ public:
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
-    // Read-only accessors used by sibling scenes.
+    // We've moved drawing here so it can access particles and screen shake
+    void drawField(Console& ctx, int ox, int oy) const;
+
     const PongState& state()     const { return _st; }
     bool             playerWon() const { return _playerWon; }
 
@@ -103,9 +104,16 @@ private:
     bool               _playerWon = false;
     uint8_t            _serveTimer = 0;
 
+    // ── Juice / VFX ──────────────────────────────────────────────────────────
+    struct Particle { float x, y, vx, vy; uint8_t life; };
+    static constexpr uint8_t MAX_PARTICLES = 15;
+    Particle _particles[MAX_PARTICLES] = {};
+    uint8_t _shakeFrames = 0;
+
     void _resetBall(bool serveLeft);
     void _updateAI();
-    void _handlePaddleCollision();
+    void _handlePaddleCollision(Console& ctx); // Added ctx for audio
+    void _spawnSparks(float x, float y, float dirX);
 };
 
 class PongPauseScene : public Scene {
