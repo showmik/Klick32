@@ -244,10 +244,25 @@ void RoguePlayScene::_generateCaveMap() {
     _data->player.y = p.iy();
 
     Vec2 s;
+    int attempts = 0; // Prevent infinite loop on tiny disconnected maps
     do { 
         s = getOpenTile(); 
-    } while (abs(s.ix() - _data->player.x) + abs(s.iy() - _data->player.y) < 15); // Ensure stairs aren't right next to player
+        attempts++;
+    } while (abs(s.ix() - _data->player.x) + abs(s.iy() - _data->player.y) < 15 && attempts < 50); 
     _data->map[s.iy()][s.ix()] = TileType::STAIRS_DOWN;
+
+    // --- BUG FIX: Guarantee connectivity between player and stairs ---
+    int curX = _data->player.x;
+    int curY = _data->player.y;
+    
+    if (random(2) == 0) {
+        while (curX != s.ix()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(s.ix() - curX); }
+        while (curY != s.iy()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(s.iy() - curY); }
+    } else {
+        while (curY != s.iy()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(s.iy() - curY); }
+        while (curX != s.ix()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(s.ix() - curX); }
+    }
+    // ---------------------------------------------------------------
 
     int numChests = random(1, 4);
     for (int i = 0; i < numChests; i++) {
