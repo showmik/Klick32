@@ -1,4 +1,5 @@
 #include "TinyRogueGame.h"
+#include "TinyRogueSprites.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 // RogueTitleScene
@@ -310,9 +311,6 @@ void RoguePlayScene::draw(Console& ctx) {
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
-    // We are rendering ASCII-style minimalist tiles using the 5x7 font
-    ctx.setFont(u8g2_font_5x7_tf);
-    
     int viewportTilesX = Console::W / 8;
     int viewportTilesY = Console::H / 8;
 
@@ -323,35 +321,43 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 
             if (mapX < 0 || mapX >= RogueSharedData::MAP_W || mapY < 0 || mapY >= RogueSharedData::MAP_H) continue;
 
-            int screenX = x * 8;
-            int screenY = (y * 8) + 8; // Offset by 8 because font rendering draws from the baseline
+            // Render coordinates (true 8x8 grid, no font baseline offset needed)
+            int renderX = (x * 8) + ox;
+            int renderY = (y * 8) + oy; 
 
             TileType t = _data->map[mapY][mapX];
 
-            // Draw Entities with shake offsets applied
-            int renderX = screenX + ox;
-            int renderY = screenY + oy;
-
+            // 1. Draw the base tile
             if (t == TileType::WALL) {
-                ctx.drawStr(renderX, renderY, "#");
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall);
             } else if (t == TileType::FLOOR || t == TileType::CORRIDOR) {
-                ctx.drawStr(renderX, renderY, ".");
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_floor);
             } else if (t == TileType::STAIRS_DOWN) {
-                ctx.drawStr(renderX, renderY, ">");
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_stairs);
             } else if (t == TileType::CHEST) {
-                // Draw a chest symbol
-                ctx.drawStr(renderX, renderY, "C");
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_chest);
             }
 
-            // Draw Monsters
+            // 2. Draw Entities on top
             Monster* m = _getMonsterAt(mapX, mapY);
             if (m) {
-                if (m->type == MonsterType::RAT) ctx.drawStr(renderX, renderY, "r");
-                else if (m->type == MonsterType::GOBLIN) ctx.drawStr(renderX, renderY, "g");
+                // Clear the background behind the monster so it doesn't overlap the floor dot
+                ctx.setDrawColor(0);
+                ctx.drawBox(renderX, renderY, 8, 8);
+                ctx.setDrawColor(1);
+                
+                if (m->type == MonsterType::RAT) {
+                    ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_rat);
+                } else if (m->type == MonsterType::GOBLIN) {
+                    ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_goblin);
+                }
             } 
-            // Draw Player
             else if (mapX == _data->player.x && mapY == _data->player.y) {
-                ctx.drawStr(renderX, renderY, "@");
+                ctx.setDrawColor(0);
+                ctx.drawBox(renderX, renderY, 8, 8);
+                ctx.setDrawColor(1);
+                
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_player);
             }
         }
     }
