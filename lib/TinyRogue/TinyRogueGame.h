@@ -105,9 +105,13 @@ private:
     Monster* _getMonsterAt(int x, int y) const;
     void _processMonsterTurns(Console& ctx, SceneManager& sm);
 
-    void _generateMap();
+    void _generateMap();            // The "Router"
+    void _generateBSPMap();         // The Castle generator
+    void _generateCaveMap();        // The Cave generator
+    void _spawnMonsters();          // Shared monster spawner
+
     void _processTurn(Console& ctx, int dx, int dy);
-    void _updateCamera(bool snap = false); 
+    void _updateCamera(bool snap = false);
 
     // Combat Particles
     struct BloodSpurt { float x, y, vx, vy; uint8_t life; };

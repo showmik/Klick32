@@ -58,8 +58,22 @@ void RoguePlayScene::_spawnHitEffect(int gridX, int gridY) {
 }
 
 void RoguePlayScene::_generateMap() {
+    // 1. Reset Fog of War
     memset(_data->explored, 0, sizeof(_data->explored));
 
+    // 2. Roll the dice for biome (70% Castle/BSP, 30% Cave/CA)
+    if (random(100) < 70) {
+        _generateBSPMap();
+    } else {
+        _generateCaveMap();
+    }
+
+    // 3. Shared Spawning & Setup
+    _spawnMonsters();
+    _updateCamera(true); 
+}
+
+void RoguePlayScene::_generateBSPMap() {
     for (int y = 0; y < RogueSharedData::MAP_H; y++) {
         for (int x = 0; x < RogueSharedData::MAP_W; x++) {
             _data->map[y][x] = TileType::WALL;
@@ -115,7 +129,6 @@ void RoguePlayScene::_generateMap() {
                     _data->map[y][x] = TileType::FLOOR;
                 }
             }
-
             if (leafCount < 16) leafIndices[leafCount++] = i;
         }
     }
@@ -126,7 +139,6 @@ void RoguePlayScene::_generateMap() {
             BSPNode& r = nodes[nodes[i].rightNode];
 
             nodes[i].room = l.room; 
-
             int lx = l.room.x + l.room.w / 2;
             int ly = l.room.y + l.room.h / 2;
             int rx = r.room.x + r.room.w / 2;
@@ -159,7 +171,78 @@ void RoguePlayScene::_generateMap() {
             }
         }
     }
+}
 
+void RoguePlayScene::_generateCaveMap() {
+    // 1. Initial Noise (45% walls)
+    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
+        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
+            if (x == 0 || x == RogueSharedData::MAP_W - 1 || y == 0 || y == RogueSharedData::MAP_H - 1) {
+                _data->map[y][x] = TileType::WALL; // Hard borders
+            } else {
+                _data->map[y][x] = (random(100) < 45) ? TileType::WALL : TileType::FLOOR;
+            }
+        }
+    }
+
+    // 2. Cellular Automata Smoothing Passes
+    static TileType temp[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
+    for (int i = 0; i < 4; i++) {
+        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+                int wallCount = 0;
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        if (dx == 0 && dy == 0) continue;
+                        if (_data->map[y+dy][x+dx] == TileType::WALL) wallCount++;
+                    }
+                }
+                
+                // Rule: Become wall if crowded, become floor if open
+                if (wallCount >= 5) temp[y][x] = TileType::WALL;
+                else if (wallCount <= 3) temp[y][x] = TileType::FLOOR;
+                else temp[y][x] = _data->map[y][x];
+            }
+        }
+        // Copy back
+        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+                _data->map[y][x] = temp[y][x];
+            }
+        }
+    }
+
+    // 3. Helper to find open space
+    auto getOpenTile = [&]() {
+        int tx, ty;
+        do {
+            tx = random(1, RogueSharedData::MAP_W - 1);
+            ty = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[ty][tx] != TileType::FLOOR);
+        return Vec2{(float)tx, (float)ty};
+    };
+
+    // 4. Place Player, Stairs, and Loot
+    Vec2 p = getOpenTile();
+    _data->player.x = p.ix();
+    _data->player.y = p.iy();
+
+    Vec2 s;
+    do { 
+        s = getOpenTile(); 
+    } while (abs(s.ix() - _data->player.x) + abs(s.iy() - _data->player.y) < 15); // Ensure stairs aren't right next to player
+    _data->map[s.iy()][s.ix()] = TileType::STAIRS_DOWN;
+
+    int numChests = random(1, 4);
+    for (int i = 0; i < numChests; i++) {
+        Vec2 c = getOpenTile();
+        if (c.ix() != _data->player.x || c.iy() != _data->player.y) {
+            _data->map[c.iy()][c.ix()] = TileType::CHEST;
+        }
+    }
+}
+
+void RoguePlayScene::_spawnMonsters() {
     for (auto& m : _data->monsters) m.active = false;
 
     int numMonsters = min((int)RogueSharedData::MAX_MONSTERS, (int)(_data->currentDepth + 2));
@@ -188,8 +271,6 @@ void RoguePlayScene::_generateMap() {
         else if (r == 2) _data->monsters[i].type = MonsterType::BAT;
         else             _data->monsters[i].type = MonsterType::SKELETON;
     }
-    
-    _updateCamera(true); 
 }
 
 void RoguePlayScene::_updateCamera(bool snap) {
