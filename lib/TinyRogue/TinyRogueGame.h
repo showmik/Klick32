@@ -25,22 +25,19 @@ struct Entity {
     int xp = 0;
 };
 
-// Inside RogueSharedData, we already have gold and currentDepth.
-
 struct Monster : public Entity {
     MonsterType type;
     bool active = false;
 };
 
 // ─── Shared Game State ───────────────────────────────────────────────────────
-// Owned by TinyRogueGame. All scenes receive a pointer to this.
 struct RogueSharedData {
-    // Keep map sizes reasonable for memory and generation speed
     static constexpr int MAP_W = 32;
     static constexpr int MAP_H = 32;
     static constexpr int MAX_MONSTERS = 15;
 
     TileType map[MAP_H][MAP_W];
+    bool explored[MAP_H][MAP_W]; // Fog of War tracking
     Entity player;
     Monster monsters[MAX_MONSTERS];
     
@@ -84,7 +81,6 @@ public:
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
-    // Helper exposed so PauseScene can draw the dungeon in the background
     void drawDungeon(Console& ctx, int ox = 0, int oy = 0) const;
 
 private:
@@ -92,11 +88,9 @@ private:
     RoguePauseScene* _pause  = nullptr;
     RogueDeadScene*  _dead   = nullptr;
 
-    // --- NEW: HUD Notification System ---
     char _hudMessage[32] = "";
     uint8_t _hudMessageTimer = 0;
 
-    // --- Replace _camX and _camY with Pixel Tracking ---
     int _camPixelX  = 0;
     int _camPixelY  = 0;
     int _camStartX  = 0;
@@ -105,9 +99,7 @@ private:
     int _camTargetY = 0;
     int _camT       = 0;
     
-    // Number of frames it takes the camera to pan to the player (lower = faster)
     static constexpr int CAM_FRAMES = 6; 
-
     uint8_t _shakeFrames = 0; 
 
     Monster* _getMonsterAt(int x, int y) const;
@@ -115,7 +107,14 @@ private:
 
     void _generateMap();
     void _processTurn(Console& ctx, int dx, int dy);
-    void _updateCamera(bool snap = false); // Add 'snap' parameter
+    void _updateCamera(bool snap = false); 
+
+    // Combat Particles
+    struct BloodSpurt { float x, y, vx, vy; uint8_t life; };
+    static constexpr uint8_t MAX_BLOOD = 10;
+    BloodSpurt _blood[MAX_BLOOD] = {};
+
+    void _spawnHitEffect(int gridX, int gridY);
 };
 
 class RoguePauseScene : public Scene {

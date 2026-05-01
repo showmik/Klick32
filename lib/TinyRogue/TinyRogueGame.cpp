@@ -11,11 +11,8 @@ void RogueTitleScene::onEnter(Console& ctx) {
 
 void RogueTitleScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
-    
-    // Hard exit back to OS
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
-    // Start Game
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
         sm.replace(_play, ctx);
@@ -27,7 +24,6 @@ void RogueTitleScene::draw(Console& ctx) {
     ctx.drawStr(32, 24, "TINY ROGUE");
     ctx.drawHLine(0, 30, Console::W);
 
-    // Blinking prompt
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
         int w = ctx.strWidth("Press A to descend");
@@ -46,39 +42,49 @@ void RoguePlayScene::onEnter(Console& ctx) {
     _generateMap();
 }
 
+void RoguePlayScene::_spawnHitEffect(int gridX, int gridY) {
+    int px = (gridX * 8) + 4;
+    int py = (gridY * 8) + 4;
+    uint8_t spawned = 0;
+    for (auto& b : _blood) {
+        if (b.life == 0) {
+            b.x = px; b.y = py;
+            b.vx = (random(-20, 21) / 10.0f);
+            b.vy = (random(-20, 21) / 10.0f);
+            b.life = random(5, 12);
+            if (++spawned > 4) break;
+        }
+    }
+}
+
 void RoguePlayScene::_generateMap() {
-    // 1. Fill map with solid walls
+    memset(_data->explored, 0, sizeof(_data->explored));
+
     for (int y = 0; y < RogueSharedData::MAP_H; y++) {
         for (int x = 0; x < RogueSharedData::MAP_W; x++) {
             _data->map[y][x] = TileType::WALL;
         }
     }
 
-    // 2. BSP Tree Allocation (Max depth 4 = 31 nodes)
     const int MAX_NODES = 31;
     BSPNode nodes[MAX_NODES];
     int numNodes = 0;
 
-    // Create root node representing the entire map bounds
     nodes[numNodes++] = { {1, 1, RogueSharedData::MAP_W - 2, RogueSharedData::MAP_H - 2}, {0,0,0,0}, -1, -1 };
 
-    // 3. Subdivide the space
     for (int i = 0; i < numNodes; i++) {
-        if (numNodes >= MAX_NODES - 1) break; // Reached maximum tree depth
+        if (numNodes >= MAX_NODES - 1) break;
 
         Rect b = nodes[i].bounds;
-        
-        // Determine split direction based on aspect ratio to prevent overly skinny areas
         bool splitH = random(2) == 0;
-        if (b.w > b.h && b.w / b.h >= 1.25f) splitH = false; // Force vertical cut
-        else if (b.h > b.w && b.h / b.w >= 1.25f) splitH = true;  // Force horizontal cut
+        if (b.w > b.h && b.w / b.h >= 1.25f) splitH = false; 
+        else if (b.h > b.w && b.h / b.w >= 1.25f) splitH = true; 
 
-        int maxSplit = (splitH ? b.h : b.w) - 6; // Leave minimum size of 6 units
-        if (maxSplit <= 6) continue; // Area is too small to split further
+        int maxSplit = (splitH ? b.h : b.w) - 6; 
+        if (maxSplit <= 6) continue; 
 
         int splitLoc = random(6, maxSplit);
 
-        // Assign child indices
         nodes[i].leftNode = numNodes;
         nodes[i].rightNode = numNodes + 1;
 
@@ -91,16 +97,12 @@ void RoguePlayScene::_generateMap() {
         }
     }
 
-    // 4. Carve Rooms in the Leaves
     int leafCount = 0;
     int leafIndices[16];
 
     for (int i = 0; i < numNodes; i++) {
-        // If the node has no children, it's a leaf
         if (nodes[i].leftNode == -1 && nodes[i].rightNode == -1) { 
             Rect b = nodes[i].bounds;
-            
-            // Random room size within the partitioned bounds
             int rw = random(4, b.w - 1);
             int rh = random(4, b.h - 1);
             int rx = b.x + random(1, b.w - rw);
@@ -108,7 +110,6 @@ void RoguePlayScene::_generateMap() {
 
             nodes[i].room = {rx, ry, rw, rh};
 
-            // Carve floor
             for (int y = ry; y < ry + rh; y++) {
                 for (int x = rx; x < rx + rw; x++) {
                     _data->map[y][x] = TileType::FLOOR;
@@ -119,16 +120,13 @@ void RoguePlayScene::_generateMap() {
         }
     }
 
-    // 5. Connect Rooms (Bottom-Up Traversal)
     for (int i = numNodes - 1; i >= 0; i--) {
         if (nodes[i].leftNode != -1) {
             BSPNode& l = nodes[nodes[i].leftNode];
             BSPNode& r = nodes[nodes[i].rightNode];
 
-            // Parent inherits the left child's room so nodes further up the tree can connect to it
             nodes[i].room = l.room; 
 
-            // Connect the center of the left subtree's room to the right subtree's room
             int lx = l.room.x + l.room.w / 2;
             int ly = l.room.y + l.room.h / 2;
             int rx = r.room.x + r.room.w / 2;
@@ -136,7 +134,6 @@ void RoguePlayScene::_generateMap() {
 
             int curX = lx, curY = ly;
             
-            // Carve L-shaped corridor. Only overwrite WALL to preserve existing floors
             if (random(2) == 0) {
                 while (curX != rx) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(rx - curX); }
                 while (curY != ry) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(ry - curY); }
@@ -147,7 +144,6 @@ void RoguePlayScene::_generateMap() {
         }
     }
 
-    // 6. Spawn Player, Exits, and Loot
     if (leafCount > 0) {
         Rect firstRoom = nodes[leafIndices[0]].room;
         _data->player.x = firstRoom.x + firstRoom.w / 2;
@@ -164,7 +160,6 @@ void RoguePlayScene::_generateMap() {
         }
     }
 
-    // 7. Spawn Monsters
     for (auto& m : _data->monsters) m.active = false;
 
     int numMonsters = min((int)RogueSharedData::MAX_MONSTERS, (int)(_data->currentDepth + 2));
@@ -187,7 +182,6 @@ void RoguePlayScene::_generateMap() {
         _data->monsters[i].hp = 4 + _data->currentDepth;
         _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
 
-        // Spawn all four types
         int r = random(4);
         if (r == 0)      _data->monsters[i].type = MonsterType::GOBLIN;
         else if (r == 1) _data->monsters[i].type = MonsterType::RAT;
@@ -195,16 +189,13 @@ void RoguePlayScene::_generateMap() {
         else             _data->monsters[i].type = MonsterType::SKELETON;
     }
     
-    // Note: ensure you use the `true` parameter here if you added smooth camera tracking
     _updateCamera(true); 
 }
 
 void RoguePlayScene::_updateCamera(bool snap) {
-    // Calculate target pixel position to center the player
     int targetX = (_data->player.x * 8) - (Console::W / 2) + 4;
     int targetY = (_data->player.y * 8) - (Console::H / 2) + 4;
 
-    // Clamp to map boundaries (in pixels)
     targetX = gclamp(targetX, 0, (RogueSharedData::MAP_W * 8) - Console::W);
     targetY = gclamp(targetY, 0, (RogueSharedData::MAP_H * 8) - Console::H);
 
@@ -213,7 +204,6 @@ void RoguePlayScene::_updateCamera(bool snap) {
         _camPixelY = _camStartY = _camTargetY = targetY;
         _camT = CAM_FRAMES;
     } else if (targetX != _camTargetX || targetY != _camTargetY) {
-        // Player moved, start a new lerp from the current visual position
         _camStartX = _camPixelX;
         _camStartY = _camPixelY;
         _camTargetX = targetX;
@@ -221,7 +211,6 @@ void RoguePlayScene::_updateCamera(bool snap) {
         _camT = 0;
     }
 
-    // Advance interpolation every frame
     if (_camT < CAM_FRAMES) {
         _camT++;
         _camPixelX = lerpi(_camStartX, _camTargetX, _camT, CAM_FRAMES);
@@ -241,7 +230,6 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
 
     int dx = 0, dy = 0;
     
-    // Swap justPressed for repeat to enable auto-walking!
     if (ctx.repeat(Btn::UP))    dy = -1;
     if (ctx.repeat(Btn::DOWN))  dy = 1;
     if (ctx.repeat(Btn::LEFT))  dx = -1;
@@ -252,6 +240,13 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
         _processMonsterTurns(ctx, sm); 
     }
     
+    // Update combat particles
+    for (auto& b : _blood) {
+        if (b.life > 0) {
+            b.x += b.vx; b.y += b.vy; b.life--;
+        }
+    }
+
     _updateCamera(); 
 }
 
@@ -268,21 +263,17 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
     for (auto& m : _data->monsters) {
         if (!m.active) continue;
 
-        // Base aggro radius varies by type
         int aggro = 6;
         if (m.type == MonsterType::BAT) aggro = 8;
         else if (m.type == MonsterType::SKELETON) aggro = 5;
 
-        // Skeletons are slow: they skip every odd turn
         if (m.type == MonsterType::SKELETON && (_data->turnCount % 2 != 0)) {
             continue; 
         }
 
-        // Bats are fast: they evaluate and step twice per turn
         int steps = (m.type == MonsterType::BAT) ? 2 : 1;
 
         for (int s = 0; s < steps; s++) {
-            // Re-calculate distance in case they moved on the first step
             int dx = _data->player.x - m.x;
             int dy = _data->player.y - m.y;
 
@@ -290,21 +281,17 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                 int stepX = 0, stepY = 0;
 
                 if (m.type == MonsterType::BAT && random(3) == 0) {
-                    // Bats move erratically 33% of the time
                     if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
                     else                stepY = (random(2) == 0) ? 1 : -1;
                 } 
                 else if (m.type == MonsterType::RAT && abs(dx) > 3 && abs(dy) > 3) {
-                    // Rats wander aimlessly unless you are very close
                     if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
                     else                stepY = (random(2) == 0) ? 1 : -1;
                 }
                 else {
-                    // Standard tactical pursuit
                     stepX = gsign(dx);
                     stepY = gsign(dy);
 
-                    // Favor horizontal or vertical movement randomly to avoid perfect diagonal tracking
                     if (stepX != 0 && stepY != 0) {
                         if (random(2) == 0) stepY = 0; 
                         else stepX = 0;
@@ -314,20 +301,16 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                 int nx = m.x + stepX;
                 int ny = m.y + stepY;
 
-                // Map bounds check
                 if (nx < 0 || nx >= RogueSharedData::MAP_W || ny < 0 || ny >= RogueSharedData::MAP_H) continue;
 
-                // Attack player
                 if (nx == _data->player.x && ny == _data->player.y) {
-                    // Calculate damage, ensuring it never drops below 1
                     int damage = m.attack - _data->player.defense;
                     if (damage < 1) damage = 1; 
 
                     _data->player.hp -= damage;
                     playerHit = true;
-                    break; // End their turn immediately if they attack
+                    break; 
                 }
-                // Move into open space
                 else if (_data->map[ny][nx] != TileType::WALL && !_getMonsterAt(nx, ny)) {
                     m.x = nx;
                     m.y = ny;
@@ -350,7 +333,7 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
 }
 
 void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
-    _data->turnCount++; // Advance global time
+    _data->turnCount++; 
 
     int targetX = _data->player.x + dx;
     int targetY = _data->player.y + dy;
@@ -360,16 +343,20 @@ void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
     TileType targetTile = _data->map[targetY][targetX];
     if (targetTile == TileType::WALL) return; 
 
-    // --- Bump Combat & Interactions ---
     Monster* targetMonster = _getMonsterAt(targetX, targetY);
     
     if (targetMonster) {
-        targetMonster->hp -= _data->player.attack;
+        int dmg = _data->player.attack;
+        bool crit = (random(100) < 20);
+        if (crit) dmg *= 2;
+        
+        targetMonster->hp -= dmg;
+        _shakeFrames = crit ? 6 : 3; 
+        _spawnHitEffect(targetX, targetY);
+        ctx.beep(crit ? 1500 : 1000, 20); 
         
         if (targetMonster->hp <= 0) {
             targetMonster->active = false;
-            
-            // Gain XP and Level Up!
             _data->player.xp += targetMonster->maxHp;
             int xpNeeded = _data->player.level * 10;
             
@@ -377,37 +364,54 @@ void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
                 _data->player.xp -= xpNeeded;
                 _data->player.level++;
                 _data->player.maxHp += 5;
-                _data->player.hp = _data->player.maxHp; // Full heal on level up
+                _data->player.hp = _data->player.maxHp; 
                 _data->player.attack += 1;
+                snprintf(_hudMessage, sizeof(_hudMessage), "LEVEL UP!");
+                _hudMessageTimer = 60;
+                ctx.beep(800, 100); ctx.beep(1200, 150);
             }
         }
-    } 
+    }
     else if (targetTile == TileType::CHEST) {
-        // Open the chest!
         _data->map[targetY][targetX] = TileType::FLOOR; 
         
+        if (random(100) < 15) {
+            snprintf(_hudMessage, sizeof(_hudMessage), "It's a MIMIC!");
+            _hudMessageTimer = 60;
+            ctx.beep(200, 150);
+            _shakeFrames = 8;
+            
+            for (auto& m : _data->monsters) {
+                if (!m.active) {
+                    m.x = targetX; m.y = targetY;
+                    m.active = true;
+                    m.hp = 10 + (_data->currentDepth * 3);
+                    m.attack = _data->player.attack + 1; 
+                    m.type = MonsterType::GOBLIN; 
+                    break;
+                }
+            }
+            return; 
+        }
+
         int roll = random(100);
         if (roll < 25) { 
-            // 25% chance for a Sword
             _data->player.attack += 1;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found Sword! +1 ATK");
-            _hudMessageTimer = 60; // Show for 2 seconds (assuming 30fps)
-            ctx.beep(800, 40); ctx.beep(1200, 60); // Triumphant jingle
+            _hudMessageTimer = 60; 
+            ctx.beep(800, 40); ctx.beep(1200, 60); 
         } else if (roll < 50) { 
-            // 25% chance for a Shield
             _data->player.defense += 1;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found Shield! +1 DEF");
             _hudMessageTimer = 60;
             ctx.beep(800, 40); ctx.beep(1200, 60);
         } else if (roll < 75) { 
-            // 25% chance for an Elixir
             _data->player.maxHp += 5;
             _data->player.hp = _data->player.maxHp;
             snprintf(_hudMessage, sizeof(_hudMessage), "Elixir! Max HP Up");
             _hudMessageTimer = 60;
             ctx.beep(600, 40); ctx.beep(1000, 60);
         } else { 
-            // 25% chance for Gold
             int amount = 15 * _data->currentDepth;
             _data->gold += amount;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found %d Gold", amount);
@@ -416,7 +420,6 @@ void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
         }
     }
     else {
-        // --- Normal Movement ---
         _data->player.x = targetX;
         _data->player.y = targetY;
 
@@ -435,18 +438,14 @@ void RoguePlayScene::draw(Console& ctx) {
     
     ctx.setFont(u8g2_font_5x7_tf);
     
-    // --- Top UI Area ---
     if (_hudMessageTimer > 0) {
         _hudMessageTimer--;
-        
-        // Draw the notification banner centered at the top
         int w = ctx.strWidth(_hudMessage);
         ctx.setDrawColor(0);
         ctx.drawBox((Console::W - w) / 2 - 2, 0, w + 4, 9);
         ctx.setDrawColor(1);
         ctx.drawStr((Console::W - w) / 2, 7, _hudMessage);
     } else {
-        // Top Left: Health and Level
         char topBuf[32];
         snprintf(topBuf, sizeof(topBuf), "HP:%d/%d L:%d", _data->player.hp, _data->player.maxHp, _data->player.level);
         
@@ -455,7 +454,6 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.setDrawColor(1);
         ctx.drawStr(1, 7, topBuf);
 
-        // Top Right: Attack and Defense
         char statBuf[32];
         snprintf(statBuf, sizeof(statBuf), "A:%d D:%d", _data->player.attack, _data->player.defense);
         int statW = ctx.strWidth(statBuf);
@@ -466,12 +464,10 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.drawStr(Console::W - statW - 1, 7, statBuf);
     }
 
-    // --- Bottom UI Area ---
     char botBuf[32];
     snprintf(botBuf, sizeof(botBuf), "D:%d  G:%d", (unsigned)_data->currentDepth, (unsigned)_data->gold);
     int botWidth = ctx.strWidth(botBuf);
     
-    // Solid backing box so the text remains readable over the dungeon
     ctx.setDrawColor(0);
     ctx.drawBox(Console::W - botWidth - 3, Console::H - 9, botWidth + 3, 9);
     ctx.setDrawColor(1);
@@ -479,7 +475,6 @@ void RoguePlayScene::draw(Console& ctx) {
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
-    // Add +1 to columns and rows to cover tiles partially scrolling off-screen
     int viewportTilesX = (Console::W / 8) + 1;
     int viewportTilesY = (Console::H / 8) + 1;
     
@@ -495,13 +490,19 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 
             if (mapX < 0 || mapX >= RogueSharedData::MAP_W || mapY < 0 || mapY >= RogueSharedData::MAP_H) continue;
 
-            // Apply pixel-perfect camera offset
+            // Line of Sight Math
+            int distX = abs(mapX - _data->player.x);
+            int distY = abs(mapY - _data->player.y);
+            bool inSight = (distX * distX + distY * distY <= 20); 
+            
+            if (inSight) _data->explored[mapY][mapX] = true;
+            if (!_data->explored[mapY][mapX]) continue; 
+
             int renderX = (x * 8) + offsetX + ox;
             int renderY = (y * 8) + offsetY + oy; 
 
             TileType t = _data->map[mapY][mapX];
 
-            // 1. Draw Base Tiles
             if (t == TileType::WALL) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall);
             } else if (t == TileType::FLOOR || t == TileType::CORRIDOR) {
@@ -512,9 +513,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_chest);
             }
 
-            // 2. Draw Entities (using the new background masking from the tileset update)
             Monster* m = _getMonsterAt(mapX, mapY);
-            if (m) {
+            if (m && inSight) {
                 ctx.setDrawColor(0);
                 ctx.drawBox(renderX, renderY, 8, 8);
                 ctx.setDrawColor(1);
@@ -531,12 +531,32 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_player);
             }
+
+            // Dither pattern for explored but currently unseen tiles
+            if (!inSight) {
+                ctx.setDrawColor(0); 
+                for(int dy=0; dy<8; dy++) {
+                    for(int dx=0; dx<8; dx++) {
+                        if ((dx+dy)%2 == 0) ctx.drawPixel(renderX+dx, renderY+dy);
+                    }
+                }
+                ctx.setDrawColor(1);
+            }
+        }
+    }
+
+    // Draw Combat Particles over everything
+    for (const auto& b : _blood) {
+        if (b.life > 0) {
+            int px = (int)b.x - _camPixelX + (Console::W / 2) - 4 + ox;
+            int py = (int)b.y - _camPixelY + (Console::H / 2) - 4 + oy;
+            ctx.drawPixel(px, py);
         }
     }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// RoguePauseScene & RogueDeadScene (Boilerplate)
+// RoguePauseScene & RogueDeadScene 
 // ═════════════════════════════════════════════════════════════════════════════
 
 void RoguePauseScene::update(Console& ctx, SceneManager& sm) {
@@ -548,7 +568,7 @@ void RoguePauseScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void RoguePauseScene::draw(Console& ctx) {
-    _play->drawDungeon(ctx, 0, 0); // Explicitly pass 0 offsets
+    _play->drawDungeon(ctx, 0, 0); 
     ctx.setDrawColor(0);
     ctx.drawBox(34, 22, 60, 22);
     ctx.setDrawColor(1);
@@ -569,7 +589,7 @@ void RogueDeadScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void RogueDeadScene::draw(Console& ctx) {
-    _play->drawDungeon(ctx, 0, 0); // Explicitly pass 0 offsets
+    _play->drawDungeon(ctx, 0, 0); 
     ctx.setDrawColor(0);
     ctx.drawBox(20, 20, 88, 28);
     ctx.setDrawColor(1);
@@ -589,7 +609,6 @@ void RogueDeadScene::draw(Console& ctx) {
 void TinyRogueGame::onEnter(Console& ctx) {
     _data.hiScore = ctx.loadHiScore();
 
-    // Wire up the scene stack routing
     _title.setPlayScene(&_play);
     _play.setData(&_data);
     _play.setPauseScene(&_pause);
