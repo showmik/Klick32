@@ -85,6 +85,7 @@ private:
     uint8_t          _cursor = 0;
     char             _msg[32] = "";
     uint8_t          _msgTimer = 0;
+    uint8_t          _introFrames = 0;
 };
 
 class RoguePlayScene : public Scene {
@@ -141,11 +142,12 @@ private:
 class RoguePauseScene : public Scene {
 public:
     void setPlayScene(RoguePlayScene* p) { _play = p; }
-    void onEnter(Console& ctx) override {}
+    void onEnter(Console& ctx) override { _introFrames = 0; } // Reset on enter
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 private:
     RoguePlayScene* _play = nullptr;
+    uint8_t _introFrames = 0; // Track animation state
 };
 
 class RogueDeadScene : public Scene {

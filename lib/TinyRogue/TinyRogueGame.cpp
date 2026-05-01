@@ -337,6 +337,7 @@ void RoguePlayScene::_updateCamera(bool snap) {
 }
 
 void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
+    if (_hudMessageTimer > 0) _hudMessageTimer--;
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
@@ -561,9 +562,11 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 void RogueShopScene::onEnter(Console& ctx) { 
     _cursor = 0; 
     _msgTimer = 0;
+    _introFrames = 0; // Reset animation
 }
 
 void RogueShopScene::update(Console& ctx, SceneManager& sm) {
+    if (_introFrames < 10) _introFrames++;
     // Exit Shop
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
         ctx.sfxMenuBack();
@@ -621,39 +624,36 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void RogueShopScene::draw(Console& ctx) {
-    // 1. Draw the frozen dungeon underneath
     _play->drawDungeon(ctx, 0, 0); 
     
-    // 2. Draw Shop UI Box
-    ctx.setDrawColor(0);
-    ctx.drawBox(10, 8, 108, 48);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(10, 8, 108, 48);
-
-    // 3. Header & Gold
-    ctx.setFont(u8g2_font_5x7_tf);
-    ctx.drawStr(14, 16, "MERCHANT (B to exit)");
+    // Calculate slide-in offset (Starts at screen height, ends at 0)
+    int yOff = lerpi(Console::H, 0, _introFrames, 10);
     
-    ctx.drawHLine(10, 20, 108);
+    // Apply yOff to all vertical coordinates
+    ctx.setDrawColor(0);
+    ctx.drawBox(10, 8 + yOff, 108, 48);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(10, 8 + yOff, 108, 48);
+
+    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.drawStr(14, 16 + yOff, "MERCHANT (B to exit)");
+    ctx.drawHLine(10, 20 + yOff, 108);
     
     char gBuf[16]; 
     snprintf(gBuf, sizeof(gBuf), "Wallet: %u g", _data->gold);
-    ctx.drawStr(14, 28, gBuf);
+    ctx.drawStr(14, 28 + yOff, gBuf);
 
-    // 4. Items
-    ctx.drawStr(24, 38, "Heal HP   (20g)");
-    ctx.drawStr(24, 46, "Up ATK    (50g)");
-    ctx.drawStr(24, 54, "Up DEF    (50g)");
+    ctx.drawStr(24, 38 + yOff, "Heal HP   (20g)");
+    ctx.drawStr(24, 46 + yOff, "Up ATK    (50g)");
+    ctx.drawStr(24, 54 + yOff, "Up DEF    (50g)");
 
-    // 5. Cursor
-    ctx.drawStr(14, 38 + (_cursor * 8), ">");
+    ctx.drawStr(14, 38 + (_cursor * 8) + yOff, ">");
 
-    // 6. Dynamic Event Messages (Flashes over the bottom)
     if (_msgTimer > 0) {
         ctx.setDrawColor(0);
-        ctx.drawBox(12, 40, 104, 14);
+        ctx.drawBox(12, 40 + yOff, 104, 14);
         ctx.setDrawColor(1);
-        ctx.drawStr(14, 50, _msg);
+        ctx.drawStr(14, 50 + yOff, _msg);
     }
 }
 
@@ -663,16 +663,26 @@ void RoguePlayScene::draw(Console& ctx) {
     
     drawDungeon(ctx, ox, oy); 
     
+    
+    // Top Center: HUD Messages
     ctx.setFont(u8g2_font_5x7_tf);
     
     // Top Center: HUD Messages
     if (_hudMessageTimer > 0) {
-        _hudMessageTimer--;
-        int w = ctx.strWidth(_hudMessage);
-        ctx.setDrawColor(0);
-        ctx.drawBox((Console::W - w) / 2 - 2, 0, w + 4, 9);
-        ctx.setDrawColor(1);
-        ctx.drawStr((Console::W - w) / 2, 7, _hudMessage);
+        // Because timer goes from 60 down to 0, lerpi mapping (0, 12) means
+        // it starts at Y=12 and floats UP to Y=0 as the timer runs out.
+        int floatY = lerpi(0, 12, _hudMessageTimer, 60);
+        
+        // 1-bit "Fade Out": Flicker rapidly during the last 15 frames
+        bool visible = (_hudMessageTimer > 15) || (_hudMessageTimer % 2 == 0);
+        
+        if (visible) {
+            int w = ctx.strWidth(_hudMessage);
+            ctx.setDrawColor(0);
+            ctx.drawBox((Console::W - w) / 2 - 2, floatY, w + 4, 9);
+            ctx.setDrawColor(1);
+            ctx.drawStr((Console::W - w) / 2, floatY + 7, _hudMessage);
+        }
     } else {
         // Top Left: HP (Heart Icon) and Level
         char topBuf[32];
@@ -820,6 +830,7 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void RoguePauseScene::update(Console& ctx, SceneManager& sm) {
+    if (_introFrames < 8) _introFrames++;
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
@@ -829,12 +840,16 @@ void RoguePauseScene::update(Console& ctx, SceneManager& sm) {
 
 void RoguePauseScene::draw(Console& ctx) {
     _play->drawDungeon(ctx, 0, 0); 
+    
+    // Calculate slide-in offset (Starts off-screen top, ends at 0)
+    int yOff = lerpi(-30, 0, _introFrames, 8);
+
     ctx.setDrawColor(0);
-    ctx.drawBox(34, 22, 60, 22);
+    ctx.drawBox(34, 22 + yOff, 60, 22);
     ctx.setDrawColor(1);
-    ctx.drawFrame(34, 22, 60, 22);
+    ctx.drawFrame(34, 22 + yOff, 60, 22);
     ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(42, 37, "PAUSED");
+    ctx.drawStr(42, 37 + yOff, "PAUSED");
 }
 
 void RogueDeadScene::onEnter(Console& ctx) { _frame = 0; }
