@@ -24,6 +24,7 @@
 #include "SnakeGame.h"
 #include "PongGame.h"
 #include "SpaceInvadersGame.h"
+#include "TinyRogueGame.h"
 // ... add more here
 
 // ─── Global instances ────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ DinoGame dino;
 SnakeGame snake;
 PongGame  pong;
 SpaceInvadersGame invaders;
+TinyRogueGame rogue;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
@@ -41,7 +43,7 @@ void setup() {
     os.registerGame(&snake);
     os.registerGame(&pong);
     os.registerGame(&invaders);
-
+    os.registerGame(&rogue);
     os.run();   // never returns
 }
 
