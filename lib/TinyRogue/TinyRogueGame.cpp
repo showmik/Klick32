@@ -133,6 +133,14 @@ void RoguePlayScene::_generateBSPMap() {
         }
     }
 
+    // Spawn exactly 1 Merchant on an open floor tile
+    int mx, my;
+    do {
+        mx = random(1, RogueSharedData::MAP_W - 1);
+        my = random(1, RogueSharedData::MAP_H - 1);
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    _data->map[my][mx] = TileType::MERCHANT;
+
     for (int i = numNodes - 1; i >= 0; i--) {
         if (nodes[i].leftNode != -1) {
             BSPNode& l = nodes[nodes[i].leftNode];
@@ -211,6 +219,14 @@ void RoguePlayScene::_generateCaveMap() {
             }
         }
     }
+
+    // Spawn exactly 1 Merchant on an open floor tile
+    int mx, my;
+    do {
+        mx = random(1, RogueSharedData::MAP_W - 1);
+        my = random(1, RogueSharedData::MAP_H - 1);
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    _data->map[my][mx] = TileType::MERCHANT;
 
     // 3. Helper to find open space
     auto getOpenTile = [&]() {
@@ -317,7 +333,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.repeat(Btn::RIGHT)) dx = 1;
 
     if (dx != 0 || dy != 0) {
-        _processTurn(ctx, dx, dy);         
+        _processTurn(ctx, sm, dx, dy);  // <--- Added 'sm' right here!      
         _processMonsterTurns(ctx, sm); 
     }
     
@@ -413,7 +429,7 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
     }
 }
 
-void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
+void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy) {
     _data->turnCount++; 
 
     int targetX = _data->player.x + dx;
@@ -500,6 +516,12 @@ void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
             ctx.beep(1200, 20); ctx.beep(1500, 40);
         }
     }
+    else if (targetTile == TileType::MERCHANT) {
+        // Push the shop overlay without ending the turn
+        ctx.sfxMenuEnter();
+        sm.push(_shop, ctx);
+        return; 
+    }
     else {
         _data->player.x = targetX;
         _data->player.y = targetY;
@@ -508,6 +530,109 @@ void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
             _data->currentDepth++;
             _generateMap(); 
         }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RogueShopScene 
+// ═════════════════════════════════════════════════════════════════════════════
+
+void RogueShopScene::onEnter(Console& ctx) { 
+    _cursor = 0; 
+    _msgTimer = 0;
+}
+
+void RogueShopScene::update(Console& ctx, SceneManager& sm) {
+    // Exit Shop
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
+        ctx.sfxMenuBack();
+        sm.pop(ctx);
+        return;
+    }
+
+    // Navigation
+    if (ctx.justPressed(Btn::UP) || ctx.repeat(Btn::UP)) {
+        if (_cursor > 0) { _cursor--; ctx.sfxMenuNav(); }
+    }
+    if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) {
+        if (_cursor < 2) { _cursor++; ctx.sfxMenuNav(); }
+    }
+
+    if (_msgTimer > 0) _msgTimer--;
+
+    // Purchasing Logic
+    if (ctx.justPressed(Btn::A)) {
+        int cost = (_cursor == 0) ? 20 : 50; // Health is 20g, upgrades are 50g
+
+        if (_data->gold >= cost) {
+            bool purchased = false;
+
+            if (_cursor == 0 && _data->player.hp < _data->player.maxHp) {
+                _data->player.hp = _data->player.maxHp;
+                snprintf(_msg, sizeof(_msg), "Fully Healed!");
+                purchased = true;
+            } else if (_cursor == 0) {
+                snprintf(_msg, sizeof(_msg), "Already full HP!");
+            } else if (_cursor == 1) {
+                _data->player.attack++;
+                snprintf(_msg, sizeof(_msg), "Weapon Sharpened!");
+                purchased = true;
+            } else if (_cursor == 2) {
+                _data->player.defense++;
+                snprintf(_msg, sizeof(_msg), "Armor Fortified!");
+                purchased = true;
+            }
+
+            if (purchased) {
+                _data->gold -= cost;
+                ctx.sfxPoint(); // Happy sound
+            } else {
+                ctx.beep(300, 30); // Error sound
+            }
+            _msgTimer = 60;
+
+        } else {
+            ctx.sfxDeath(); // Not enough money sound
+            snprintf(_msg, sizeof(_msg), "Not enough Gold!");
+            _msgTimer = 60;
+        }
+    }
+}
+
+void RogueShopScene::draw(Console& ctx) {
+    // 1. Draw the frozen dungeon underneath
+    _play->drawDungeon(ctx, 0, 0); 
+    
+    // 2. Draw Shop UI Box
+    ctx.setDrawColor(0);
+    ctx.drawBox(10, 8, 108, 48);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(10, 8, 108, 48);
+
+    // 3. Header & Gold
+    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.drawStr(14, 16, "MERCHANT (B to exit)");
+    
+    ctx.drawHLine(10, 20, 108);
+    
+    char gBuf[16]; 
+    snprintf(gBuf, sizeof(gBuf), "Wallet: %u g", _data->gold);
+    ctx.drawStr(14, 28, gBuf);
+
+    // 4. Items
+    ctx.drawStr(24, 38, "Heal HP   (20g)");
+    ctx.drawStr(24, 46, "Up ATK    (50g)");
+    ctx.drawStr(24, 54, "Up DEF    (50g)");
+
+    // 5. Cursor
+    ctx.drawStr(14, 38 + (_cursor * 8), ">");
+
+    // 6. Dynamic Event Messages (Flashes over the bottom)
+    if (_msgTimer > 0) {
+        ctx.setDrawColor(0);
+        ctx.drawBox(12, 40, 104, 14);
+        ctx.setDrawColor(1);
+        ctx.drawStr(14, 50, _msg);
     }
 }
 
@@ -592,6 +717,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_stairs);
             } else if (t == TileType::CHEST) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_chest);
+            } else if (t == TileType::MERCHANT) {            
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_merchant);
             }
 
             Monster* m = _getMonsterAt(mapX, mapY);
@@ -694,6 +821,11 @@ void TinyRogueGame::onEnter(Console& ctx) {
     _play.setData(&_data);
     _play.setPauseScene(&_pause);
     _play.setDeadScene(&_dead);
+    _play.setShopScene(&_shop); 
+    
+    _shop.setData(&_data);      
+    _shop.setPlayScene(&_play); 
+
     _pause.setPlayScene(&_play);
     _dead.setData(&_data);
     _dead.setPlayScene(&_play);

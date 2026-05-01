@@ -7,7 +7,7 @@
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
 enum class TileType : uint8_t { 
-    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST 
+    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT 
 };
 
 enum class MonsterType : uint8_t { 
@@ -59,6 +59,7 @@ struct BSPNode {
 class RoguePlayScene;
 class RoguePauseScene;
 class RogueDeadScene;
+class RogueShopScene;
 
 class RogueTitleScene : public Scene {
 public:
@@ -71,11 +72,27 @@ private:
     uint8_t         _frame = 0;
 };
 
+class RogueShopScene : public Scene {
+public:
+    void setPlayScene(RoguePlayScene* p) { _play = p; }
+    void setData(RogueSharedData* d)     { _data = d; }
+    void onEnter(Console& ctx) override;
+    void update (Console& ctx, SceneManager& sm) override;
+    void draw   (Console& ctx) override;
+private:
+    RoguePlayScene*  _play = nullptr;
+    RogueSharedData* _data = nullptr;
+    uint8_t          _cursor = 0;
+    char             _msg[32] = "";
+    uint8_t          _msgTimer = 0;
+};
+
 class RoguePlayScene : public Scene {
 public:
     void setData      (RogueSharedData* d) { _data = d; }
     void setPauseScene(RoguePauseScene* p) { _pause = p; }
     void setDeadScene (RogueDeadScene* d)  { _dead = d; }
+    void setShopScene (RogueShopScene* s)  { _shop = s; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
@@ -87,7 +104,7 @@ private:
     RogueSharedData* _data   = nullptr;
     RoguePauseScene* _pause  = nullptr;
     RogueDeadScene*  _dead   = nullptr;
-
+    RogueShopScene*  _shop   = nullptr;
     char _hudMessage[32] = "";
     uint8_t _hudMessageTimer = 0;
 
@@ -110,7 +127,7 @@ private:
     void _generateCaveMap();        // The Cave generator
     void _spawnMonsters();          // Shared monster spawner
 
-    void _processTurn(Console& ctx, int dx, int dy);
+    void _processTurn(Console& ctx, SceneManager& sm, int dx, int dy);
     void _updateCamera(bool snap = false);
 
     // Combat Particles
@@ -163,4 +180,5 @@ private:
     RoguePlayScene  _play;
     RoguePauseScene _pause;
     RogueDeadScene  _dead;
+    RogueShopScene  _shop;
 };

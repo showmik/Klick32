@@ -48,3 +48,8 @@ static const uint8_t PROGMEM spr_rogue_bat[8] = {
 static const uint8_t PROGMEM spr_rogue_skeleton[8] = {
     0x3C, 0x5A, 0x3C, 0x18, 0x3C, 0x24, 0x24, 0x00
 };
+
+// Merchant: A hooded figure with a gleaming coin
+static const uint8_t PROGMEM spr_rogue_merchant[8] = {
+    0x3C, 0x7E, 0xDB, 0xFF, 0x24, 0x3C, 0x66, 0x00
+};
