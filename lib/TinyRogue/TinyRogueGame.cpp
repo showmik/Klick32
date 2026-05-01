@@ -54,72 +54,124 @@ void RoguePlayScene::_generateMap() {
         }
     }
 
-    // 2. Simple Room Generation
-    const int numRooms = 5;
-    int prevCenterX = 0, prevCenterY = 0;
+    // 2. BSP Tree Allocation (Max depth 4 = 31 nodes)
+    const int MAX_NODES = 31;
+    BSPNode nodes[MAX_NODES];
+    int numNodes = 0;
 
-    for (int i = 0; i < numRooms; i++) {
-        // Random room dimensions and position
-        int rw = random(4, 8);
-        int rh = random(4, 8);
-        int rx = random(1, RogueSharedData::MAP_W - rw - 1);
-        int ry = random(1, RogueSharedData::MAP_H - rh - 1);
+    // Create root node representing the entire map bounds
+    nodes[numNodes++] = { {1, 1, RogueSharedData::MAP_W - 2, RogueSharedData::MAP_H - 2}, {0,0,0,0}, -1, -1 };
 
-        // Carve the room
-        for (int y = ry; y < ry + rh; y++) {
-            for (int x = rx; x < rx + rw; x++) {
-                _data->map[y][x] = TileType::FLOOR;
-            }
-        }
+    // 3. Subdivide the space
+    for (int i = 0; i < numNodes; i++) {
+        if (numNodes >= MAX_NODES - 1) break; // Reached maximum tree depth
 
-        int centerX = rx + (rw / 2);
-        int centerY = ry + (rh / 2);
+        Rect b = nodes[i].bounds;
+        
+        // Determine split direction based on aspect ratio to prevent overly skinny areas
+        bool splitH = random(2) == 0;
+        if (b.w > b.h && b.w / b.h >= 1.25f) splitH = false; // Force vertical cut
+        else if (b.h > b.w && b.h / b.w >= 1.25f) splitH = true;  // Force horizontal cut
 
-        if (i == 0) {
-            // Place player in the first room
-            _data->player.x = centerX;
-            _data->player.y = centerY;
+        int maxSplit = (splitH ? b.h : b.w) - 6; // Leave minimum size of 6 units
+        if (maxSplit <= 6) continue; // Area is too small to split further
+
+        int splitLoc = random(6, maxSplit);
+
+        // Assign child indices
+        nodes[i].leftNode = numNodes;
+        nodes[i].rightNode = numNodes + 1;
+
+        if (splitH) {
+            nodes[numNodes++] = { {b.x, b.y, b.w, splitLoc}, {0,0,0,0}, -1, -1 };
+            nodes[numNodes++] = { {b.x, b.y + splitLoc, b.w, b.h - splitLoc}, {0,0,0,0}, -1, -1 };
         } else {
-            // Carve L-shaped corridor to the previous room
-            int curX = prevCenterX;
-            int curY = prevCenterY;
-            
-            // Move horizontally first, then vertically (or vice versa randomly)
-            if (random(2) == 0) {
-                while (curX != centerX) { _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(centerX - curX); }
-                while (curY != centerY) { _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(centerY - curY); }
-            } else {
-                while (curY != centerY) { _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(centerY - curY); }
-                while (curX != centerX) { _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(centerX - curX); }
-            }
+            nodes[numNodes++] = { {b.x, b.y, splitLoc, b.h}, {0,0,0,0}, -1, -1 };
+            nodes[numNodes++] = { {b.x + splitLoc, b.y, b.w - splitLoc, b.h}, {0,0,0,0}, -1, -1 };
         }
-
-        if (i == numRooms - 1) {
-            // Place exit stairs in the last room
-            _data->map[centerY][centerX] = TileType::STAIRS_DOWN;
-        }
-
-        // 30% chance to spawn a chest in the corner of a room
-        if (i > 0 && random(100) < 30) {
-            _data->map[ry + 1][rx + 1] = TileType::CHEST;
-        }
-
-        prevCenterX = centerX;
-        prevCenterY = centerY;
     }
 
-    // --- Monster Spawning ---
-    // Reset all monsters
+    // 4. Carve Rooms in the Leaves
+    int leafCount = 0;
+    int leafIndices[16];
+
+    for (int i = 0; i < numNodes; i++) {
+        // If the node has no children, it's a leaf
+        if (nodes[i].leftNode == -1 && nodes[i].rightNode == -1) { 
+            Rect b = nodes[i].bounds;
+            
+            // Random room size within the partitioned bounds
+            int rw = random(4, b.w - 1);
+            int rh = random(4, b.h - 1);
+            int rx = b.x + random(1, b.w - rw);
+            int ry = b.y + random(1, b.h - rh);
+
+            nodes[i].room = {rx, ry, rw, rh};
+
+            // Carve floor
+            for (int y = ry; y < ry + rh; y++) {
+                for (int x = rx; x < rx + rw; x++) {
+                    _data->map[y][x] = TileType::FLOOR;
+                }
+            }
+
+            if (leafCount < 16) leafIndices[leafCount++] = i;
+        }
+    }
+
+    // 5. Connect Rooms (Bottom-Up Traversal)
+    for (int i = numNodes - 1; i >= 0; i--) {
+        if (nodes[i].leftNode != -1) {
+            BSPNode& l = nodes[nodes[i].leftNode];
+            BSPNode& r = nodes[nodes[i].rightNode];
+
+            // Parent inherits the left child's room so nodes further up the tree can connect to it
+            nodes[i].room = l.room; 
+
+            // Connect the center of the left subtree's room to the right subtree's room
+            int lx = l.room.x + l.room.w / 2;
+            int ly = l.room.y + l.room.h / 2;
+            int rx = r.room.x + r.room.w / 2;
+            int ry = r.room.y + r.room.h / 2;
+
+            int curX = lx, curY = ly;
+            
+            // Carve L-shaped corridor. Only overwrite WALL to preserve existing floors
+            if (random(2) == 0) {
+                while (curX != rx) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(rx - curX); }
+                while (curY != ry) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(ry - curY); }
+            } else {
+                while (curY != ry) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(ry - curY); }
+                while (curX != rx) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(rx - curX); }
+            }
+        }
+    }
+
+    // 6. Spawn Player, Exits, and Loot
+    if (leafCount > 0) {
+        Rect firstRoom = nodes[leafIndices[0]].room;
+        _data->player.x = firstRoom.x + firstRoom.w / 2;
+        _data->player.y = firstRoom.y + firstRoom.h / 2;
+
+        Rect lastRoom = nodes[leafIndices[leafCount - 1]].room;
+        _data->map[lastRoom.y + lastRoom.h / 2][lastRoom.x + lastRoom.w / 2] = TileType::STAIRS_DOWN;
+        
+        for (int i = 1; i < leafCount - 1; i++) {
+            if (random(100) < 30) {
+                Rect r = nodes[leafIndices[i]].room;
+                _data->map[r.y + 1][r.x + 1] = TileType::CHEST;
+            }
+        }
+    }
+
+    // 7. Spawn Monsters
     for (auto& m : _data->monsters) m.active = false;
 
-    // Spawn more monsters as you go deeper (cap at MAX_MONSTERS)
     int numMonsters = min((int)RogueSharedData::MAX_MONSTERS, (int)(_data->currentDepth + 2));
-    
     for (int i = 0; i < numMonsters; i++) {
         int mx, my;
         bool validSpot = false;
         
-        // Find a random floor tile that isn't the player's starting spot
         while (!validSpot) {
             mx = random(1, RogueSharedData::MAP_W - 1);
             my = random(1, RogueSharedData::MAP_H - 1);
@@ -132,28 +184,43 @@ void RoguePlayScene::_generateMap() {
         _data->monsters[i].x = mx;
         _data->monsters[i].y = my;
         _data->monsters[i].active = true;
-        
-        // Scale health and damage with depth
         _data->monsters[i].hp = 4 + _data->currentDepth;
         _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
         _data->monsters[i].type = (random(3) == 0) ? MonsterType::GOBLIN : MonsterType::RAT;
     }
     
-    _updateCamera();
+    // Note: ensure you use the `true` parameter here if you added smooth camera tracking
+    _updateCamera(true); 
 }
 
-void RoguePlayScene::_updateCamera() {
-    // Center the camera on the player. 
-    // Console is 128x64. At 8x8 pixels per tile, viewport is 16x8 tiles.
-    int viewportTilesX = Console::W / 8;
-    int viewportTilesY = Console::H / 8;
+void RoguePlayScene::_updateCamera(bool snap) {
+    // Calculate target pixel position to center the player
+    int targetX = (_data->player.x * 8) - (Console::W / 2) + 4;
+    int targetY = (_data->player.y * 8) - (Console::H / 2) + 4;
 
-    _camX = _data->player.x - (viewportTilesX / 2);
-    _camY = _data->player.y - (viewportTilesY / 2);
+    // Clamp to map boundaries (in pixels)
+    targetX = gclamp(targetX, 0, (RogueSharedData::MAP_W * 8) - Console::W);
+    targetY = gclamp(targetY, 0, (RogueSharedData::MAP_H * 8) - Console::H);
 
-    // Clamp camera so it doesn't show outside the map bounds
-    _camX = gclamp(_camX, 0, RogueSharedData::MAP_W - viewportTilesX);
-    _camY = gclamp(_camY, 0, RogueSharedData::MAP_H - viewportTilesY);
+    if (snap) {
+        _camPixelX = _camStartX = _camTargetX = targetX;
+        _camPixelY = _camStartY = _camTargetY = targetY;
+        _camT = CAM_FRAMES;
+    } else if (targetX != _camTargetX || targetY != _camTargetY) {
+        // Player moved, start a new lerp from the current visual position
+        _camStartX = _camPixelX;
+        _camStartY = _camPixelY;
+        _camTargetX = targetX;
+        _camTargetY = targetY;
+        _camT = 0;
+    }
+
+    // Advance interpolation every frame
+    if (_camT < CAM_FRAMES) {
+        _camT++;
+        _camPixelX = lerpi(_camStartX, _camTargetX, _camT, CAM_FRAMES);
+        _camPixelY = lerpi(_camStartY, _camTargetY, _camT, CAM_FRAMES);
+    }
 }
 
 void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
@@ -164,7 +231,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
         return;
     }
 
-    if (_shakeFrames > 0) _shakeFrames--; // Decay screen shake
+    if (_shakeFrames > 0) _shakeFrames--; 
 
     int dx = 0, dy = 0;
     if (ctx.justPressed(Btn::UP))    dy = -1;
@@ -173,10 +240,12 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.justPressed(Btn::RIGHT)) dx = 1;
 
     if (dx != 0 || dy != 0) {
-        _processTurn(dx, dy);         // 1. Player Acts
-        _processMonsterTurns(ctx, sm); // 2. Monsters Act
-        _updateCamera();              // 3. Update View
+        _processTurn(dx, dy);         
+        _processMonsterTurns(ctx, sm); 
     }
+    
+    // Call every frame to process the lerp animation
+    _updateCamera(); 
 }
 
 Monster* RoguePlayScene::_getMonsterAt(int x, int y) const {
@@ -311,23 +380,29 @@ void RoguePlayScene::draw(Console& ctx) {
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
-    int viewportTilesX = Console::W / 8;
-    int viewportTilesY = Console::H / 8;
+    // Add +1 to columns and rows to cover tiles partially scrolling off-screen
+    int viewportTilesX = (Console::W / 8) + 1;
+    int viewportTilesY = (Console::H / 8) + 1;
+    
+    int startCol = _camPixelX / 8;
+    int startRow = _camPixelY / 8;
+    int offsetX = -(_camPixelX % 8);
+    int offsetY = -(_camPixelY % 8);
 
-    for (int y = 0; y < viewportTilesY; y++) {
-        for (int x = 0; x < viewportTilesX; x++) {
-            int mapX = _camX + x;
-            int mapY = _camY + y;
+    for (int y = 0; y <= viewportTilesY; y++) {
+        for (int x = 0; x <= viewportTilesX; x++) {
+            int mapX = startCol + x;
+            int mapY = startRow + y;
 
             if (mapX < 0 || mapX >= RogueSharedData::MAP_W || mapY < 0 || mapY >= RogueSharedData::MAP_H) continue;
 
-            // Render coordinates (true 8x8 grid, no font baseline offset needed)
-            int renderX = (x * 8) + ox;
-            int renderY = (y * 8) + oy; 
+            // Apply pixel-perfect camera offset
+            int renderX = (x * 8) + offsetX + ox;
+            int renderY = (y * 8) + offsetY + oy; 
 
             TileType t = _data->map[mapY][mapX];
 
-            // 1. Draw the base tile
+            // 1. Draw Base Tiles
             if (t == TileType::WALL) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall);
             } else if (t == TileType::FLOOR || t == TileType::CORRIDOR) {
@@ -338,19 +413,15 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_chest);
             }
 
-            // 2. Draw Entities on top
+            // 2. Draw Entities (using the new background masking from the tileset update)
             Monster* m = _getMonsterAt(mapX, mapY);
             if (m) {
-                // Clear the background behind the monster so it doesn't overlap the floor dot
                 ctx.setDrawColor(0);
                 ctx.drawBox(renderX, renderY, 8, 8);
                 ctx.setDrawColor(1);
                 
-                if (m->type == MonsterType::RAT) {
-                    ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_rat);
-                } else if (m->type == MonsterType::GOBLIN) {
-                    ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_goblin);
-                }
+                if (m->type == MonsterType::RAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_rat);
+                else if (m->type == MonsterType::GOBLIN) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_goblin);
             } 
             else if (mapX == _data->player.x && mapY == _data->player.y) {
                 ctx.setDrawColor(0);

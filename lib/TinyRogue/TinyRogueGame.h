@@ -49,6 +49,13 @@ struct RogueSharedData {
     uint32_t hiScore = 0;
 };
 
+struct BSPNode {
+    Rect bounds;
+    Rect room;
+    int leftNode = -1;
+    int rightNode = -1;
+};
+
 // ─── Scene Declarations ──────────────────────────────────────────────────────
 
 class RoguePlayScene;
@@ -84,19 +91,26 @@ private:
     RoguePauseScene* _pause  = nullptr;
     RogueDeadScene*  _dead   = nullptr;
 
-    // Camera offset
-    int _camX = 0;
-    int _camY = 0;
+    // --- Replace _camX and _camY with Pixel Tracking ---
+    int _camPixelX  = 0;
+    int _camPixelY  = 0;
+    int _camStartX  = 0;
+    int _camStartY  = 0;
+    int _camTargetX = 0;
+    int _camTargetY = 0;
+    int _camT       = 0;
+    
+    // Number of frames it takes the camera to pan to the player (lower = faster)
+    static constexpr int CAM_FRAMES = 6; 
 
-    uint8_t _shakeFrames = 0; // Adds some "juice" when the player takes damage
+    uint8_t _shakeFrames = 0; 
 
-    // New AI & Combat Helpers
     Monster* _getMonsterAt(int x, int y) const;
     void _processMonsterTurns(Console& ctx, SceneManager& sm);
 
     void _generateMap();
     void _processTurn(int dx, int dy);
-    void _updateCamera();
+    void _updateCamera(bool snap = false); // Add 'snap' parameter
 };
 
 class RoguePauseScene : public Scene {
