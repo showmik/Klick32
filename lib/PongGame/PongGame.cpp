@@ -1,5 +1,6 @@
 // Target path: lib/PongGame/PongGame.cpp
 #include "PongGame.h"
+#include "PongSprites.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 // PongTitleScene
@@ -405,3 +406,4 @@ void PongGame::draw(Console& ctx) {
 bool        PongGame::isRunning()   const { return !_sm.empty(); }
 bool        PongGame::needsRedraw() const { return _sm.needsRedraw(); }
 const char* PongGame::getName()     const { return "Pong"; }
+const uint8_t* PongGame::getCoverArt() const { return spr_pong_cover; }
