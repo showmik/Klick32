@@ -276,8 +276,14 @@ void RoguePlayScene::_generateCaveMap() {
 void RoguePlayScene::_spawnMonsters() {
     for (auto& m : _data->monsters) m.active = false;
 
-    int numMonsters = min((int)RogueSharedData::MAX_MONSTERS, (int)(_data->currentDepth + 2));
-    for (int i = 0; i < numMonsters; i++) {
+    // FIX: Significantly increase enemy density. 
+    // Spawns 8 enemies on Floor 1, scaling up as you descend.
+    int targetMonsters = (_data->currentDepth * 2) + 6;
+    if (targetMonsters > RogueSharedData::MAX_MONSTERS) {
+        targetMonsters = RogueSharedData::MAX_MONSTERS;
+    }
+
+    for (int i = 0; i < targetMonsters; i++) {
         int mx, my;
         bool validSpot = false;
         
@@ -659,6 +665,7 @@ void RoguePlayScene::draw(Console& ctx) {
     
     ctx.setFont(u8g2_font_5x7_tf);
     
+    // Top Center: HUD Messages
     if (_hudMessageTimer > 0) {
         _hudMessageTimer--;
         int w = ctx.strWidth(_hudMessage);
@@ -667,32 +674,62 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.setDrawColor(1);
         ctx.drawStr((Console::W - w) / 2, 7, _hudMessage);
     } else {
+        // Top Left: HP (Heart Icon) and Level
         char topBuf[32];
-        snprintf(topBuf, sizeof(topBuf), "HP:%d/%d L:%d", _data->player.hp, _data->player.maxHp, _data->player.level);
+        snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", _data->player.hp, _data->player.maxHp, _data->player.level);
+        int topW = ctx.strWidth(topBuf);
         
         ctx.setDrawColor(0);
-        ctx.drawBox(0, 0, ctx.strWidth(topBuf) + 2, 9);
+        ctx.drawBox(0, 0, 10 + topW + 2, 10);
         ctx.setDrawColor(1);
-        ctx.drawStr(1, 7, topBuf);
+        ctx.drawBitmap(1, 1, 1, 8, spr_icon_heart);
+        ctx.drawStr(11, 7, topBuf);
 
-        char statBuf[32];
-        snprintf(statBuf, sizeof(statBuf), "A:%d D:%d", _data->player.attack, _data->player.defense);
-        int statW = ctx.strWidth(statBuf);
+        // Top Right: Attack (Sword) and Defense (Shield)
+        char atkBuf[8], defBuf[8];
+        snprintf(atkBuf, sizeof(atkBuf), "%d", _data->player.attack);
+        snprintf(defBuf, sizeof(defBuf), "%d", _data->player.defense);
+        
+        int atkW = ctx.strWidth(atkBuf);
+        int defW = ctx.strWidth(defBuf);
+        // Calculate total width: [Sword] + ATK + space + [Shield] + DEF
+        int trTotalW = 8 + 2 + atkW + 4 + 8 + 2 + defW;
+        int trStartX = Console::W - trTotalW - 2;
         
         ctx.setDrawColor(0);
-        ctx.drawBox(Console::W - statW - 2, 0, statW + 2, 9);
+        ctx.drawBox(trStartX, 0, trTotalW + 2, 10);
         ctx.setDrawColor(1);
-        ctx.drawStr(Console::W - statW - 1, 7, statBuf);
+        
+        ctx.drawBitmap(trStartX + 1, 1, 1, 8, spr_icon_sword);
+        ctx.drawStr(trStartX + 11, 7, atkBuf);
+        
+        int shieldX = trStartX + 11 + atkW + 4;
+        ctx.drawBitmap(shieldX, 1, 1, 8, spr_icon_shield);
+        ctx.drawStr(shieldX + 10, 7, defBuf);
     }
 
-    char botBuf[32];
-    snprintf(botBuf, sizeof(botBuf), "D:%d  G:%d", (unsigned)_data->currentDepth, (unsigned)_data->gold);
-    int botWidth = ctx.strWidth(botBuf);
+    // Bottom Right: Depth (Stairs) and Gold (Coin)
+    char depBuf[8], goldBuf[16];
+    snprintf(depBuf, sizeof(depBuf), "%d", _data->currentDepth);
+    snprintf(goldBuf, sizeof(goldBuf), "%d", _data->gold);
+    
+    int depW = ctx.strWidth(depBuf);
+    int goldW = ctx.strWidth(goldBuf);
+    // Calculate total width: [Stairs] + Depth + space + [Coin] + Gold
+    int brTotalW = 8 + 2 + depW + 4 + 8 + 2 + goldW;
+    int brStartX = Console::W - brTotalW - 2;
+    int botY = Console::H - 10;
     
     ctx.setDrawColor(0);
-    ctx.drawBox(Console::W - botWidth - 3, Console::H - 9, botWidth + 3, 9);
+    ctx.drawBox(brStartX, botY, brTotalW + 2, 10);
     ctx.setDrawColor(1);
-    ctx.drawStr(Console::W - botWidth - 1, Console::H - 2, botBuf);
+    
+    ctx.drawBitmap(brStartX + 1, botY + 1, 1, 8, spr_icon_depth);
+    ctx.drawStr(brStartX + 11, botY + 7, depBuf);
+    
+    int coinX = brStartX + 11 + depW + 4;
+    ctx.drawBitmap(coinX, botY + 1, 1, 8, spr_icon_coin);
+    ctx.drawStr(coinX + 10, botY + 7, goldBuf);
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
