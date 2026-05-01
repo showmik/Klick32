@@ -240,17 +240,18 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
     if (_shakeFrames > 0) _shakeFrames--; 
 
     int dx = 0, dy = 0;
-    if (ctx.justPressed(Btn::UP))    dy = -1;
-    if (ctx.justPressed(Btn::DOWN))  dy = 1;
-    if (ctx.justPressed(Btn::LEFT))  dx = -1;
-    if (ctx.justPressed(Btn::RIGHT)) dx = 1;
+    
+    // Swap justPressed for repeat to enable auto-walking!
+    if (ctx.repeat(Btn::UP))    dy = -1;
+    if (ctx.repeat(Btn::DOWN))  dy = 1;
+    if (ctx.repeat(Btn::LEFT))  dx = -1;
+    if (ctx.repeat(Btn::RIGHT)) dx = 1;
 
     if (dx != 0 || dy != 0) {
-        _processTurn(ctx, dx, dy);      
+        _processTurn(ctx, dx, dy);         
         _processMonsterTurns(ctx, sm); 
     }
     
-    // Call every frame to process the lerp animation
     _updateCamera(); 
 }
 
