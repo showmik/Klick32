@@ -20,7 +20,7 @@ struct Entity {
     int hp = 10;
     int maxHp = 10;
     int attack = 2;
-    // --- New Progression Stats ---
+    int defense = 0;
     int level = 1;
     int xp = 0;
 };
@@ -47,6 +47,7 @@ struct RogueSharedData {
     uint32_t currentDepth = 1;
     uint32_t gold = 0;
     uint32_t hiScore = 0;
+    uint32_t turnCount = 0;
 };
 
 struct BSPNode {
@@ -91,6 +92,10 @@ private:
     RoguePauseScene* _pause  = nullptr;
     RogueDeadScene*  _dead   = nullptr;
 
+    // --- NEW: HUD Notification System ---
+    char _hudMessage[32] = "";
+    uint8_t _hudMessageTimer = 0;
+
     // --- Replace _camX and _camY with Pixel Tracking ---
     int _camPixelX  = 0;
     int _camPixelY  = 0;
@@ -109,7 +114,7 @@ private:
     void _processMonsterTurns(Console& ctx, SceneManager& sm);
 
     void _generateMap();
-    void _processTurn(int dx, int dy);
+    void _processTurn(Console& ctx, int dx, int dy);
     void _updateCamera(bool snap = false); // Add 'snap' parameter
 };
 

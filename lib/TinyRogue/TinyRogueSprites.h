@@ -38,3 +38,13 @@ static const uint8_t PROGMEM spr_rogue_rat[8] = {
 static const uint8_t PROGMEM spr_rogue_goblin[8] = {
     0x00, 0x24, 0x7E, 0x5A, 0x7E, 0x24, 0x24, 0x00
 };
+
+// Bat: Sharp V-shaped wings, hangs near the top of the tile
+static const uint8_t PROGMEM spr_rogue_bat[8] = {
+    0x81, 0xC3, 0x7E, 0x3C, 0x18, 0x00, 0x00, 0x00
+};
+
+// Skeleton: Skull and ribs
+static const uint8_t PROGMEM spr_rogue_skeleton[8] = {
+    0x3C, 0x5A, 0x3C, 0x18, 0x3C, 0x24, 0x24, 0x00
+};

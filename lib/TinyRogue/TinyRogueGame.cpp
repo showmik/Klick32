@@ -186,7 +186,13 @@ void RoguePlayScene::_generateMap() {
         _data->monsters[i].active = true;
         _data->monsters[i].hp = 4 + _data->currentDepth;
         _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
-        _data->monsters[i].type = (random(3) == 0) ? MonsterType::GOBLIN : MonsterType::RAT;
+
+        // Spawn all four types
+        int r = random(4);
+        if (r == 0)      _data->monsters[i].type = MonsterType::GOBLIN;
+        else if (r == 1) _data->monsters[i].type = MonsterType::RAT;
+        else if (r == 2) _data->monsters[i].type = MonsterType::BAT;
+        else             _data->monsters[i].type = MonsterType::SKELETON;
     }
     
     // Note: ensure you use the `true` parameter here if you added smooth camera tracking
@@ -240,7 +246,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.justPressed(Btn::RIGHT)) dx = 1;
 
     if (dx != 0 || dy != 0) {
-        _processTurn(dx, dy);         
+        _processTurn(ctx, dx, dy);      
         _processMonsterTurns(ctx, sm); 
     }
     
@@ -261,51 +267,90 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
     for (auto& m : _data->monsters) {
         if (!m.active) continue;
 
-        // Simple Line-of-Sight/Aggro radius check (e.g., 6 tiles)
-        int dx = _data->player.x - m.x;
-        int dy = _data->player.y - m.y;
-        
-        if (abs(dx) <= 6 && abs(dy) <= 6) {
-            // Determine step direction using engine helper
-            int stepX = gsign(dx);
-            int stepY = gsign(dy);
+        // Base aggro radius varies by type
+        int aggro = 6;
+        if (m.type == MonsterType::BAT) aggro = 8;
+        else if (m.type == MonsterType::SKELETON) aggro = 5;
 
-            // Favor horizontal or vertical movement randomly to avoid perfect diagonal tracking
-            if (stepX != 0 && stepY != 0) {
-                if (random(2) == 0) stepY = 0; 
-                else stepX = 0;
-            }
+        // Skeletons are slow: they skip every odd turn
+        if (m.type == MonsterType::SKELETON && (_data->turnCount % 2 != 0)) {
+            continue; 
+        }
 
-            int nx = m.x + stepX;
-            int ny = m.y + stepY;
+        // Bats are fast: they evaluate and step twice per turn
+        int steps = (m.type == MonsterType::BAT) ? 2 : 1;
 
-            // Attack player
-            if (nx == _data->player.x && ny == _data->player.y) {
-                _data->player.hp -= m.attack;
-                playerHit = true;
-            } 
-            // Move into open space
-            else if (_data->map[ny][nx] != TileType::WALL && !_getMonsterAt(nx, ny)) {
-                m.x = nx;
-                m.y = ny;
+        for (int s = 0; s < steps; s++) {
+            // Re-calculate distance in case they moved on the first step
+            int dx = _data->player.x - m.x;
+            int dy = _data->player.y - m.y;
+
+            if (abs(dx) <= aggro && abs(dy) <= aggro) {
+                int stepX = 0, stepY = 0;
+
+                if (m.type == MonsterType::BAT && random(3) == 0) {
+                    // Bats move erratically 33% of the time
+                    if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
+                    else                stepY = (random(2) == 0) ? 1 : -1;
+                } 
+                else if (m.type == MonsterType::RAT && abs(dx) > 3 && abs(dy) > 3) {
+                    // Rats wander aimlessly unless you are very close
+                    if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
+                    else                stepY = (random(2) == 0) ? 1 : -1;
+                }
+                else {
+                    // Standard tactical pursuit
+                    stepX = gsign(dx);
+                    stepY = gsign(dy);
+
+                    // Favor horizontal or vertical movement randomly to avoid perfect diagonal tracking
+                    if (stepX != 0 && stepY != 0) {
+                        if (random(2) == 0) stepY = 0; 
+                        else stepX = 0;
+                    }
+                }
+
+                int nx = m.x + stepX;
+                int ny = m.y + stepY;
+
+                // Map bounds check
+                if (nx < 0 || nx >= RogueSharedData::MAP_W || ny < 0 || ny >= RogueSharedData::MAP_H) continue;
+
+                // Attack player
+                if (nx == _data->player.x && ny == _data->player.y) {
+                    // Calculate damage, ensuring it never drops below 1
+                    int damage = m.attack - _data->player.defense;
+                    if (damage < 1) damage = 1; 
+
+                    _data->player.hp -= damage;
+                    playerHit = true;
+                    break; // End their turn immediately if they attack
+                }
+                // Move into open space
+                else if (_data->map[ny][nx] != TileType::WALL && !_getMonsterAt(nx, ny)) {
+                    m.x = nx;
+                    m.y = ny;
+                }
             }
         }
     }
 
     if (playerHit) {
-        ctx.sfxDeath(); // Use standard hit/damage sound
+        ctx.sfxDeath(); 
         _shakeFrames = 6;
         
         if (_data->player.hp <= 0) {
-            ctx.saveHiScore(_data->currentDepth); // Save depth as high score
+            ctx.saveHiScore(_data->currentDepth); 
             sm.replace(_dead, ctx);
         }
     } else {
-        ctx.beep(400, 10); // Standard footstep sound
+        ctx.beep(400, 10); 
     }
 }
 
-void RoguePlayScene::_processTurn(int dx, int dy) {
+void RoguePlayScene::_processTurn(Console& ctx, int dx, int dy) {
+    _data->turnCount++; // Advance global time
+
     int targetX = _data->player.x + dx;
     int targetY = _data->player.y + dy;
 
@@ -338,14 +383,37 @@ void RoguePlayScene::_processTurn(int dx, int dy) {
     } 
     else if (targetTile == TileType::CHEST) {
         // Open the chest!
-        _data->map[targetY][targetX] = TileType::FLOOR; // Remove chest from map
+        _data->map[targetY][targetX] = TileType::FLOOR; 
         
-        if (random(2) == 0) { // 50% chance for a health potion
-            _data->player.hp = min(_data->player.maxHp, _data->player.hp + 5);
-        } else {              // 50% chance for gold
-            _data->gold += 15 * _data->currentDepth;
+        int roll = random(100);
+        if (roll < 25) { 
+            // 25% chance for a Sword
+            _data->player.attack += 1;
+            snprintf(_hudMessage, sizeof(_hudMessage), "Found Sword! +1 ATK");
+            _hudMessageTimer = 60; // Show for 2 seconds (assuming 30fps)
+            ctx.beep(800, 40); ctx.beep(1200, 60); // Triumphant jingle
+        } else if (roll < 50) { 
+            // 25% chance for a Shield
+            _data->player.defense += 1;
+            snprintf(_hudMessage, sizeof(_hudMessage), "Found Shield! +1 DEF");
+            _hudMessageTimer = 60;
+            ctx.beep(800, 40); ctx.beep(1200, 60);
+        } else if (roll < 75) { 
+            // 25% chance for an Elixir
+            _data->player.maxHp += 5;
+            _data->player.hp = _data->player.maxHp;
+            snprintf(_hudMessage, sizeof(_hudMessage), "Elixir! Max HP Up");
+            _hudMessageTimer = 60;
+            ctx.beep(600, 40); ctx.beep(1000, 60);
+        } else { 
+            // 25% chance for Gold
+            int amount = 15 * _data->currentDepth;
+            _data->gold += amount;
+            snprintf(_hudMessage, sizeof(_hudMessage), "Found %d Gold", amount);
+            _hudMessageTimer = 60;
+            ctx.beep(1200, 20); ctx.beep(1500, 40);
         }
-    } 
+    }
     else {
         // --- Normal Movement ---
         _data->player.x = targetX;
@@ -364,19 +432,49 @@ void RoguePlayScene::draw(Console& ctx) {
     
     drawDungeon(ctx, ox, oy); 
     
-    // Draw minimalist HUD
     ctx.setFont(u8g2_font_5x7_tf);
     
-    // Top Bar: Health and Level
-    char topBuf[32];
-    snprintf(topBuf, sizeof(topBuf), "HP:%d/%d  LVL:%d", _data->player.hp, _data->player.maxHp, _data->player.level);
-    ctx.drawStr(2, 7, topBuf);
+    // --- Top UI Area ---
+    if (_hudMessageTimer > 0) {
+        _hudMessageTimer--;
+        
+        // Draw the notification banner centered at the top
+        int w = ctx.strWidth(_hudMessage);
+        ctx.setDrawColor(0);
+        ctx.drawBox((Console::W - w) / 2 - 2, 0, w + 4, 9);
+        ctx.setDrawColor(1);
+        ctx.drawStr((Console::W - w) / 2, 7, _hudMessage);
+    } else {
+        // Top Left: Health and Level
+        char topBuf[32];
+        snprintf(topBuf, sizeof(topBuf), "HP:%d/%d L:%d", _data->player.hp, _data->player.maxHp, _data->player.level);
+        
+        ctx.setDrawColor(0);
+        ctx.drawBox(0, 0, ctx.strWidth(topBuf) + 2, 9);
+        ctx.setDrawColor(1);
+        ctx.drawStr(1, 7, topBuf);
 
-    // Bottom Bar: Depth and Gold
+        // Top Right: Attack and Defense
+        char statBuf[32];
+        snprintf(statBuf, sizeof(statBuf), "A:%d D:%d", _data->player.attack, _data->player.defense);
+        int statW = ctx.strWidth(statBuf);
+        
+        ctx.setDrawColor(0);
+        ctx.drawBox(Console::W - statW - 2, 0, statW + 2, 9);
+        ctx.setDrawColor(1);
+        ctx.drawStr(Console::W - statW - 1, 7, statBuf);
+    }
+
+    // --- Bottom UI Area ---
     char botBuf[32];
     snprintf(botBuf, sizeof(botBuf), "D:%d  G:%d", (unsigned)_data->currentDepth, (unsigned)_data->gold);
     int botWidth = ctx.strWidth(botBuf);
-    ctx.drawStr(Console::W - botWidth - 2, Console::H - 2, botBuf);
+    
+    // Solid backing box so the text remains readable over the dungeon
+    ctx.setDrawColor(0);
+    ctx.drawBox(Console::W - botWidth - 3, Console::H - 9, botWidth + 3, 9);
+    ctx.setDrawColor(1);
+    ctx.drawStr(Console::W - botWidth - 1, Console::H - 2, botBuf);
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
@@ -422,6 +520,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 
                 if (m->type == MonsterType::RAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_rat);
                 else if (m->type == MonsterType::GOBLIN) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_goblin);
+                else if (m->type == MonsterType::BAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_bat);
+                else if (m->type == MonsterType::SKELETON) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_skeleton);
             } 
             else if (mapX == _data->player.x && mapY == _data->player.y) {
                 ctx.setDrawColor(0);
