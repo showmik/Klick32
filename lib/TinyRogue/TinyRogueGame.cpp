@@ -626,34 +626,52 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm) {
 void RogueShopScene::draw(Console& ctx) {
     _play->drawDungeon(ctx, 0, 0); 
     
-    // Calculate slide-in offset (Starts at screen height, ends at 0)
     int yOff = lerpi(Console::H, 0, _introFrames, 10);
-    
-    // Apply yOff to all vertical coordinates
-    ctx.setDrawColor(0);
-    ctx.drawBox(10, 8 + yOff, 108, 48);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(10, 8 + yOff, 108, 48);
+    int bx = 10, by = 8 + yOff, bw = 108, bh = 52; 
 
+    // 1. Drop Shadow (Offset +2, +2)
+    ctx.setDrawColor(0);
+    ctx.drawBox(bx + 2, by + 2, bw, bh);
+
+    // 2. Main Box Background & Border
+    ctx.setDrawColor(0);
+    ctx.drawBox(bx, by, bw, bh);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(bx, by, bw, bh);
+
+    // 3. Inverted Header Anchor
+    ctx.setDrawColor(1);
+    ctx.drawBox(bx, by, bw, 14); 
+    
+    ctx.setFont(u8g2_font_7x13B_tf);
+    ctx.setDrawColor(0); // Black text for negative space
+    ctx.drawStr(bx + 4, by + 11, "MERCHANT");
+
+    // Embed exit prompt in the right side of the header
     ctx.setFont(u8g2_font_5x7_tf);
-    ctx.drawStr(14, 16 + yOff, "MERCHANT (B to exit)");
-    ctx.drawHLine(10, 20 + yOff, 108);
+    int escW = ctx.strWidth("[B] Exit");
+    ctx.drawStr(bx + bw - escW - 4, by + 10, "[B] Exit"); 
+
+    ctx.setDrawColor(1); // Reset back to white for the body
     
     char gBuf[16]; 
     snprintf(gBuf, sizeof(gBuf), "Wallet: %u g", _data->gold);
-    ctx.drawStr(14, 28 + yOff, gBuf);
+    ctx.drawStr(bx + 4, by + 24, gBuf);
 
-    ctx.drawStr(24, 38 + yOff, "Heal HP   (20g)");
-    ctx.drawStr(24, 46 + yOff, "Up ATK    (50g)");
-    ctx.drawStr(24, 54 + yOff, "Up DEF    (50g)");
+    ctx.drawStr(bx + 14, by + 34, "Heal HP   (20g)");
+    ctx.drawStr(bx + 14, by + 42, "Up ATK    (50g)");
+    ctx.drawStr(bx + 14, by + 50, "Up DEF    (50g)");
 
-    ctx.drawStr(14, 38 + (_cursor * 8) + yOff, ">");
+    ctx.drawStr(bx + 4, by + 34 + (_cursor * 8), ">");
 
+    // Dynamic Event Message Overlay
     if (_msgTimer > 0) {
         ctx.setDrawColor(0);
-        ctx.drawBox(12, 40 + yOff, 104, 14);
+        ctx.drawBox(bx + 2, by + 36, bw - 4, 14);
         ctx.setDrawColor(1);
-        ctx.drawStr(14, 50 + yOff, _msg);
+        
+        int msgW = ctx.strWidth(_msg);
+        ctx.drawStr(bx + (bw - msgW) / 2, by + 46, _msg);
     }
 }
 
@@ -841,15 +859,33 @@ void RoguePauseScene::update(Console& ctx, SceneManager& sm) {
 void RoguePauseScene::draw(Console& ctx) {
     _play->drawDungeon(ctx, 0, 0); 
     
-    // Calculate slide-in offset (Starts off-screen top, ends at 0)
     int yOff = lerpi(-30, 0, _introFrames, 8);
+    int bx = 30, by = 22 + yOff, bw = 68, bh = 24;
 
+    // 1. Drop Shadow
     ctx.setDrawColor(0);
-    ctx.drawBox(34, 22 + yOff, 60, 22);
+    ctx.drawBox(bx + 2, by + 2, bw, bh);
+
+    // 2. Main Box Background & Border
+    ctx.setDrawColor(0);
+    ctx.drawBox(bx, by, bw, bh);
     ctx.setDrawColor(1);
-    ctx.drawFrame(34, 22 + yOff, 60, 22);
+    ctx.drawFrame(bx, by, bw, bh);
+
+    // 3. Inverted Header Anchor
+    ctx.setDrawColor(1);
+    ctx.drawBox(bx, by, bw, 14);
+
     ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(42, 37 + yOff, "PAUSED");
+    ctx.setDrawColor(0);
+    int tw = ctx.strWidth("PAUSED");
+    ctx.drawStr(bx + (bw - tw) / 2, by + 11, "PAUSED");
+
+    // Sub-text in the remaining black space
+    ctx.setDrawColor(1);
+    ctx.setFont(u8g2_font_5x7_tf);
+    tw = ctx.strWidth("[B] Resume");
+    ctx.drawStr(bx + (bw - tw) / 2, by + 21, "[B] Resume");
 }
 
 void RogueDeadScene::onEnter(Console& ctx) { _frame = 0; }
@@ -865,15 +901,34 @@ void RogueDeadScene::update(Console& ctx, SceneManager& sm) {
 
 void RogueDeadScene::draw(Console& ctx) {
     _play->drawDungeon(ctx, 0, 0); 
+    
+    int bx = 20, by = 20, bw = 88, bh = 28;
+
+    // 1. Drop Shadow
     ctx.setDrawColor(0);
-    ctx.drawBox(20, 20, 88, 28);
+    ctx.drawBox(bx + 2, by + 2, bw, bh);
+
+    // 2. Main Box Background & Border
+    ctx.setDrawColor(0);
+    ctx.drawBox(bx, by, bw, bh);
     ctx.setDrawColor(1);
-    ctx.drawFrame(20, 20, 88, 28);
+    ctx.drawFrame(bx, by, bw, bh);
+
+    // 3. Inverted Header Anchor
+    ctx.setDrawColor(1);
+    ctx.drawBox(bx, by, bw, 14);
+
     ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(34, 36, "YOU DIED");
+    ctx.setDrawColor(0);
+    int tw = ctx.strWidth("YOU DIED");
+    ctx.drawStr(bx + (bw - tw) / 2, by + 11, "YOU DIED");
+    
+    // Blinking prompt in the body
+    ctx.setDrawColor(1);
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStr(32, 45, "A to restart");
+        tw = ctx.strWidth("A to restart");
+        ctx.drawStr(bx + (bw - tw) / 2, by + 24, "A to restart");
     }
 }
 
