@@ -49,9 +49,6 @@ private:
     Camera*          _camera   = nullptr;
     AnimationManager* _particles = nullptr;
 
-    struct Star { float x, y, speed; };
-    Star _stars[MAX_STARS];
-
     Sprite _player;
     Sprite _pb; // Player Bullet
     Sprite _eBullets[MAX_EBULLETS];
@@ -117,4 +114,6 @@ private:
     SIPlayScene      _play;
     SIPauseScene     _pause;
     SIGameOverScene  _gameover;
+};
+ameOverScene  _gameover;
 };
