@@ -45,9 +45,13 @@ private:
     static constexpr int MAX_EBULLETS = 3;
     static constexpr int MAX_STARS = 40;
     
+    struct Star { float x, y, speed; };
+
     SISharedData*    _data     = nullptr;
     Camera*          _camera   = nullptr;
     AnimationManager* _particles = nullptr;
+
+    Star _stars[MAX_STARS];
 
     Sprite _player;
     Sprite _pb; // Player Bullet
@@ -114,6 +118,4 @@ private:
     SIPlayScene      _play;
     SIPauseScene     _pause;
     SIGameOverScene  _gameover;
-};
-ameOverScene  _gameover;
 };

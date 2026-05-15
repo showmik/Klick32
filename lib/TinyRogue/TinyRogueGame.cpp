@@ -127,14 +127,6 @@ void RoguePlayScene::_generateBSPMap() {
         }
     }
 
-    // Spawn exactly 1 Merchant on an open floor tile
-    int mx, my;
-    do {
-        mx = random(1, RogueSharedData::MAP_W - 1);
-        my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
-    _data->map[my][mx] = TileType::MERCHANT;
-
     for (int i = numNodes - 1; i >= 0; i--) {
         if (nodes[i].leftNode != -1) {
             BSPNode& l = nodes[nodes[i].leftNode];
@@ -173,6 +165,14 @@ void RoguePlayScene::_generateBSPMap() {
             }
         }
     }
+
+    // Spawn exactly 1 Merchant on an open floor tile
+    int mx, my;
+    do {
+        mx = random(1, RogueSharedData::MAP_W - 1);
+        my = random(1, RogueSharedData::MAP_H - 1);
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    _data->map[my][mx] = TileType::MERCHANT;
 }
 
 void RoguePlayScene::_generateCaveMap() {
@@ -213,14 +213,6 @@ void RoguePlayScene::_generateCaveMap() {
             }
         }
     }
-
-    // Spawn exactly 1 Merchant on an open floor tile
-    int mx, my;
-    do {
-        mx = random(1, RogueSharedData::MAP_W - 1);
-        my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
-    _data->map[my][mx] = TileType::MERCHANT;
 
     // 3. Helper to find open space
     auto getOpenTile = [&]() {
@@ -265,6 +257,14 @@ void RoguePlayScene::_generateCaveMap() {
             _data->map[c.iy()][c.ix()] = TileType::CHEST;
         }
     }
+
+    // Spawn exactly 1 Merchant on an open floor tile
+    int mx, my;
+    do {
+        mx = random(1, RogueSharedData::MAP_W - 1);
+        my = random(1, RogueSharedData::MAP_H - 1);
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    _data->map[my][mx] = TileType::MERCHANT;
 }
 
 void RoguePlayScene::_spawnMonsters() {
@@ -352,7 +352,7 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
     bool playerHit = false;
 
     for (auto& m : _data->monsters) {
-        if (!m.active) continue;
+        if (!m.active || _data->player.hp <= 0) continue;
 
         int aggro = 6;
         if (m.type == MonsterType::BAT) aggro = 8;
@@ -415,16 +415,22 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
         _camera->shake(6);
         
         if (_data->player.hp <= 0) {
-        if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
-        ctx.sfxDeath();
-        sm.emit(ctx, Event::GAME_OVER);
-    }    } else {
+            if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
+            ctx.sfxDeath();
+            sm.emit(ctx, Event::GAME_OVER);
+        }
+    } else {
         ctx.beep(400, 10); 
     }
 }
 
 void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy) {
     _data->turnCount++; 
+    
+    // Passive HP Regeneration (1 HP every 20 turns)
+    if (_data->turnCount % 20 == 0 && _data->player.hp < _data->player.maxHp) {
+        _data->player.hp++;
+    }
 
     int targetX = _data->player.x + dx;
     int targetY = _data->player.y + dy;
@@ -449,14 +455,17 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         if (targetMonster->hp <= 0) {
             targetMonster->active = false;
             _data->player.xp += targetMonster->maxHp;
-            int xpNeeded = _data->player.level * 10;
             
-            if (_data->player.xp >= xpNeeded) {
-                _data->player.xp -= xpNeeded;
+            bool leveledUp = false;
+            while (_data->player.xp >= _data->player.level * 10) {
+                _data->player.xp -= _data->player.level * 10;
                 _data->player.level++;
                 _data->player.maxHp += 5;
                 _data->player.hp = _data->player.maxHp; 
                 _data->player.attack += 1;
+                leveledUp = true;
+            }
+            if (leveledUp) {
                 snprintf(_hudMessage, sizeof(_hudMessage), "LEVEL UP!");
                 _hudMessageTimer = 60;
                 ctx.beep(800, 100); ctx.beep(1200, 150);
@@ -542,12 +551,17 @@ void RogueShopScene::onEnter(Console& ctx) {
 void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_introFrames < 10) _introFrames++;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+        ctx.sfxMenuNav();
+        sm.emit(ctx, Event::RESUME);
+        return;
+    }
 
     if (ctx.justPressed(Btn::UP) || ctx.repeat(Btn::UP)) {
         if (_cursor > 0) { _cursor--; ctx.sfxMenuNav(); }
     }
     if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) {
-        if (_cursor < 2) { _cursor++; ctx.sfxMenuNav(); }
+        if (_cursor < 4) { _cursor++; ctx.sfxMenuNav(); }
     }
 
     if (_msgTimer > 0) _msgTimer--;
@@ -555,8 +569,15 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::A)) {
         int costHealth = 20;
         int costMaxHp = 50;
+        int costAtk = 100;
+        int costDef = 100;
+        
         if (_cursor == 0) { // Buy Health
-            if (_data->gold >= costHealth) {
+            if (_data->player.hp >= _data->player.maxHp) {
+                ctx.beep(150, 100);
+                snprintf(_msg, sizeof(_msg), "ALREADY FULL!");
+                _msgTimer = 40;
+            } else if (_data->gold >= costHealth) {
                 _data->gold -= costHealth;
                 _data->player.hp = gclamp(_data->player.hp + 5, 0, _data->player.maxHp);
                 ctx.sfxPoint();
@@ -580,6 +601,30 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
                 snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
                 _msgTimer = 40;
             }
+        } else if (_cursor == 2) { // Buy ATK
+            if (_data->gold >= costAtk) {
+                _data->gold -= costAtk;
+                _data->player.attack += 1;
+                ctx.sfxPoint();
+                snprintf(_msg, sizeof(_msg), "ATTACK UP!");
+                _msgTimer = 40;
+            } else {
+                ctx.beep(150, 100);
+                snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
+                _msgTimer = 40;
+            }
+        } else if (_cursor == 3) { // Buy DEF
+            if (_data->gold >= costDef) {
+                _data->gold -= costDef;
+                _data->player.defense += 1;
+                ctx.sfxPoint();
+                snprintf(_msg, sizeof(_msg), "DEFENSE UP!");
+                _msgTimer = 40;
+            } else {
+                ctx.beep(150, 100);
+                snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
+                _msgTimer = 40;
+            }
         } else { // Exit
             ctx.sfxMenuNav();
             sm.emit(ctx, Event::RESUME);
@@ -590,7 +635,7 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
 void RogueShopScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
     int yOff = lerpi(Console::H, 0, _introFrames, 10);
-    int bx = 10, by = 8 + yOff, bw = 108, bh = 52; 
+    int bx = 4, by = 4 + yOff, bw = 120, bh = 56; 
 
     ctx.setDrawColor(0);
     ctx.drawBox(bx + 2, by + 2, bw, bh);
@@ -599,35 +644,34 @@ void RogueShopScene::draw(Console& ctx) {
     ctx.setDrawColor(1);
     ctx.drawFrame(bx, by, bw, bh);
     ctx.setDrawColor(1);
-    ctx.drawBox(bx, by, bw, 14); 
+    ctx.drawBox(bx, by, bw, 12); 
     
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.setDrawColor(0);
-    ctx.drawStr(bx + 4, by + 11, "MERCHANT");
-
     ctx.setFont(u8g2_font_5x7_tf);
-    int escW = ctx.strWidth("[B] Exit");
-    ctx.drawStr(bx + bw - escW - 4, by + 10, "[B] Exit"); 
+    ctx.setDrawColor(0);
+    ctx.drawStr(bx + 4, by + 9, "MERCHANT");
+
+    char gBuf[16]; 
+    snprintf(gBuf, sizeof(gBuf), "%u gold", _data->gold);
+    int gw = ctx.strWidth(gBuf);
+    ctx.drawStr(bx + bw - gw - 4, by + 9, gBuf);
 
     ctx.setDrawColor(1);
     
-    char gBuf[16]; 
-    snprintf(gBuf, sizeof(gBuf), "Wallet: %u g", _data->gold);
-    ctx.drawStr(bx + 4, by + 24, gBuf);
+    ctx.drawStr(bx + 14, by + 21, "Heal HP   (20g)");
+    ctx.drawStr(bx + 14, by + 29, "Up HP     (50g)");
+    ctx.drawStr(bx + 14, by + 37, "Up ATK   (100g)");
+    ctx.drawStr(bx + 14, by + 45, "Up DEF   (100g)");
+    ctx.drawStr(bx + 14, by + 53, "Exit Shop");
 
-    ctx.drawStr(bx + 14, by + 34, "Heal HP   (20g)");
-    ctx.drawStr(bx + 14, by + 42, "Up HP     (50g)");
-    ctx.drawStr(bx + 14, by + 50, "Exit Shop");
-
-    ctx.drawStr(bx + 4, by + 34 + (_cursor * 8), ">");
+    ctx.drawStr(bx + 4, by + 21 + (_cursor * 8), ">");
 
     if (_msgTimer > 0) {
         ctx.setDrawColor(0);
-        ctx.drawBox(bx + 2, by + 36, bw - 4, 14);
+        ctx.drawBox(bx + 2, by + bh - 14, bw - 4, 12);
         ctx.setDrawColor(1);
         
         int msgW = ctx.strWidth(_msg);
-        ctx.drawStr(bx + (bw - msgW) / 2, by + 46, _msg);
+        ctx.drawStr(bx + (bw - msgW) / 2, by + bh - 5, _msg);
     }
 }
 

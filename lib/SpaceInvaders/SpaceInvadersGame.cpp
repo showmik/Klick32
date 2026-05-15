@@ -47,6 +47,12 @@ void SIPlayScene::onEnter(Console& ctx) {
         _eBullets[i].active = false;
     }
 
+    for (int i = 0; i < MAX_STARS; i++) {
+        _stars[i].x = (float)random(Console::W);
+        _stars[i].y = (float)random(Console::H);
+        _stars[i].speed = 0.5f + (random(10) / 10.0f);
+    }
+
     _initLevel();
 }
 
