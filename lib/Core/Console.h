@@ -3,6 +3,7 @@
 #include "InputManager.h"
 #include "Sound.h"
 #include "SaveManager.h"
+#include "Camera.h"
 
 // ─── Console ──────────────────────────────────────────────────────────────────
 // The single context object passed to every game's update() and draw() calls.
@@ -151,6 +152,12 @@ public:
     void removeSave(const char* key) { _save.remove(key); }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // CAMERA
+    // ══════════════════════════════════════════════════════════════════════════
+    void setCamera(Camera* cam) { _camera = cam; }
+    Camera* getCamera() const { return _camera; }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // DRAWING
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -162,24 +169,24 @@ public:
     int strWidth(const char* str) { return (int)_disp.getStrWidth(str); }
 
     // ── Pixels and lines ──────────────────────────────────────────────────────
-    void drawPixel(int x, int y)                    { _disp.drawPixel(x, y);           }
-    void drawHLine(int x, int y, int w)             { _disp.drawHLine(x, y, w);        }
-    void drawVLine(int x, int y, int h)             { _disp.drawVLine(x, y, h);        }
-    void drawLine (int x1, int y1, int x2, int y2) { _disp.drawLine(x1, y1, x2, y2); }
+    void drawPixel(int x, int y)                    { _disp.drawPixel(x + _camX(), y + _camY());           }
+    void drawHLine(int x, int y, int w)             { _disp.drawHLine(x + _camX(), y + _camY(), w);        }
+    void drawVLine(int x, int y, int h)             { _disp.drawVLine(x + _camX(), y + _camY(), h);        }
+    void drawLine (int x1, int y1, int x2, int y2) { _disp.drawLine(x1 + _camX(), y1 + _camY(), x2 + _camX(), y2 + _camY()); }
 
     // ── Rectangles ────────────────────────────────────────────────────────────
-    void drawFrame (int x, int y, int w, int h)        { _disp.drawFrame(x, y, w, h);     }
-    void drawBox   (int x, int y, int w, int h)        { _disp.drawBox(x, y, w, h);       }
-    void drawRFrame(int x, int y, int w, int h, int r) { _disp.drawRFrame(x, y, w, h, r); }
-    void drawRBox  (int x, int y, int w, int h, int r) { _disp.drawRBox(x, y, w, h, r);   }
+    void drawFrame (int x, int y, int w, int h)        { _disp.drawFrame(x + _camX(), y + _camY(), w, h);     }
+    void drawBox   (int x, int y, int w, int h)        { _disp.drawBox(x + _camX(), y + _camY(), w, h);       }
+    void drawRFrame(int x, int y, int w, int h, int r) { _disp.drawRFrame(x + _camX(), y + _camY(), w, h, r); }
+    void drawRBox  (int x, int y, int w, int h, int r) { _disp.drawRBox(x + _camX(), y + _camY(), w, h, r);   }
 
     // ── Circles ───────────────────────────────────────────────────────────────
-    void drawCircle(int cx, int cy, int r) { _disp.drawCircle(cx, cy, r); }
-    void drawDisc  (int cx, int cy, int r) { _disp.drawDisc(cx, cy, r);   }
+    void drawCircle(int cx, int cy, int r) { _disp.drawCircle(cx + _camX(), cy + _camY(), r); }
+    void drawDisc  (int cx, int cy, int r) { _disp.drawDisc(cx + _camX(), cy + _camY(), r);   }
 
     // ── Text ──────────────────────────────────────────────────────────────────
     // y is the baseline, not the top of the character.
-    void drawStr(int x, int y, const char* str) { _disp.drawStr(x, y, str); }
+    void drawStr(int x, int y, const char* str) { _disp.drawStr(x + _camX(), y + _camY(), str); }
 
     // ── Bitmaps ───────────────────────────────────────────────────────────────
     // bytesPerRow = ceil(spriteWidthPx / 8).
@@ -187,7 +194,7 @@ public:
     //   16 px wide → bytesPerRow = 2
     // bmp must be in PROGMEM.
     void drawBitmap(int x, int y, int bytesPerRow, int h, const uint8_t* bmp) {
-        _disp.drawBitmap(x, y, bytesPerRow, h, bmp);
+        _disp.drawBitmap(x + _camX(), y + _camY(), bytesPerRow, h, bmp);
     }
 
     // ── Escape hatch ──────────────────────────────────────────────────────────
@@ -202,8 +209,12 @@ private:
 
     friend class OS;
 
+    int _camX() const { return _camera ? _camera->getOffsetX() : 0; }
+    int _camY() const { return _camera ? _camera->getOffsetY() : 0; }
+
     U8G2&         _disp;
     InputManager& _input;
     Sound&        _sound;
     SaveManager&  _save;
+    Camera*       _camera = nullptr;
 };

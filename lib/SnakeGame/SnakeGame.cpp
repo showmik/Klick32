@@ -20,7 +20,6 @@ void SnakePlayScene::_initRound() {
     _bonusActive = false;
     _poisonActive = false;
     _numWalls    = 0;
-    _shakeFrames = 0;
     _data->newHiScore = false;
 
     for (int i = 0; i < _len; i++) {
@@ -120,8 +119,6 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
         return;
     }
 
-    if (_shakeFrames > 0) _shakeFrames--;
-
     Dir checkDir = (_queueLen > 0) ? _inputQueue[_queueLen - 1] : _dir;
 
     if (ctx.justPressed(Btn::UP)    && checkDir != Dir::DOWN && checkDir != Dir::UP)    _pushInput(Dir::UP);
@@ -182,7 +179,7 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
         }
 
         if (crashed) {
-            _shakeFrames = 15;
+            if (_camera) _camera->shake(15);
             _data->lastScore = _score;
             
             if (_score > _data->hiScore) {
@@ -234,7 +231,7 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
             if (nx == _px && ny == _py) {
                 _score = (_score >= 20) ? _score - 20 : 0;
                 if (_len > 4) _len -= 2; 
-                _shakeFrames = 8;        
+                if (_camera) _camera->shake(8);        
                 _poisonActive = false;
                 ctx.beep(200, 100);      
             } else if (--_poisonTimer == 0) {
@@ -251,16 +248,6 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
         // Update Head
         _sx[0] = nx;
         _sy[0] = ny;
-    } // <--- THIS IS THE END OF THE _moveTimer BLOCK
-
-    // ── Update Particle Physics (Runs every frame) ──
-    for (auto& p : _particles) {
-        if (p.life > 0) {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.2f; // Subtle gravity pulls them down
-            p.life--;
-        }
     }
 }
 
@@ -268,41 +255,21 @@ void SnakePlayScene::_spawnSparks(int gridX, int gridY, SparkType type) {
     int px = (gridX * BLOCK_SIZE) + (BLOCK_SIZE / 2);
     int py = (gridY * BLOCK_SIZE) + TOP_OFFSET + (BLOCK_SIZE / 2);
 
-    // Bonus uses the entire pool; normal/poison only use a few sparks
-    uint8_t targetSpawn = (type == SparkType::BONUS) ? MAX_PARTICLES : 6;
-    uint8_t spawned = 0;
-
-    for (auto& p : _particles) {
-        if (spawned >= targetSpawn) break;
-        
-        // Overwrite dead particles (or force overwrite everything for a bonus boom)
-        if (p.life == 0 || type == SparkType::BONUS) {
-            p.x = (float)px;
-            p.y = (float)py;
-            p.isBonus = (type == SparkType::BONUS);
-            
-            if (type == SparkType::BONUS) {
-                // Massive 360-degree high-speed burst
-                p.vx = (random(-30, 31) / 10.0f);
-                p.vy = (random(-30, 31) / 10.0f);
-                p.life = random(15, 35);
-            } else if (type == SparkType::NORMAL) {
-                // Small upward pop
-                p.vx = (random(-10, 11) / 5.0f);
-                p.vy = (random(-15, -5) / 5.0f);
-                p.life = random(10, 20);
-            } else { // POISON
-                // Small downward sludge
-                p.vx = (random(-10, 11) / 5.0f);
-                p.vy = (random(5, 15) / 5.0f);
-                p.life = random(10, 20);
-            }
-            spawned++;
+    uint8_t targetSpawn = (type == SparkType::BONUS) ? 20 : 6;
+    for (int i = 0; i < targetSpawn; i++) {
+        if (type == SparkType::BONUS) {
+            _particles->spawnPixel(px, py, (random(-30, 31) / 10.0f), (random(-30, 31) / 10.0f), random(15, 35));
+        } else if (type == SparkType::NORMAL) {
+            _particles->spawnPixel(px, py, (random(-10, 11) / 5.0f), (random(-15, -5) / 5.0f), random(10, 20));
+        } else { // POISON
+            _particles->spawnPixel(px, py, (random(-10, 11) / 5.0f), (random(5, 15) / 5.0f), random(10, 20));
         }
     }
 }
 
-void SnakePlayScene::drawField(Console& ctx, int ox, int oy) const {
+void SnakePlayScene::drawField(Console& ctx) const {
+    ctx.setCamera(nullptr); // Unset camera for UI
+
     // Top UI bar
     ctx.drawHLine(0, TOP_OFFSET - 1, Console::W);
     ctx.setFont(u8g2_font_5x7_tf);
@@ -318,55 +285,44 @@ void SnakePlayScene::drawField(Console& ctx, int ox, int oy) const {
         ctx.drawStr(Console::W - w - 2, 6, buf);
     }
 
+    ctx.setCamera(_camera); // Apply camera shake to the game world
+
     // Draw Walls (8x8)
     // Offset by -2 pixels to center the 8x8 sprite over the 4x4 block
     for (int i = 0; i < _numWalls; i++) {
-        int px = (_wx[i] * BLOCK_SIZE) + ox - 2;
-        int py = (_wy[i] * BLOCK_SIZE) + TOP_OFFSET + oy - 2;
+        int px = (_wx[i] * BLOCK_SIZE) - 2;
+        int py = (_wy[i] * BLOCK_SIZE) + TOP_OFFSET - 2;
         ctx.drawBitmap(px, py, 1, 8, spr_snake_wall);
     }
 
-    for (const auto& p : _particles) {
-        if (p.life > 0) {
-            if (p.isBonus) {
-                // Draw bonus sparks as 2x2 blocks.
-                // The modulo math makes them aggressively flicker as they die out.
-                if (p.life % 3 != 0) {
-                    ctx.drawBox((int)p.x + ox, (int)p.y + oy, 2, 2);
-                }
-            } else {
-                // Normal 1-pixel sparks
-                ctx.drawPixel((int)p.x + ox, (int)p.y + oy);
-            }
-        }
-    }
+    _particles->draw(ctx);
 
     // Draw Normal Apple (4x4)
     // No offset needed, fits perfectly in the 4x4 grid block
-    int ax_px = (_ax * BLOCK_SIZE) + ox; 
-    int ay_py = (_ay * BLOCK_SIZE) + TOP_OFFSET + oy;
+    int ax_px = (_ax * BLOCK_SIZE); 
+    int ay_py = (_ay * BLOCK_SIZE) + TOP_OFFSET;
     ctx.drawBitmap(ax_px, ay_py, 1, 4, spr_snake_apple);
                  
     // Draw Bonus Apple (8x8)
     // Offset by -2 pixels to center the 8x8 sprite over the 4x4 block
     if (_bonusActive && (millis() / 150) % 2 == 0) {
-        int bx_px = (_bx * BLOCK_SIZE) + ox - 2;
-        int by_py = (_by * BLOCK_SIZE) + TOP_OFFSET + oy - 2;
+        int bx_px = (_bx * BLOCK_SIZE) - 2;
+        int by_py = (_by * BLOCK_SIZE) + TOP_OFFSET - 2;
         ctx.drawBitmap(bx_px, by_py, 1, 8, spr_snake_bonus);
     }
 
     // Draw Poison Apple (4x4)
     // No offset needed
     if (_poisonActive) {
-        int px_px = (_px * BLOCK_SIZE) + ox;
-        int py_py = (_py * BLOCK_SIZE) + TOP_OFFSET + oy;
+        int px_px = (_px * BLOCK_SIZE);
+        int py_py = (_py * BLOCK_SIZE) + TOP_OFFSET;
         ctx.drawBitmap(px_px, py_py, 1, 4, spr_snake_poison);
     }
 
     // Draw Snake Body
     for (int i = 0; i < _len; i++) {
-        int px = (_sx[i] * BLOCK_SIZE) + ox;
-        int py = (_sy[i] * BLOCK_SIZE) + TOP_OFFSET + oy;
+        int px = (_sx[i] * BLOCK_SIZE);
+        int py = (_sy[i] * BLOCK_SIZE) + TOP_OFFSET;
         
         // 1. Draw the segment itself
         if (i == 0) {
@@ -377,8 +333,8 @@ void SnakePlayScene::drawField(Console& ctx, int ox, int oy) const {
 
         // 2. Draw the connector to the PREVIOUS segment (the one closer to the head)
         if (i > 0) {
-            int prevX = (_sx[i-1] * BLOCK_SIZE) + ox;
-            int prevY = (_sy[i-1] * BLOCK_SIZE) + TOP_OFFSET + oy;
+            int prevX = (_sx[i-1] * BLOCK_SIZE);
+            int prevY = (_sy[i-1] * BLOCK_SIZE) + TOP_OFFSET;
 
             // Skip connection if wrapping around screen edges
             if (abs(_sx[i] - _sx[i-1]) <= 1 && abs(_sy[i] - _sy[i-1]) <= 1) {
@@ -395,15 +351,12 @@ void SnakePlayScene::drawField(Console& ctx, int ox, int oy) const {
             }
         }
     }
+    
+    ctx.setCamera(nullptr); // Unset camera to prevent UI from shaking in overlay scenes
 }
 
 void SnakePlayScene::draw(Console& ctx) {
-    int ox = 0, oy = 0;
-    if (_shakeFrames > 0) {
-        ox = random(-1, 2);
-        oy = random(-1, 2);
-    }
-    drawField(ctx, ox, oy);
+    drawField(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -422,7 +375,7 @@ void SnakePauseScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void SnakePauseScene::draw(Console& ctx) {
-    _play->drawField(ctx, 0, 0);
+    _play->drawField(ctx);
 
     ctx.setDrawColor(0);
     ctx.drawBox(34, 24, 60, 18);
@@ -490,7 +443,7 @@ void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void SnakeNameEntryScene::draw(Console& ctx) {
-    _play->drawField(ctx, 0, 0);
+    _play->drawField(ctx);
 
     ctx.setDrawColor(0);
     ctx.drawBox(14, 12, 100, 42);
@@ -535,7 +488,7 @@ void SnakeDeadScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void SnakeDeadScene::draw(Console& ctx) {
-    _play->drawField(ctx, 0, 0);
+    _play->drawField(ctx);
 
     ctx.setDrawColor(0);
     ctx.drawBox(20, 20, 88, 28);
@@ -566,15 +519,18 @@ void SnakeGame::onEnter(Console& ctx) {
     _play.setPauseScene(&_pause);
     _play.setNameScene(&_nameEntry);
     _play.setDeadScene(&_dead);
+    _play.setEngine(&_camera, &_particles);
 
     _pause.setPlayScene(&_play);
 
     _nameEntry.setData(&_data);
     _nameEntry.setDeadScene(&_dead);
     _nameEntry.setPlayScene(&_play);
+    _nameEntry.setEngine(&_camera);
 
     _dead.setData(&_data);
     _dead.setPlayScene(&_play);
+    _dead.setEngine(&_camera);
 
     _sm.replace(&_play, ctx);
 }
@@ -584,6 +540,8 @@ void SnakeGame::onExit(Console& ctx) {
 }
 
 void SnakeGame::update(Console& ctx) {
+    _camera.update();
+    _particles.update();
     _sm.update(ctx);
 }
 

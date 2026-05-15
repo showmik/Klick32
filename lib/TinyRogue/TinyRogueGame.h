@@ -3,6 +3,8 @@
 #include "GameUtils.h"
 #include "SceneManager.h"
 #include "Scene.h"
+#include "Camera.h"
+#include "AnimationManager.h"
 
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
@@ -94,6 +96,7 @@ public:
     void setPauseScene(RoguePauseScene* p) { _pause = p; }
     void setDeadScene (RogueDeadScene* d)  { _dead = d; }
     void setShopScene (RogueShopScene* s)  { _shop = s; }
+    void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
@@ -106,19 +109,10 @@ private:
     RoguePauseScene* _pause  = nullptr;
     RogueDeadScene*  _dead   = nullptr;
     RogueShopScene*  _shop   = nullptr;
+    Camera*          _camera = nullptr;
+    AnimationManager* _particles = nullptr;
     char _hudMessage[32] = "";
     uint8_t _hudMessageTimer = 0;
-
-    int _camPixelX  = 0;
-    int _camPixelY  = 0;
-    int _camStartX  = 0;
-    int _camStartY  = 0;
-    int _camTargetX = 0;
-    int _camTargetY = 0;
-    int _camT       = 0;
-    
-    static constexpr int CAM_FRAMES = 6; 
-    uint8_t _shakeFrames = 0; 
 
     Monster* _getMonsterAt(int x, int y) const;
     void _processMonsterTurns(Console& ctx, SceneManager& sm);
@@ -130,11 +124,6 @@ private:
 
     void _processTurn(Console& ctx, SceneManager& sm, int dx, int dy);
     void _updateCamera(bool snap = false);
-
-    // Combat Particles
-    struct BloodSpurt { float x, y, vx, vy; uint8_t life; };
-    static constexpr uint8_t MAX_BLOOD = 10;
-    BloodSpurt _blood[MAX_BLOOD] = {};
 
     void _spawnHitEffect(int gridX, int gridY);
 };
@@ -174,10 +163,13 @@ public:
     
     bool           isRunning() const override;
     const char*    getName()   const override;
+    const uint8_t* getCoverArt() const override;
 
 private:
     RogueSharedData _data;
     SceneManager    _sm;
+    Camera          _camera;
+    AnimationManager _particles;
     RogueTitleScene _title;
     RoguePlayScene  _play;
     RoguePauseScene _pause;

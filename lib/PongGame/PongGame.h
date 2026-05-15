@@ -4,6 +4,8 @@
 #include "GameUtils.h"
 #include "SceneManager.h"
 #include "Scene.h"
+#include "Camera.h"
+#include "AnimationManager.h"
 
 // ─── PongGame ─────────────────────────────────────────────────────────────────
 // Classic two-paddle Pong: player (left) vs AI (right).
@@ -86,13 +88,14 @@ class PongPlayScene : public Scene {
 public:
     void setPauseScene   (PongPauseScene*    p) { _pause    = p; }
     void setGameOverScene(PongGameOverScene* g) { _gameover = g; }
+    void setEngine       (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
     // We've moved drawing here so it can access particles and screen shake
-    void drawField(Console& ctx, int ox, int oy) const;
+    void drawField(Console& ctx) const;
 
     const PongState& state()     const { return _st; }
     bool             playerWon() const { return _playerWon; }
@@ -101,14 +104,12 @@ private:
     PongState          _st;
     PongPauseScene*    _pause     = nullptr;
     PongGameOverScene* _gameover  = nullptr;
+    Camera*            _camera    = nullptr;
+    AnimationManager*  _particles = nullptr;
     bool               _playerWon = false;
     uint8_t            _serveTimer = 0;
 
     // ── Juice / VFX ──────────────────────────────────────────────────────────
-    struct Particle { float x, y, vx, vy; uint8_t life; };
-    static constexpr uint8_t MAX_PARTICLES = 15;
-    Particle _particles[MAX_PARTICLES] = {};
-    uint8_t _shakeFrames = 0;
     uint8_t _leftHitTimer = 0;   
     uint8_t _rightHitTimer = 0;
     uint8_t _rallyCount = 0;
@@ -162,6 +163,8 @@ public:
 
 private:
     SceneManager       _sm;
+    Camera             _camera;
+    AnimationManager   _particles;
     PongTitleScene     _title;
     PongPlayScene      _play;
     PongPauseScene     _pause;

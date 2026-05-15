@@ -3,6 +3,8 @@
 #include "GameUtils.h"
 #include "SceneManager.h"
 #include "Scene.h"
+#include "Sprite.h"
+#include "Camera.h"
 
 // Forward declarations
 class SIPlayScene;
@@ -33,6 +35,7 @@ public:
     void setData      (SISharedData* d)    { _data = d; }
     void setPauseScene(SIPauseScene* p)    { _pause = p; }
     void setDeadScene (SIGameOverScene* d) { _gameover = d; }
+    void setEngine    (Camera* cam)        { _camera = cam; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
@@ -47,16 +50,13 @@ static constexpr int ALIEN_COLS = 8;
     SISharedData*    _data     = nullptr;
     SIPauseScene*    _pause    = nullptr;
     SIGameOverScene* _gameover = nullptr;
+    Camera*          _camera   = nullptr;
 
-    float _playerX = 60.0f;
-    
-    // Player Bullet
-    float _pbX = 0;
-    float _pbY = 0;
-    bool  _pbActive = false;
+    Sprite _player;
+    Sprite _pb; // Player Bullet
+    Sprite _eBullets[MAX_EBULLETS];
+    Sprite _aliens[ALIEN_ROWS][ALIEN_COLS];
 
-    // Swarm
-    bool  _aliens[ALIEN_ROWS][ALIEN_COLS];
     int   _aliensAlive = 0;
     float _swarmX = 10.0f;
     float _swarmY = 10.0f;
@@ -65,11 +65,6 @@ static constexpr int ALIEN_COLS = 8;
     uint8_t _moveTimer = 0;
     uint8_t _moveDelay = 30; // Gets faster as aliens die
 
-    // Enemy Bullets
-    struct EBullet { float x, y; bool active; };
-    EBullet _eBullets[MAX_EBULLETS];
-
-    uint8_t _shakeFrames = 0;
     uint8_t _respawnTimer = 0;
 
     void _initLevel();
@@ -110,10 +105,12 @@ public:
     void draw   (Console& ctx) override;
     bool           isRunning() const override;
     const char*    getName()   const override;
+    const uint8_t* getCoverArt() const override;
 
 private:
     SISharedData    _data;
     SceneManager    _sm;
+    Camera          _camera;
     SITitleScene    _title;
     SIPlayScene     _play;
     SIPauseScene    _pause;

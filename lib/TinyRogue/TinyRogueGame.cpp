@@ -45,15 +45,8 @@ void RoguePlayScene::onEnter(Console& ctx) {
 void RoguePlayScene::_spawnHitEffect(int gridX, int gridY) {
     int px = (gridX * 8) + 4;
     int py = (gridY * 8) + 4;
-    uint8_t spawned = 0;
-    for (auto& b : _blood) {
-        if (b.life == 0) {
-            b.x = px; b.y = py;
-            b.vx = (random(-20, 21) / 10.0f);
-            b.vy = (random(-20, 21) / 10.0f);
-            b.life = random(5, 12);
-            if (++spawned > 4) break;
-        }
+    for (int i = 0; i < 4; i++) {
+        _particles->spawnPixel(px, py, (random(-20, 21) / 10.0f), (random(-20, 21) / 10.0f), random(5, 12));
     }
 }
 
@@ -318,21 +311,9 @@ void RoguePlayScene::_updateCamera(bool snap) {
     targetY = gclamp(targetY, 0, (RogueSharedData::MAP_H * 8) - Console::H);
 
     if (snap) {
-        _camPixelX = _camStartX = _camTargetX = targetX;
-        _camPixelY = _camStartY = _camTargetY = targetY;
-        _camT = CAM_FRAMES;
-    } else if (targetX != _camTargetX || targetY != _camTargetY) {
-        _camStartX = _camPixelX;
-        _camStartY = _camPixelY;
-        _camTargetX = targetX;
-        _camTargetY = targetY;
-        _camT = 0;
-    }
-
-    if (_camT < CAM_FRAMES) {
-        _camT++;
-        _camPixelX = lerpi(_camStartX, _camTargetX, _camT, CAM_FRAMES);
-        _camPixelY = lerpi(_camStartY, _camTargetY, _camT, CAM_FRAMES);
+        _camera->snapTo(targetX, targetY);
+    } else {
+        _camera->panTo(targetX, targetY, 6);
     }
 }
 
@@ -345,25 +326,15 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
         return;
     }
 
-    if (_shakeFrames > 0) _shakeFrames--; 
-
     int dx = 0, dy = 0;
-    
-    if (ctx.repeat(Btn::UP))    dy = -1;
-    if (ctx.repeat(Btn::DOWN))  dy = 1;
-    if (ctx.repeat(Btn::LEFT))  dx = -1;
-    if (ctx.repeat(Btn::RIGHT)) dx = 1;
+    if (ctx.justPressed(Btn::UP)   || ctx.repeat(Btn::UP))   dy = -1;
+    if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) dy = 1;
+    if (ctx.justPressed(Btn::LEFT) || ctx.repeat(Btn::LEFT)) dx = -1;
+    if (ctx.justPressed(Btn::RIGHT)|| ctx.repeat(Btn::RIGHT)) dx = 1;
 
     if (dx != 0 || dy != 0) {
         _processTurn(ctx, sm, dx, dy);  // <--- Added 'sm' right here!      
         _processMonsterTurns(ctx, sm); 
-    }
-    
-    // Update combat particles
-    for (auto& b : _blood) {
-        if (b.life > 0) {
-            b.x += b.vx; b.y += b.vy; b.life--;
-        }
     }
 
     _updateCamera(); 
@@ -440,7 +411,7 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
 
     if (playerHit) {
         ctx.sfxDeath(); 
-        _shakeFrames = 6;
+        _camera->shake(6);
         
         if (_data->player.hp <= 0) {
             ctx.saveHiScore(_data->currentDepth); 
@@ -470,7 +441,7 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         if (crit) dmg *= 2;
         
         targetMonster->hp -= dmg;
-        _shakeFrames = crit ? 6 : 3; 
+        _camera->shake(crit ? 6 : 3); 
         _spawnHitEffect(targetX, targetY);
         ctx.beep(crit ? 1500 : 1000, 20); 
         
@@ -498,7 +469,7 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             snprintf(_hudMessage, sizeof(_hudMessage), "It's a MIMIC!");
             _hudMessageTimer = 60;
             ctx.beep(200, 150);
-            _shakeFrames = 8;
+            _camera->shake(8);
             
             for (auto& m : _data->monsters) {
                 if (!m.active) {
@@ -676,11 +647,7 @@ void RogueShopScene::draw(Console& ctx) {
 }
 
 void RoguePlayScene::draw(Console& ctx) {
-    int ox = (_shakeFrames > 0) ? random(-2, 3) : 0;
-    int oy = (_shakeFrames > 0) ? random(-2, 3) : 0;
-    
-    drawDungeon(ctx, ox, oy); 
-    
+    drawDungeon(ctx, 0, 0); 
     
     // Top Center: HUD Messages
     ctx.setFont(u8g2_font_5x7_tf);
@@ -761,13 +728,13 @@ void RoguePlayScene::draw(Console& ctx) {
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
+    ctx.setCamera(_camera);
+
     int viewportTilesX = (Console::W / 8) + 1;
     int viewportTilesY = (Console::H / 8) + 1;
     
-    int startCol = _camPixelX / 8;
-    int startRow = _camPixelY / 8;
-    int offsetX = -(_camPixelX % 8);
-    int offsetY = -(_camPixelY % 8);
+    int startCol = _camera->x / 8;
+    int startRow = _camera->y / 8;
 
     for (int y = 0; y <= viewportTilesY; y++) {
         for (int x = 0; x <= viewportTilesX; x++) {
@@ -784,8 +751,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
             if (inSight) _data->explored[mapY][mapX] = true;
             if (!_data->explored[mapY][mapX]) continue; 
 
-            int renderX = (x * 8) + offsetX + ox;
-            int renderY = (y * 8) + offsetY + oy; 
+            int renderX = (mapX * 8);
+            int renderY = (mapY * 8); 
 
             TileType t = _data->map[mapY][mapX];
 
@@ -833,14 +800,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
         }
     }
 
-    // Draw Combat Particles over everything
-    for (const auto& b : _blood) {
-        if (b.life > 0) {
-            int px = (int)b.x - _camPixelX + (Console::W / 2) - 4 + ox;
-            int py = (int)b.y - _camPixelY + (Console::H / 2) - 4 + oy;
-            ctx.drawPixel(px, py);
-        }
-    }
+    _particles->draw(ctx);
+    ctx.setCamera(nullptr);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -943,7 +904,7 @@ void TinyRogueGame::onEnter(Console& ctx) {
     _play.setData(&_data);
     _play.setPauseScene(&_pause);
     _play.setDeadScene(&_dead);
-    _play.setShopScene(&_shop); 
+    _play.setEngine(&_camera, &_particles);
     
     _shop.setData(&_data);      
     _shop.setPlayScene(&_play); 
@@ -959,8 +920,13 @@ void TinyRogueGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
 }
 
-void TinyRogueGame::update(Console& ctx) { _sm.update(ctx); }
+void TinyRogueGame::update(Console& ctx) { 
+    _camera.update();
+    _particles.update();
+    _sm.update(ctx); 
+}
 void TinyRogueGame::draw(Console& ctx)   { _sm.draw(ctx); }
 
 bool        TinyRogueGame::isRunning() const { return !_sm.empty(); }
 const char* TinyRogueGame::getName()   const { return "Tiny Rogue"; }
+const uint8_t* TinyRogueGame::getCoverArt() const { return spr_tinyrogue_cover; }

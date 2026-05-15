@@ -80,16 +80,8 @@ void PongPlayScene::_updateAI() {
 }
 
 void PongPlayScene::_spawnSparks(float x, float y, float dirX) {
-    uint8_t spawned = 0;
-    for (auto& p : _particles) {
-        if (p.life == 0) {
-            p.x = x;
-            p.y = y;
-            p.vx = dirX * (random(15, 35) / 10.0f); // Burst outward
-            p.vy = (random(-25, 25) / 10.0f);       // Spread vertically
-            p.life = random(8, 15);
-            if (++spawned > 5) break;               // 5 sparks per hit
-        }
+    for (int i = 0; i < 5; i++) {
+        _particles->spawnPixel(x, y, dirX * (random(15, 35) / 10.0f), (random(-25, 25) / 10.0f), random(8, 15));
     }
 }
 
@@ -109,7 +101,7 @@ void PongPlayScene::_handlePaddleCollision(Console& ctx) {
         float rel  = (s.ballPos.y - s.leftY) / PongState::PAD_H - 0.5f;
         s.ballVel.y = rel * PongState::BALL_SPEED * 2.2f;
         
-        _shakeFrames = 3;
+        if (_camera) _camera->shake(3);
         _leftHitTimer = 4;
         _spawnSparks(s.ballPos.x, s.ballPos.y, 1.0f);
         ctx.beep(600 + (_rallyCount * 40) + abs((int)s.ballVel.y) * 50, 30);
@@ -128,7 +120,7 @@ void PongPlayScene::_handlePaddleCollision(Console& ctx) {
         float rel  = (s.ballPos.y - s.rightY) / PongState::PAD_H - 0.5f;
         s.ballVel.y = rel * PongState::BALL_SPEED * 2.2f;
         
-        _shakeFrames = 3;
+        if (_camera) _camera->shake(3);
         _rightHitTimer = 4;
         _spawnSparks(s.ballPos.x, s.ballPos.y, -1.0f);
         ctx.beep(600 + abs((int)s.ballVel.y) * 50, 30); 
@@ -139,10 +131,11 @@ void PongPlayScene::_handlePaddleCollision(Console& ctx) {
 }
 
 // Helper used by both PlayScene and PauseScene (the latter draws background).
-// Helper used by both PlayScene and PauseScene (the latter draws background).
-void PongPlayScene::drawField(Console& ctx, int ox, int oy) const {
+void PongPlayScene::drawField(Console& ctx) const {
     const PongState& s = _st;
     
+    ctx.setCamera(nullptr); // UI first
+
     // HUD line + scores
     ctx.setFont(u8g2_font_5x7_tf);
     
@@ -151,19 +144,19 @@ void PongPlayScene::drawField(Console& ctx, int ox, int oy) const {
 
     char buf[4];
     snprintf(buf, sizeof(buf), "%u", s.scoreL);
-    ctx.drawStr(55 + ox, 8 + oy + scoreOffsetY, buf);
+    ctx.drawStr(55, 8 + scoreOffsetY, buf);
     
     snprintf(buf, sizeof(buf), "%u", s.scoreR);
-    ctx.drawStr(70 + ox, 8 + oy + scoreOffsetY, buf);
+    ctx.drawStr(70, 8 + scoreOffsetY, buf);
+
+    ctx.setCamera(_camera);
 
     // Centre dashes
     for (int y = PongState::FIELD_TOP + 2; y < Console::H; y += 7)
-        ctx.drawVLine(64 + ox, y + oy, 4);
+        ctx.drawVLine(64, y, 4);
 
     // Particles
-    for (const auto& p : _particles) {
-        if (p.life > 0) ctx.drawPixel((int)p.x + ox, (int)p.y + oy);
-    }
+    _particles->draw(ctx);
 
     // ── Paddles (with Squash & Stretch) ──
     
@@ -171,23 +164,25 @@ void PongPlayScene::drawField(Console& ctx, int ox, int oy) const {
     int lPadW = PongState::PAD_W + _leftHitTimer;
     int lPadH = PongState::PAD_H - (_leftHitTimer * 2);
     int lPadY = (int)s.leftY + _leftHitTimer; // Offset Y to keep it vertically centered
-    ctx.drawBox(PongState::PAD_MARGIN + ox, lPadY + oy, lPadW, lPadH);
+    ctx.drawBox(PongState::PAD_MARGIN, lPadY, lPadW, lPadH);
 
     // Right Paddle: Bulges out to the left (Subtract timer from X to pin it to the wall)
     int rPadW = PongState::PAD_W + _rightHitTimer;
     int rPadH = PongState::PAD_H - (_rightHitTimer * 2);
     int rPadY = (int)s.rightY + _rightHitTimer;
     int rPadX = Console::W - PongState::PAD_MARGIN - PongState::PAD_W - _rightHitTimer;
-    ctx.drawBox(rPadX + ox, rPadY + oy, rPadW, rPadH);
+    ctx.drawBox(rPadX, rPadY, rPadW, rPadH);
 
     // Speed Trail
     // Multiply velocity by 1.5 or 2 to make the tail longer at higher speeds
     int tailX = (int)(s.ballPos.x - (s.ballVel.x * 1.5f));
     int tailY = (int)(s.ballPos.y - (s.ballVel.y * 1.5f));
-    ctx.drawLine(s.ballPos.ix() + ox, s.ballPos.iy() + oy, tailX + ox, tailY + oy);
+    ctx.drawLine(s.ballPos.ix(), s.ballPos.iy(), tailX, tailY);
 
     // Ball
-    ctx.drawDisc(s.ballPos.ix() + ox, s.ballPos.iy() + oy, PongState::BALL_R);
+    ctx.drawDisc(s.ballPos.ix(), s.ballPos.iy(), PongState::BALL_R);
+
+    ctx.setCamera(nullptr);
 }
 
 void PongPlayScene::update(Console& ctx, SceneManager& sm) {
@@ -238,7 +233,7 @@ if (_hitStopFrames > 0) {
         // Scoring
         if (s.ballPos.x < 0) {
             s.scoreR++;
-            _shakeFrames = 12; // Big shake!
+            if (_camera) _camera->shake(12); // Big shake!
             ctx.sfxDeath();
             if (s.scoreR >= PongState::WIN_SCORE) { sm.replace(_gameover, ctx); return; }
             _resetBall(false); 
@@ -246,7 +241,7 @@ if (_hitStopFrames > 0) {
 
         if (s.ballPos.x > Console::W) {
             s.scoreL++;
-            _shakeFrames = 12; // Big shake!
+            if (_camera) _camera->shake(12); // Big shake!
             ctx.sfxPoint();
             if (s.scoreL >= PongState::WIN_SCORE) { _playerWon = true; sm.replace(_gameover, ctx); return; }
             _resetBall(true); 
@@ -254,26 +249,13 @@ if (_hitStopFrames > 0) {
     }
 
     // ── Particle & Shake Physics ──
-    if (_shakeFrames > 0) _shakeFrames--;
     if (_leftHitTimer > 0) _leftHitTimer--;
     if (_rightHitTimer > 0) _rightHitTimer--;
-
-    for (auto& p : _particles) {
-        if (p.life > 0) {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.15f; // Gravity pull on sparks
-            p.life--;
-        }
-    }
 }
 
 void PongPlayScene::draw(Console& ctx) {
-    int ox = (_shakeFrames > 0) ? random(-2, 3) : 0;
-    int oy = (_shakeFrames > 0) ? random(-2, 3) : 0;
-    
     // Flash the screen for the first 3 frames of a score impact
-    if (_shakeFrames > 9) {
+    if (_serveTimer > 87) {
         ctx.setDrawColor(1); // White
         ctx.drawBox(0, 0, Console::W, Console::H); // Fill screen
         ctx.setDrawColor(0); // Set draw color to Black for everything else
@@ -281,7 +263,7 @@ void PongPlayScene::draw(Console& ctx) {
         ctx.setDrawColor(1); // Normal white drawing
     }
     
-    drawField(ctx, ox, oy);
+    drawField(ctx);
     
     // Draw the countdown number
     if (_serveTimer > 0) {
@@ -316,7 +298,7 @@ void PongPauseScene::update(Console& ctx, SceneManager& sm) {
 
 void PongPauseScene::draw(Console& ctx) {
     // Draw the frozen game state as background with NO shake (0, 0)
-    _play->drawField(ctx, 0, 0);
+    _play->drawField(ctx);
 
     // Overlay: filled box to obscure + border
     ctx.setDrawColor(0);
@@ -385,6 +367,7 @@ void PongGame::onEnter(Console& ctx) {
     _title.setPlayScene    (&_play);
     _play .setPauseScene   (&_pause);
     _play .setGameOverScene(&_gameover);
+    _play .setEngine       (&_camera, &_particles);
     _pause.setPlayScene    (&_play);
     _gameover.setPlayScene (&_play);
 
@@ -396,6 +379,8 @@ void PongGame::onExit(Console& ctx) {
 }
 
 void PongGame::update(Console& ctx) {
+    _camera.update();
+    _particles.update();
     _sm.update(ctx);
 }
 

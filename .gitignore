@@ -7,3 +7,9 @@ repomix-output.txt
 repomix-output.xml
 /graphify-out
 GEMINI.md
+lib/Core/Camera.h
+GameEngine_Improvement_Plan.txt
+.agents/rules/graphify.md
+ARCHITECTURE.md
+.agents/workflows/graphify.md
+.gemini/settings.json

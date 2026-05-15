@@ -34,8 +34,17 @@ void SITitleScene::draw(Console& ctx) {
 void SIPlayScene::onEnter(Console& ctx) {
     _data->score = 0;
     _data->lives = 3;
-    _playerX = Console::W / 2 - 4;
     _respawnTimer = 0;
+    
+    _player = Sprite(Console::W / 2 - 4, 56, 7, 5, spr_si_player);
+    _pb = Sprite(0, 0, 1, 3, nullptr); 
+    _pb.active = false;
+
+    for (int i = 0; i < MAX_EBULLETS; i++) {
+        _eBullets[i] = Sprite(0, 0, 1, 3, nullptr);
+        _eBullets[i].active = false;
+    }
+
     _initLevel();
 }
 
@@ -43,13 +52,14 @@ void SIPlayScene::_initLevel() {
     _swarmX = 10.0f;
     _swarmY = 12.0f;
     _swarmVX = 2.0f;
-    _pbActive = false;
+    _pb.active = false;
     _aliensAlive = ALIEN_ROWS * ALIEN_COLS;
     _moveDelay = 25;
     
     for (int r = 0; r < ALIEN_ROWS; r++) {
         for (int c = 0; c < ALIEN_COLS; c++) {
-            _aliens[r][c] = true;
+            _aliens[r][c] = Sprite(_swarmX + c * 8, _swarmY + r * 8, 5, 5, spr_si_alien1);
+            _aliens[r][c].active = true;
         }
     }
     for (auto& eb : _eBullets) eb.active = false;
@@ -63,34 +73,27 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm) {
         return;
     }
 
-    if (_shakeFrames > 0) _shakeFrames--;
-
     // Handle Respawn Pause
     if (_respawnTimer > 0) {
         _respawnTimer--;
     } else {
         // Player Movement
-        if (ctx.pressed(Btn::LEFT))  _playerX -= 2.0f;
-        if (ctx.pressed(Btn::RIGHT)) _playerX += 2.0f;
-        _playerX = gclamp(_playerX, 2.0f, (float)(Console::W - 10));
+        if (ctx.pressed(Btn::LEFT))  _player.x -= 2.0f;
+        if (ctx.pressed(Btn::RIGHT)) _player.x += 2.0f;
+        _player.x = gclamp(_player.x, 2.0f, (float)(Console::W - 10));
 
         // Player Shooting
-        if (ctx.justPressed(Btn::A) && !_pbActive) {
-            _pbActive = true;
-            _pbX = _playerX + 3;
-            _pbY = 52.0f;
+        if (ctx.justPressed(Btn::A) && !_pb.active) {
+            _pb.active = true;
+            _pb.x = _player.x + 3;
+            _pb.y = 52.0f;
             ctx.beep(1200, 20);
         }
     }
 
-    // Player Movement
-    if (ctx.pressed(Btn::LEFT))  _playerX -= 2.0f;
-    if (ctx.pressed(Btn::RIGHT)) _playerX += 2.0f;
-    _playerX = gclamp(_playerX, 2.0f, (float)(Console::W - 10));
-
-    if (_pbActive) {
-        _pbY -= 4.0f;
-        if (_pbY < 0) _pbActive = false;
+    if (_pb.active) {
+        _pb.y -= 4.0f;
+        if (_pb.y < 0) _pb.active = false;
     }
 
     // Alien Movement (Step-based)
@@ -106,8 +109,9 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm) {
         float leftmost = Console::W;
         for (int r = 0; r < ALIEN_ROWS; r++) {
             for (int c = 0; c < ALIEN_COLS; c++) {
-                if (_aliens[r][c]) {
-                    float ax = _swarmX + c * 8;
+                if (_aliens[r][c].active) {
+                    _aliens[r][c].x = _swarmX + c * 8;
+                    float ax = _aliens[r][c].x;
                     if (ax > rightmost) rightmost = ax;
                     if (ax < leftmost) leftmost = ax;
                 }
@@ -125,6 +129,16 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm) {
                 return;
             }
         }
+        
+        // Sync Y pos
+        for (int r = 0; r < ALIEN_ROWS; r++) {
+            for (int c = 0; c < ALIEN_COLS; c++) {
+                if (_aliens[r][c].active) {
+                    _aliens[r][c].y = _swarmY + r * 8;
+                    _aliens[r][c].bitmap = (_animFrame == 0) ? spr_si_alien1 : spr_si_alien2;
+                }
+            }
+        }
 
         // Alien Shooting
         if (random(10) < 3) {
@@ -132,10 +146,10 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm) {
                 if (!eb.active) {
                     int c = random(ALIEN_COLS);
                     for (int r = ALIEN_ROWS - 1; r >= 0; r--) {
-                        if (_aliens[r][c]) {
+                        if (_aliens[r][c].active) {
                             eb.active = true;
-                            eb.x = _swarmX + c * 8 + 2;
-                            eb.y = _swarmY + r * 8 + 5;
+                            eb.x = _aliens[r][c].x + 2;
+                            eb.y = _aliens[r][c].y + 5;
                             break;
                         }
                     }
@@ -163,20 +177,15 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void SIPlayScene::_checkCollisions(Console& ctx, SceneManager& sm) {
-    Rect playerRect = {(int)_playerX, 56, 7, 5};
-
     // Check Player Bullet vs Aliens
-    if (_pbActive) {
-    Rect pbRect = {(int)_pbX, (int)_pbY, 1, 3}; // Skinny 1x3 bullet
-    bool hit = false;
-    for (int r = 0; r < ALIEN_ROWS && !hit; r++) {
-        for (int c = 0; c < ALIEN_COLS; c++) {
-            if (_aliens[r][c]) {
-                // Alien hitbox (now 5x5, spaced 8px apart)
-                Rect alienRect = {(int)(_swarmX + c * 8), (int)(_swarmY + r * 8), 5, 5};
-                if (pbRect.overlaps(alienRect)) {
-                        _aliens[r][c] = false;
-                        _pbActive = false;
+    if (_pb.active) {
+        bool hit = false;
+        for (int r = 0; r < ALIEN_ROWS && !hit; r++) {
+            for (int c = 0; c < ALIEN_COLS; c++) {
+                if (_aliens[r][c].active) {
+                    if (_pb.collidesWith(_aliens[r][c])) {
+                        _aliens[r][c].active = false;
+                        _pb.active = false;
                         _aliensAlive--;
                         _data->score += 10;
                         if (_data->score > _data->hiScore) _data->hiScore = _data->score;
@@ -193,10 +202,9 @@ void SIPlayScene::_checkCollisions(Console& ctx, SceneManager& sm) {
     if (_respawnTimer == 0) { // Only check if the player is vulnerable
         for (auto& eb : _eBullets) {
             if (eb.active) {
-                Rect ebRect = {(int)eb.x, (int)eb.y, 1, 3};
-                if (ebRect.overlaps(playerRect)) {
+                if (eb.collidesWith(_player)) {
                     ctx.sfxDeath();
-                    _shakeFrames = 15;
+                    if (_camera) _camera->shake(15);
                     _data->lives--;
 
                     if (_data->lives < 0) {
@@ -207,8 +215,8 @@ void SIPlayScene::_checkCollisions(Console& ctx, SceneManager& sm) {
                     } else {
                         // Lost a life, trigger respawn
                         _respawnTimer = 60; // 2 seconds of freeze/invulnerability
-                        _playerX = Console::W / 2 - 4; // Re-center player
-                        _pbActive = false; // Kill active player bullet
+                        _player.x = Console::W / 2 - 4; // Re-center player
+                        _pb.active = false; // Kill active player bullet
                         for (auto& b : _eBullets) b.active = false; // Clear enemy bullets
                         return;
                     }
@@ -219,12 +227,12 @@ void SIPlayScene::_checkCollisions(Console& ctx, SceneManager& sm) {
 }
 
 void SIPlayScene::draw(Console& ctx) {
-    int ox = (_shakeFrames > 0) ? random(-2, 3) : 0;
-    int oy = (_shakeFrames > 0) ? random(-2, 3) : 0;
     drawField(ctx);
 }
 
 void SIPlayScene::drawField(Console& ctx) const {
+    ctx.setCamera(nullptr); // Ensure UI has no camera offset
+
     // UI
     ctx.setFont(u8g2_font_5x7_tf);
     char buf[24];
@@ -239,30 +247,29 @@ void SIPlayScene::drawField(Console& ctx) const {
     
     ctx.drawHLine(0, 9, Console::W);
 
+    ctx.setCamera(_camera); // Apply camera for game world
+
     // Player (Blink rapidly if respawning)
     if (_respawnTimer == 0 || (_respawnTimer / 4) % 2 == 0) {
-        ctx.drawBitmap((int)_playerX, 56, 1, 5, spr_si_player);
+        _player.draw(ctx);
     }
 
     // Player Bullet (skinny 1x3)
-    if (_pbActive) ctx.drawBox((int)_pbX, (int)_pbY, 1, 3);
+    if (_pb.active) ctx.drawBox((int)_pb.x, (int)_pb.y, 1, 3);
 
     // Enemy Bullets (skinny 1x3)
     for (const auto& eb : _eBullets) {
         if (eb.active) ctx.drawBox((int)eb.x, (int)eb.y, 1, 3);
     }
 
-    // Aliens (height=5, spacing=8)
+    // Aliens 
     for (int r = 0; r < ALIEN_ROWS; r++) {
         for (int c = 0; c < ALIEN_COLS; c++) {
-            if (_aliens[r][c]) {
-                int ax = (int)(_swarmX + c * 8);
-                int ay = (int)(_swarmY + r * 8);
-                const uint8_t* spr = (_animFrame == 0) ? spr_si_alien1 : spr_si_alien2;
-                ctx.drawBitmap(ax, ay, 1, 5, spr);
-            }
+            _aliens[r][c].draw(ctx);
         }
     }
+
+    ctx.setCamera(nullptr); // Clean up
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -322,6 +329,8 @@ void SpaceInvadersGame::onEnter(Console& ctx) {
     _play.setData(&_data);
     _play.setPauseScene(&_pause);
     _play.setDeadScene(&_gameover);
+    _play.setEngine(&_camera);
+    
     _pause.setPlayScene(&_play);
     _gameover.setData(&_data);
     _gameover.setPlayScene(&_play);
@@ -333,8 +342,12 @@ void SpaceInvadersGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
 }
 
-void SpaceInvadersGame::update(Console& ctx) { _sm.update(ctx); }
+void SpaceInvadersGame::update(Console& ctx) { 
+    _camera.update();
+    _sm.update(ctx); 
+}
 void SpaceInvadersGame::draw(Console& ctx)   { _sm.draw(ctx); }
 
 bool        SpaceInvadersGame::isRunning() const { return !_sm.empty(); }
 const char* SpaceInvadersGame::getName()   const { return "Invaders"; }
+const uint8_t* SpaceInvadersGame::getCoverArt() const { return rifat_name; }

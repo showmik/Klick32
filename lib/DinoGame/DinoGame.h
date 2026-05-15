@@ -3,6 +3,9 @@
 #include "GameUtils.h"
 #include "SceneManager.h"
 #include "Scene.h"
+#include "Sprite.h"
+#include "Camera.h"
+#include "AnimationManager.h"
 
 class DinoPlayScene;
 class DinoPauseScene;
@@ -34,18 +37,19 @@ public:
     void setData      (DinoSharedData* d) { _data = d; }
     void setPauseScene(DinoPauseScene* p) { _pause = p; }
     void setDeadScene (DinoDeadScene* d)  { _dead = d; }
+    void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
-    // Added ox and oy parameters to support Screen Shake from the DeadScene
-    void drawField(Console& ctx, bool isDead, int ox = 0, int oy = 0) const;
+    void drawField(Console& ctx, bool isDead) const;
 
-    // Expose speed so the DeadScene can inherit momentum for debris
     float getSpeed() const { return _speed; }
 
 private:
+    Camera*           _camera    = nullptr;
+    AnimationManager* _particles = nullptr;
     enum class ObstacleKind : uint8_t { CACTUS_SMALL, CACTUS_LARGE, PTERO_LOW, PTERO_HIGH };
 
     struct Obstacle {
@@ -144,20 +148,18 @@ class DinoDeadScene : public Scene {
 public:
     void setData     (DinoSharedData* d) { _data = d; }
     void setPlayScene(DinoPlayScene*  p) { _play = p; }
+    void setEngine   (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
 private:
-    struct Debris { float x, y, vx, vy; };
-
-    DinoSharedData* _data = nullptr;
-    DinoPlayScene*  _play = nullptr;
-    
-    uint8_t         _frame       = 0;
-    uint8_t         _shakeFrames = 0;
-    Debris          _debris[8]   = {};
+    DinoSharedData*   _data      = nullptr;
+    DinoPlayScene*    _play      = nullptr;
+    Camera*           _camera    = nullptr;
+    AnimationManager* _particles = nullptr;
+    uint8_t           _frame     = 0;
 };
 
 // ─── DinoGame ────────────────────────────────────────────────────────────────
@@ -176,6 +178,8 @@ public:
 private:
     DinoSharedData _data;
     SceneManager   _sm;
+    Camera         _camera;
+    AnimationManager _particles;
     DinoTitleScene _title;
     DinoPlayScene  _play;
     DinoPauseScene _pause;

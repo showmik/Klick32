@@ -4,6 +4,8 @@
 #include "GameUtils.h"
 #include "SceneManager.h"
 #include "Scene.h"
+#include "Camera.h"
+#include "AnimationManager.h"
 
 // ─── SnakeGame ────────────────────────────────────────────────────────────────
 // Classic snake: eat apples, grow, avoid walls and yourself.
@@ -66,14 +68,14 @@ public:
     void setPauseScene (SnakePauseScene*       p) { _pause     = p; }
     void setNameScene  (SnakeNameEntryScene*   n) { _nameEntry = n; }
     void setDeadScene  (SnakeDeadScene*        d) { _dead      = d; }
+    void setEngine     (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
     // Called by overlay scenes so they can paint the frozen field as background.
-    // ox / oy are the shake offsets; pass 0,0 when not shaking.
-    void drawField(Console& ctx, int ox, int oy) const;
+    void drawField(Console& ctx) const;
 
 private:
     // ── Grid constants ────────────────────────────────────────────────────────
@@ -87,19 +89,9 @@ private:
     static constexpr uint32_t BONUS_POINTS   = 50;
     static constexpr uint16_t BONUS_DURATION = 40;
     static constexpr uint16_t POISON_DURATION = 50;
-    static constexpr uint8_t MAX_PARTICLES = 20; 
 
     enum class SparkType { NORMAL, POISON, BONUS };
 
-    struct Particle { 
-        float x, y, vx, vy; 
-        uint8_t life; 
-        bool isBonus; // Track if this is a high-value spark
-    };
-
-    Particle _particles[MAX_PARTICLES] = {}; 
-    
-    // Update the helper signature
     void _spawnSparks(int gridX, int gridY, SparkType type);
 
     // ── Round state (reset on every new game) ─────────────────────────────────
@@ -130,13 +122,14 @@ private:
     uint32_t _score      = 0;
     uint8_t  _moveTimer  = 0;
     uint8_t  _speed      = START_SPEED;
-    uint8_t  _shakeFrames = 0;    // counts down in update; used by draw
 
     // ── Wired siblings ────────────────────────────────────────────────────────
     SnakeSharedData*     _data      = nullptr;
     SnakePauseScene*     _pause     = nullptr;
     SnakeNameEntryScene* _nameEntry = nullptr;
     SnakeDeadScene*      _dead      = nullptr;
+    Camera*              _camera    = nullptr;
+    AnimationManager*    _particles = nullptr;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     void _initRound();
@@ -169,6 +162,7 @@ public:
     void setData     (SnakeSharedData*  d) { _data = d; }
     void setDeadScene(SnakeDeadScene*   d) { _dead = d; }
     void setPlayScene(SnakePlayScene*   p) { _play = p; }
+    void setEngine   (Camera* cam)         { _camera = cam; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
@@ -178,10 +172,10 @@ private:
     SnakeSharedData* _data    = nullptr;
     SnakeDeadScene*  _dead    = nullptr;
     SnakePlayScene*  _play    = nullptr;
+    Camera*          _camera  = nullptr;
 
     char    _currName[4] = "AAA";
     uint8_t _nameIdx     = 0;
-    uint8_t _shakeFrames = 0;
     uint8_t _frame       = 0;
 
     void _saveToNVS(Console& ctx);
@@ -192,6 +186,7 @@ class SnakeDeadScene : public Scene {
 public:
     void setData     (SnakeSharedData*  d) { _data = d; }
     void setPlayScene(SnakePlayScene*   p) { _play = p; }
+    void setEngine   (Camera* cam)         { _camera = cam; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
@@ -200,8 +195,8 @@ public:
 private:
     SnakeSharedData* _data    = nullptr;
     SnakePlayScene*  _play    = nullptr;
+    Camera*          _camera  = nullptr;
 
-    uint8_t _shakeFrames = 0;
     uint8_t _frame       = 0;
 };
 
@@ -220,6 +215,8 @@ public:
 private:
     SnakeSharedData      _data;
     SceneManager         _sm;
+    Camera               _camera;
+    AnimationManager     _particles;
     SnakePlayScene       _play;
     SnakePauseScene      _pause;
     SnakeNameEntryScene  _nameEntry;

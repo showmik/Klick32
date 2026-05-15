@@ -306,7 +306,9 @@ void DinoPlayScene::draw(Console& ctx) {
     drawField(ctx, false);
 }
 
-void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
+void DinoPlayScene::drawField(Console& ctx, bool isDead) const {
+    ctx.setCamera(nullptr); // Ensure UI/background reset
+
     bool isNight = (_data->score / 500) % 2 != 0;
     
     if (isNight) {
@@ -321,8 +323,8 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
 
     // ── Celestial Body (Dimmed Sun/Moon) ──────────────────────────────────────
     // Moves extremely slowly leftwards across the sky
-    int cx = Console::W - ((_frameCnt / 8) % (Console::W + 30)) + ox;
-    int cy = 16 + oy;
+    int cx = Console::W - ((_frameCnt / 8) % (Console::W + 30));
+    int cy = 16;
     
     ctx.setDrawColor(isNight ? 0 : 1);
     
@@ -364,32 +366,34 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
         ctx.drawPixel(cx + 15, cy - 12);
     }
 
+    ctx.setCamera(_camera);
+
     for (const auto& c : _clouds) {
-        _drawCloud(ctx, c.pos.ix() + ox, c.pos.iy() + oy);
+        _drawCloud(ctx, c.pos.ix(), c.pos.iy());
     }
 
-    ctx.drawHLine(0, GROUND_Y + oy, SCREEN_W);
+    ctx.drawHLine(0, GROUND_Y, SCREEN_W);
     int offset = (int)((float)_frameCnt * _speed) % 20;
     
     for (int x = -offset; x < SCREEN_W; x += 20) {
-        ctx.drawHLine(x + 3 + ox,  GROUND_Y + 2 + oy, 6);
-        ctx.drawHLine(x + 13 + ox, GROUND_Y + 4 + oy, 3);
+        ctx.drawHLine(x + 3,  GROUND_Y + 2, 6);
+        ctx.drawHLine(x + 13, GROUND_Y + 4, 3);
     }
 
     for (const auto& d : _dust) {
-        if (d.life > 0) ctx.drawPixel(d.pos.ix() + ox, d.pos.iy() + oy);
+        if (d.life > 0) ctx.drawPixel(d.pos.ix(), d.pos.iy());
     }
     for (const auto& s : _sweat) {
-        if (s.life > 0) ctx.drawPixel(s.pos.ix() + ox, s.pos.iy() + oy);
+        if (s.life > 0) ctx.drawPixel(s.pos.ix(), s.pos.iy());
     }
 
-    int dx = DINO_X + ox;
-    int dy = (int)_dinoY + oy;
+    int dx = DINO_X;
+    int dy = (int)_dinoY;
 
     if (isDead) {
         ctx.drawBitmap(dx, dy, 2, DINO_H, spr_dead);
     } else if (_isDucking) {
-        ctx.drawBitmap(dx, GROUND_Y - DUCK_H + oy, 2, DUCK_H, (_animFrame == 0) ? spr_duck1 : spr_duck2);
+        ctx.drawBitmap(dx, GROUND_Y - DUCK_H, 2, DUCK_H, (_animFrame == 0) ? spr_duck1 : spr_duck2);
     } else if (!_onGround) {
         ctx.drawBitmap(dx, dy, 2, DINO_H, spr_run1);
     } else {
@@ -406,8 +410,8 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
     for (const auto& o : _obs) {
         if (!o.active) continue;
         
-        const int obx = (int)o.x + ox;
-        const int oby = _obsTopY(o.kind) + oy;
+        const int obx = (int)o.x;
+        const int oby = _obsTopY(o.kind);
         
         switch (o.kind) {
             case ObstacleKind::CACTUS_SMALL: 
@@ -424,6 +428,8 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
     }
 
     // ── Plain Text Score ──────────────────────────────────────────────────────
+    ctx.setCamera(nullptr); // Unset camera for UI
+
     char buf[32];
     ctx.setFont(u8g2_font_6x10_tf);
 
@@ -433,7 +439,7 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead, int ox, int oy) const {
     if (drawScore) {
         snprintf(buf, sizeof(buf), "HI:%05u  %05u", (unsigned)_data->hiScore, (unsigned)_data->score);
         ctx.setDrawColor(isNight ? 0 : 1);
-        ctx.drawStr(34 + ox, 10 + oy, buf);
+        ctx.drawStr(34, 10, buf);
     }
 
     ctx.setDrawColor(1); // Force reset for standard UI elements
@@ -476,28 +482,20 @@ void DinoPauseScene::draw(Console& ctx) {
 
 void DinoDeadScene::onEnter(Console& ctx) { 
     _frame = 0; 
-    _shakeFrames = 12;
+    _camera->shake(12);
 
     // Explode debris outward based on the current speed
     float inheritSpeed = _play->getSpeed() * 0.5f;
-    for (auto& d : _debris) {
-        d.x = 24.0f; // Front of the dino
-        d.y = 48.0f; // Middle of the dino
-        d.vx = inheritSpeed + (random(-15, 25) / 10.0f);
-        d.vy = (random(-40, -10) / 10.0f);
+    for (int i = 0; i < 8; i++) {
+        _particles->spawnPixel(24.0f, 48.0f, 
+            inheritSpeed + (random(-15, 25) / 10.0f), 
+            (random(-40, -10) / 10.0f), 
+            random(15, 30));
     }
 }
 
 void DinoDeadScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
-    if (_shakeFrames > 0) _shakeFrames--;
-
-    // Update Debris physics
-    for (auto& d : _debris) {
-        d.x += d.vx;
-        d.y += d.vy;
-        d.vy += 0.55f; // Gravity
-    }
 
     if (ctx.justPressed(Btn::MENU1)) { 
         sm.clear(ctx); 
@@ -510,19 +508,14 @@ void DinoDeadScene::update(Console& ctx, SceneManager& sm) {
 }
 
 void DinoDeadScene::draw(Console& ctx) {
-    // Generate screen shake offsets
-    int ox = (_shakeFrames > 0) ? random(-3, 4) : 0;
-    int oy = (_shakeFrames > 0) ? random(-3, 4) : 0;
+    _play->drawField(ctx, true);
 
-    _play->drawField(ctx, true, ox, oy);
-
-    // Draw flying debris over the background
-    for (const auto& d : _debris) {
-        if (d.y < 64) ctx.drawPixel((int)d.x + ox, (int)d.y + oy);
-    }
+    ctx.setCamera(_camera);
+    _particles->draw(ctx);
+    ctx.setCamera(nullptr);
 
     // Only draw the game over menu once the shake settles to give it impact
-    if (_shakeFrames == 0) {
+    if (_camera->getOffsetX() == 0 && _camera->getOffsetY() == 0) {
         ctx.setDrawColor(0);
         ctx.drawBox(18, 20, 92, 28);
         ctx.setDrawColor(1);
@@ -550,11 +543,13 @@ void DinoGame::onEnter(Console& ctx) {
     _play.setData(&_data);
     _play.setPauseScene(&_pause);
     _play.setDeadScene(&_dead);
+    _play.setEngine(&_camera, &_particles);
 
     _pause.setPlayScene(&_play);
 
     _dead.setData(&_data);
     _dead.setPlayScene(&_play);
+    _dead.setEngine(&_camera, &_particles);
 
     _sm.replace(&_title, ctx); 
 }
@@ -564,6 +559,8 @@ void DinoGame::onExit(Console& ctx) {
 }
 
 void DinoGame::update(Console& ctx) { 
+    _camera.update();
+    _particles.update();
     _sm.update(ctx); 
 }
 
