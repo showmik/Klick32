@@ -5,3 +5,5 @@
 .vscode/ipch
 repomix-output.txt
 repomix-output.xml
+/graphify-out
+GEMINI.md
