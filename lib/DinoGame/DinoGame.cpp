@@ -504,8 +504,11 @@ void DinoDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
         return; 
     }
     
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
-        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
+    // Prevent accidental instant-restarts by requiring a short delay (~1 second)
+    if (_frame > 30) {
+        if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
+            sm.emit(ctx, Event::CUSTOM_1); // PlayScene
+        }
     }
 }
 
