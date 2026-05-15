@@ -100,6 +100,11 @@ static const uint8_t PROGMEM spr_rogue_floor[8] = {
     0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00
 };
 
+// Tall Grass: A few distinct blades
+static const uint8_t PROGMEM spr_rogue_grass[8] = {
+    0x00, 0x00, 0x24, 0x24, 0x5A, 0x5A, 0x7E, 0x00
+};
+
 // Wall: Crisp, hollow square to define boundaries without visual clutter
 static const uint8_t PROGMEM spr_rogue_wall[8] = {
    0x00,

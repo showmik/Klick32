@@ -15,7 +15,7 @@ enum class ItemType : uint8_t {
 };
 
 enum class TileType : uint8_t { 
-    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE 
+    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE, TALL_GRASS 
 };
 
 enum class MonsterType : uint8_t { 
@@ -38,6 +38,7 @@ struct Entity {
 struct Monster : public Entity {
     MonsterType type;
     bool active = false;
+    bool alert = false;
 };
 
 // ─── Shared Game State ───────────────────────────────────────────────────────

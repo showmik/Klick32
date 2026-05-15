@@ -228,6 +228,15 @@ void RoguePlayScene::_generateBSPMap() {
         } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
         _data->map[sy][sx] = TileType::SPIKE;
     }
+
+    // Spawn Tall Grass
+    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+            if (_data->map[y][x] == TileType::FLOOR && random(100) < 15) {
+                _data->map[y][x] = TileType::TALL_GRASS;
+            }
+        }
+    }
 }
 
 void RoguePlayScene::_generateCaveMap() {
@@ -331,6 +340,15 @@ void RoguePlayScene::_generateCaveMap() {
         } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
         _data->map[sy][sx] = TileType::SPIKE;
     }
+
+    // Spawn Tall Grass
+    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+            if (_data->map[y][x] == TileType::FLOOR && random(100) < 15) {
+                _data->map[y][x] = TileType::TALL_GRASS;
+            }
+        }
+    }
 }
 
 void RoguePlayScene::_spawnMonsters() {
@@ -361,6 +379,7 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[i].active = true;
         _data->monsters[i].hp = 4 + _data->currentDepth;
         _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
+        _data->monsters[i].alert = false;
 
         int maxRand = 4;
         if (_data->currentDepth >= 3) maxRand = 5; // Introduce Orcs
@@ -443,6 +462,11 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
         if (m.type == MonsterType::BAT) aggro = 8;
         else if (m.type == MonsterType::SKELETON) aggro = 5;
 
+        // Tall grass hides the player, severely reducing monster sight radius
+        if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
+            aggro = 2; 
+        }
+
         if (m.type == MonsterType::SKELETON && (_data->turnCount % 2 != 0)) {
             continue; 
         }
@@ -457,6 +481,7 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
             int dy = _data->player.y - m.y;
 
             if (abs(dx) <= aggro && abs(dy) <= aggro) {
+                m.alert = true; // Monster woke up or spotted player
                 int stepX = 0, stepY = 0;
 
                 if (m.type == MonsterType::BAT && random(3) == 0) {
@@ -532,7 +557,17 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
     
     if (targetMonster) {
         int dmg = _data->player.attack;
-        bool crit = (random(100) < 20);
+        bool crit = false;
+        
+        if (!targetMonster->alert) {
+            crit = true; // Guaranteed Sneak Attack!
+            targetMonster->alert = true;
+            snprintf(_hudMessage, sizeof(_hudMessage), "Sneak Attack!");
+            _hudMessageTimer = 40;
+        } else {
+            crit = (random(100) < 20);
+        }
+        
         if (crit) dmg *= 2;
         
         targetMonster->hp -= dmg;
@@ -634,6 +669,16 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
     else {
         _data->player.x = targetX;
         _data->player.y = targetY;
+
+        if (targetTile == TileType::TALL_GRASS) {
+            _data->map[targetY][targetX] = TileType::FLOOR; // Trample the grass
+            if (random(100) < 15 && _data->player.hp < _data->player.maxHp) {
+                _data->player.hp++;
+                snprintf(_hudMessage, sizeof(_hudMessage), "Dewdrop: +1 HP");
+                _hudMessageTimer = 40;
+                ctx.beep(1000, 30);
+            }
+        }
 
         if (targetTile == TileType::SPIKE) {
             _data->player.hp -= 2;
@@ -900,6 +945,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall);
             } else if (t == TileType::FLOOR || t == TileType::CORRIDOR) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_floor);
+            } else if (t == TileType::TALL_GRASS) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_grass);
             } else if (t == TileType::STAIRS_DOWN) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_stairs);
             } else if (t == TileType::CHEST) {
@@ -922,6 +969,12 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 else if (m->type == MonsterType::SKELETON) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_skeleton);
                 else if (m->type == MonsterType::ORC) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_orc);
                 else if (m->type == MonsterType::TROLL) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_troll);
+                
+                // Draw sleeping indicator 'z' if unaware of player
+                if (!m->alert && (millis() / 500) % 2 == 0) {
+                    ctx.setFont(u8g2_font_5x7_tf);
+                    ctx.drawStr(renderX + 2, renderY - 1, "z");
+                }
             } 
             else if (mapX == _data->player.x && mapY == _data->player.y) {
                 ctx.setDrawColor(0);
