@@ -125,6 +125,8 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             
             // If aliens reach the player
             if (_swarmY + (ALIEN_ROWS * 8) > 56) {
+                ctx.sfxDeath();
+                if (_camera) _camera->shake(15);
                 ctx.saveHiScore(_data->hiScore);
                 sm.emit(ctx, Event::GAME_OVER);
                 return;
@@ -299,14 +301,21 @@ void SIGameOverScene::onEnter(Console& ctx) { _frame = 0; }
 void SIGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
-    if (ctx.justPressed(Btn::A)) {
-        ctx.sfxMenuEnter();
-        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
+    
+    if (_frame > 30) {
+        if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
+            ctx.sfxMenuEnter();
+            sm.emit(ctx, Event::CUSTOM_1); // PlayScene
+        }
     }
 }
 
 void SIGameOverScene::draw(Console& ctx) {
-    if (_sm) _sm->drawUnder(ctx);
+    if (_play) {
+        _play->drawField(ctx);
+    } else if (_sm) {
+        _sm->drawUnder(ctx);
+    }
     ctx.setDrawColor(0);
     ctx.drawBox(20, 20, 88, 28);
     ctx.setDrawColor(1);
@@ -330,6 +339,7 @@ void SpaceInvadersGame::onEnter(Console& ctx) {
     _play.setEngine(&_camera);
     
     _gameover.setData(&_data);
+    _gameover.setPlayScene(&_play);
 
     // Event Registry Mapping
     _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
@@ -353,6 +363,6 @@ void SpaceInvadersGame::draw(Console& ctx)   { _sm.draw(ctx); }
 
 bool        SpaceInvadersGame::isRunning() const { return !_sm.empty(); }
 const char* SpaceInvadersGame::getName()   const { return "Invaders"; }
-const uint8_t* SpaceInvadersGame::getCoverArt() const { return rifat_name; }
+const uint8_t* SpaceInvadersGame::getCoverArt() const { return spr_si_cover; }
 
 REGISTER_GAME(SpaceInvadersGame);

@@ -77,11 +77,14 @@ public:
 class SIGameOverScene : public Scene {
 public:
     void setData     (SISharedData* d) { _data = d; }
+    void setPlayScene(SIPlayScene* p)  { _play = p; }
+    
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     SISharedData* _data = nullptr;
+    SIPlayScene*  _play = nullptr;
     uint8_t       _frame = 0;
 };
 
