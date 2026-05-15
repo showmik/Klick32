@@ -1,4 +1,5 @@
 #include "TinyRogueGame.h"
+#include "GameRegistry.h"
 #include "TinyRogueSprites.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -9,7 +10,7 @@ void RogueTitleScene::onEnter(Console& ctx) {
     _frame = 0;
 }
 
-void RogueTitleScene::update(Console& ctx, SceneManager& sm) {
+void RogueTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
@@ -317,7 +318,7 @@ void RoguePlayScene::_updateCamera(bool snap) {
     }
 }
 
-void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
+void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_hudMessageTimer > 0) _hudMessageTimer--;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
@@ -538,7 +539,7 @@ void RogueShopScene::onEnter(Console& ctx) {
     _introFrames = 0;
 }
 
-void RogueShopScene::update(Console& ctx, SceneManager& sm) {
+void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_introFrames < 10) _introFrames++;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
@@ -779,7 +780,7 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 // RoguePauseScene & RogueDeadScene 
 // ═════════════════════════════════════════════════════════════════════════════
 
-void RoguePauseScene::update(Console& ctx, SceneManager& sm) {
+void RoguePauseScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_introFrames < 10) _introFrames++;
     
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
@@ -816,7 +817,7 @@ void RoguePauseScene::draw(Console& ctx) {
 
 void RogueDeadScene::onEnter(Console& ctx) { _frame = 0; }
 
-void RogueDeadScene::update(Console& ctx, SceneManager& sm) {
+void RogueDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
@@ -879,13 +880,15 @@ void TinyRogueGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
 }
 
-void TinyRogueGame::update(Console& ctx) { 
+void TinyRogueGame::update(Console& ctx, float dt) { 
     _camera.update();
     _particles.update();
-    _sm.update(ctx); 
+    _sm.update(ctx, dt); 
 }
 void TinyRogueGame::draw(Console& ctx)   { _sm.draw(ctx); }
 
 bool        TinyRogueGame::isRunning() const { return !_sm.empty(); }
 const char* TinyRogueGame::getName()   const { return "Tiny Rogue"; }
 const uint8_t* TinyRogueGame::getCoverArt() const { return spr_tinyrogue_cover; }
+
+REGISTER_GAME(TinyRogueGame);

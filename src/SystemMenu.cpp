@@ -1,6 +1,6 @@
 #include "SystemMenu.h"
 
-SystemMenu::SystemMenu(GameBase** games, const uint8_t* gameCount, Battery* batt)
+SystemMenu::SystemMenu(GameRecord* games, const uint8_t* gameCount, Battery* batt)
     : _games(games), _gameCount(gameCount), _batt(batt) {}
 
 void SystemMenu::onEnter(Console& ctx) {
@@ -17,9 +17,9 @@ void SystemMenu::onExit(Console& ctx) {}
 bool        SystemMenu::isRunning()   const { return _running; }
 const char* SystemMenu::getName()     const { return "SystemMenu"; }
 bool        SystemMenu::needsRedraw() const { return _dirty; }
-GameBase*   SystemMenu::getLaunchedGame() const { return _launchedGame; }
+GameRecord* SystemMenu::getLaunchedGameRecord() const { return _launchedGame; }
 
-void SystemMenu::update(Console& ctx) {
+void SystemMenu::update(Console& ctx, float dt) {
     if (*_gameCount == 0) return;
 
     _dirty = true; // Force redraw every frame for animations
@@ -79,7 +79,7 @@ void SystemMenu::update(Console& ctx) {
     // ── Launch Game ──
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
         ctx.sfxMenuEnter();
-        _launchedGame = _games[_selected];
+        _launchedGame = &_games[_selected];
         _running = false; 
     }
 }
@@ -139,9 +139,9 @@ void SystemMenu::_drawHeader(Console& ctx) {
 }
 
 void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
-    const GameBase* g = _games[idx];
-    const uint8_t* cover = g->getCoverArt();
-    const uint8_t* icon = g->getIcon();
+    const GameRecord& g = _games[idx];
+    const uint8_t* cover = g.cover;
+    const uint8_t* icon = g.icon;
 
     // 1. Sharp Card Frame (Slides)
     ctx.drawFrame(Layout::CARD_FRAME_X + offsetX, Layout::CARD_FRAME_Y, Layout::CARD_FRAME_W, Layout::CARD_FRAME_H);
@@ -161,13 +161,13 @@ void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
             ctx.drawBitmap(Layout::CARD_ICON_X + offsetX, iconY, 2, Layout::CARD_ICON_SIZE, icon);
         } else {
             ctx.drawRFrame(Layout::CARD_ICON_X + offsetX, iconY, Layout::CARD_ICON_SIZE, Layout::CARD_ICON_SIZE, 3);
-            char ini[2] = { g->getName()[0], '\0' };
+            char ini[2] = { g.name[0], '\0' };
             ctx.setFont(u8g2_font_7x13B_tf);
             ctx.drawStr(Layout::CARD_ICON_X + 4 + offsetX, iconY + 12, ini);
         }
 
         ctx.setFont(u8g2_font_7x13B_tf);
-        const char* name = g->getName();
+        const char* name = g.name;
         uint8_t nameW = ctx.strWidth(name);
         ctx.drawStr((Console::W - nameW) / 2 + offsetX, Layout::CARD_NAME_Y, name);
     }

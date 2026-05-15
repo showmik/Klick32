@@ -68,7 +68,7 @@ public:
     void setEngine     (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
     // Called by overlay scenes so they can paint the frozen field as background.
@@ -139,7 +139,7 @@ private:
 class SnakePauseScene : public Scene {
 public:
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 };
 
@@ -152,7 +152,7 @@ public:
     void setEngine   (Camera* cam)         { _camera = cam; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
 private:
@@ -173,7 +173,7 @@ public:
     void setEngine   (Camera* cam)         { _camera = cam; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
 private:
@@ -188,7 +188,7 @@ class SnakeGame : public GameBase {
 public:
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
-    void update (Console& ctx) override;
+    void update (Console& ctx, float dt) override;
     void draw   (Console& ctx) override;
     bool           isRunning()   const override;
     bool           needsRedraw() const override;

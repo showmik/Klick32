@@ -22,7 +22,7 @@ struct DinoSharedData {
 class DinoTitleScene : public Scene {
 public:
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
 private:
@@ -36,7 +36,7 @@ public:
     void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
     void drawField(Console& ctx, bool isDead) const;
@@ -128,7 +128,7 @@ private:
 class DinoPauseScene : public Scene {
 public:
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 };
 
@@ -139,7 +139,7 @@ public:
     void setEngine   (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
 private:
@@ -154,7 +154,7 @@ class DinoGame : public GameBase {
 public:
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
-    void update (Console& ctx) override;
+    void update (Console& ctx, float dt) override;
     void draw   (Console& ctx) override;
     
     bool           isRunning() const override;

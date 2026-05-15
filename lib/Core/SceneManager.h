@@ -94,8 +94,8 @@ public:
 
     // ── Per-frame dispatch ────────────────────────────────────────────────────
 
-    void update(Console& ctx) {
-        if (_depth > 0) _stack[_depth - 1]->update(ctx, *this);
+    void update(Console& ctx, float dt) {
+        if (_depth > 0) _stack[_depth - 1]->update(ctx, *this, dt);
     }
 
     void draw(Console& ctx) {

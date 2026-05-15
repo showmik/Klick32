@@ -1,16 +1,17 @@
 #pragma once
 #include "GameBase.h"
+#include "GameRegistry.h"
 #include "Battery.h"
 #include "Config.h"
 
 class SystemMenu : public GameBase {
 public:
     // Takes references to the OS's game list and hardware
-    SystemMenu(GameBase** games, const uint8_t* gameCount, Battery* batt);
+    SystemMenu(GameRecord* games, const uint8_t* gameCount, Battery* batt);
 
     void onEnter(Console& ctx) override;
     void onExit(Console& ctx)  override;
-    void update(Console& ctx)  override;
+    void update(Console& ctx, float dt)  override;
     void draw(Console& ctx)    override;
     
     bool           isRunning()   const override;
@@ -18,17 +19,17 @@ public:
     bool           needsRedraw() const override;
 
     // The OS calls this to find out which game the user selected
-    GameBase* getLaunchedGame() const;
+    GameRecord* getLaunchedGameRecord() const;
 
 private:
-    GameBase**     _games;
+    GameRecord*    _games;
     const uint8_t* _gameCount;
     Battery*       _batt;
 
     bool           _running = true;
     bool           _dirty   = true;
     uint8_t        _selected = 0;
-    GameBase*      _launchedGame = nullptr;
+    GameRecord*    _launchedGame = nullptr;
 
     uint8_t        _battPct   = 0;
     uint32_t       _battTimer = 0;

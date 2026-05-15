@@ -42,7 +42,7 @@ public:
 
     // Called every frame while this scene is on top of the stack.
     // Use sm to trigger transitions; use ctx for input, sound, and drawing.
-    virtual void update(Console& ctx, SceneManager& sm) = 0;
+    virtual void update(Console& ctx, SceneManager& sm, float dt) = 0;
     virtual void draw  (Console& ctx) = 0;
 
     // Override to return false when the screen hasn't changed, saving a

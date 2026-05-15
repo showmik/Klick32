@@ -1,4 +1,5 @@
 #include "DinoGame.h"
+#include "GameRegistry.h"
 #include "DinoSprites.h"
 
 // ─── DinoGame ────────────────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ void DinoTitleScene::onEnter(Console& ctx) {
     _frame = 0; 
 }
 
-void DinoTitleScene::update(Console& ctx, SceneManager& sm) {
+void DinoTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     
     if (ctx.justPressed(Btn::MENU1)) { 
@@ -164,7 +165,7 @@ void DinoPlayScene::_drawCloud(Console& ctx, int x, int y) const {
     ctx.drawDisc(x + 15, y + 5, 3);
 }
 
-void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
+void DinoPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { 
         sm.clear(ctx); 
         return; 
@@ -453,7 +454,7 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead) const {
 
 void DinoPauseScene::onEnter(Console& ctx) {}
 
-void DinoPauseScene::update(Console& ctx, SceneManager& sm) {
+void DinoPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { 
         sm.emit(ctx, Event::QUIT); 
         return; 
@@ -495,7 +496,7 @@ void DinoDeadScene::onEnter(Console& ctx) {
     }
 }
 
-void DinoDeadScene::update(Console& ctx, SceneManager& sm) {
+void DinoDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
 
     if (ctx.justPressed(Btn::MENU1)) { 
@@ -559,10 +560,10 @@ void DinoGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
 }
 
-void DinoGame::update(Console& ctx) { 
+void DinoGame::update(Console& ctx, float dt) { 
     _camera.update();
     _particles.update();
-    _sm.update(ctx); 
+    _sm.update(ctx, dt); 
 }
 
 void DinoGame::draw(Console& ctx) { 
@@ -573,3 +574,5 @@ bool           DinoGame::isRunning() const { return !_sm.empty(); }
 const char*    DinoGame::getName()   const { return "Dino Run"; }
 const uint8_t* DinoGame::getIcon()   const { return dinogame_icon; }
 const uint8_t* DinoGame::getCoverArt() const { return spr_dino_cover; }
+
+REGISTER_GAME(DinoGame);

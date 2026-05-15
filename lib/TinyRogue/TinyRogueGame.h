@@ -66,7 +66,7 @@ class RogueShopScene;
 class RogueTitleScene : public Scene {
 public:
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     uint8_t _frame = 0;
@@ -76,7 +76,7 @@ class RogueShopScene : public Scene {
 public:
     void setData(RogueSharedData* d)     { _data = d; }
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     RogueSharedData* _data = nullptr;
@@ -92,7 +92,7 @@ public:
     void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
     void drawDungeon(Console& ctx, int ox = 0, int oy = 0) const;
@@ -121,7 +121,7 @@ private:
 class RoguePauseScene : public Scene {
 public:
     void onEnter(Console& ctx) override { _introFrames = 0; } // Reset on enter
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     uint8_t _introFrames = 0; // Track animation state
@@ -131,7 +131,7 @@ class RogueDeadScene : public Scene {
 public:
     void setData     (RogueSharedData* d) { _data = d; }
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     RogueSharedData* _data = nullptr;
@@ -144,7 +144,7 @@ class TinyRogueGame : public GameBase {
 public:
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
-    void update (Console& ctx) override;
+    void update (Console& ctx, float dt) override;
     void draw   (Console& ctx) override;
     
     bool           isRunning() const override;

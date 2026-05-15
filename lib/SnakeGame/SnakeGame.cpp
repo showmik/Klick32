@@ -1,4 +1,5 @@
 #include "SnakeGame.h"
+#include "GameRegistry.h"
 #include "SnakeSprites.h"
 #include <Preferences.h>
 
@@ -110,7 +111,7 @@ void SnakePlayScene::_pushInput(Dir d) {
     if (_queueLen < 2) _inputQueue[_queueLen++] = d;
 }
 
-void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
+void SnakePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
     if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
@@ -365,7 +366,7 @@ void SnakePlayScene::draw(Console& ctx) {
 
 void SnakePauseScene::onEnter(Console& ctx) {}
 
-void SnakePauseScene::update(Console& ctx, SceneManager& sm) {
+void SnakePauseScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
@@ -406,7 +407,7 @@ void SnakeNameEntryScene::_saveToNVS(Console& ctx) {
     prefs.end();
 }
 
-void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm) {
+void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     
     if (ctx.justPressed(Btn::MENU1)) { 
@@ -478,7 +479,7 @@ void SnakeDeadScene::onEnter(Console& ctx) {
     _frame = 0;
 }
 
-void SnakeDeadScene::update(Console& ctx, SceneManager& sm) {
+void SnakeDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
@@ -539,10 +540,10 @@ void SnakeGame::onExit(Console& ctx) {
     // Clean up if needed. sm.clear() handles exiting individual scenes.
 }
 
-void SnakeGame::update(Console& ctx) {
+void SnakeGame::update(Console& ctx, float dt) {
     _camera.update();
     _particles.update();
-    _sm.update(ctx);
+    _sm.update(ctx, dt);
 }
 
 void SnakeGame::draw(Console& ctx) {
@@ -553,3 +554,5 @@ bool        SnakeGame::isRunning()   const { return !_sm.empty(); }
 bool        SnakeGame::needsRedraw() const { return _sm.needsRedraw(); }
 const char* SnakeGame::getName()     const { return "Snake"; }
 const uint8_t* SnakeGame::getCoverArt() const { return spr_snake_cover; }
+
+REGISTER_GAME(SnakeGame);

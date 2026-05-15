@@ -44,7 +44,7 @@ public:
     virtual void onExit(Console& ctx) = 0;
 
     // Called every frame: advance game logic, read input, trigger sounds.
-    virtual void update(Console& ctx) = 0;
+    virtual void update(Console& ctx, float dt) = 0;
 
     // Called every frame after update: render the current frame.
     virtual void draw(Console& ctx)   = 0;

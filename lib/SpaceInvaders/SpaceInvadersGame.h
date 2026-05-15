@@ -21,7 +21,7 @@ struct SISharedData {
 class SITitleScene : public Scene {
 public:
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     uint8_t      _frame = 0;
@@ -34,7 +34,7 @@ public:
     void setEngine    (Camera* cam)        { _camera = cam; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
     void drawField(Console& ctx) const;
 
@@ -69,7 +69,7 @@ static constexpr int ALIEN_COLS = 8;
 class SIPauseScene : public Scene {
 public:
     void onEnter(Console& ctx) override {}
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 };
 
@@ -78,7 +78,7 @@ class SIGameOverScene : public Scene {
 public:
     void setData     (SISharedData* d) { _data = d; }
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     SISharedData* _data = nullptr;
@@ -90,7 +90,7 @@ class SpaceInvadersGame : public GameBase {
 public:
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
-    void update (Console& ctx) override;
+    void update (Console& ctx, float dt) override;
     void draw   (Console& ctx) override;
     bool           isRunning() const override;
     const char*    getName()   const override;

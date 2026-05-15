@@ -74,7 +74,7 @@ struct PongState {
 class PongTitleScene : public Scene {
 public:
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
 private:
@@ -86,7 +86,7 @@ public:
     void setEngine       (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
     // We've moved drawing here so it can access particles and screen shake
@@ -117,7 +117,7 @@ private:
 class PongPauseScene : public Scene {
 public:
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 };
 
@@ -125,7 +125,7 @@ class PongGameOverScene : public Scene {
 public:
     void setState(const PongState* s, const bool* pw) { _st = s; _playerWon = pw; }
     void onEnter(Console& ctx) override;
-    void update (Console& ctx, SceneManager& sm) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
 private:
@@ -140,7 +140,7 @@ class PongGame : public GameBase {
 public:
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
-    void update (Console& ctx) override;
+    void update (Console& ctx, float dt) override;
     void draw   (Console& ctx) override;
     bool           isRunning()   const override;
     bool           needsRedraw() const override;

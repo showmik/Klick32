@@ -1,5 +1,6 @@
 // Target path: lib/PongGame/PongGame.cpp
 #include "PongGame.h"
+#include "GameRegistry.h"
 #include "PongSprites.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -10,7 +11,7 @@ void PongTitleScene::onEnter(Console& ctx) {
     _frame = 0;
 }
 
-void PongTitleScene::update(Console& ctx, SceneManager& sm) {
+void PongTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
 
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
@@ -185,7 +186,7 @@ void PongPlayScene::drawField(Console& ctx) const {
     ctx.setCamera(nullptr);
 }
 
-void PongPlayScene::update(Console& ctx, SceneManager& sm) {
+void PongPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     // If we are in hit-stop, freeze time! (Don't update ball, paddles, or timers)
 if (_hitStopFrames > 0) {
     _hitStopFrames--;
@@ -287,7 +288,7 @@ void PongPlayScene::draw(Console& ctx) {
 
 void PongPauseScene::onEnter(Console& ctx) {}
 
-void PongPauseScene::update(Console& ctx, SceneManager& sm) {
+void PongPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
@@ -319,7 +320,7 @@ void PongGameOverScene::onEnter(Console& ctx) {
     else             ctx.sfxDeath();
 }
 
-void PongGameOverScene::update(Console& ctx, SceneManager& sm) {
+void PongGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
@@ -379,10 +380,10 @@ void PongGame::onExit(Console& ctx) {
     // sm.clear() has already been called; nothing to flush.
 }
 
-void PongGame::update(Console& ctx) {
+void PongGame::update(Console& ctx, float dt) {
     _camera.update();
     _particles.update();
-    _sm.update(ctx);
+    _sm.update(ctx, dt);
 }
 
 void PongGame::draw(Console& ctx) {
@@ -393,3 +394,5 @@ bool        PongGame::isRunning()   const { return !_sm.empty(); }
 bool        PongGame::needsRedraw() const { return _sm.needsRedraw(); }
 const char* PongGame::getName()     const { return "Pong"; }
 const uint8_t* PongGame::getCoverArt() const { return spr_pong_cover; }
+
+REGISTER_GAME(PongGame);

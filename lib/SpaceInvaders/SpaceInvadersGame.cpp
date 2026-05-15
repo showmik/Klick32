@@ -1,4 +1,5 @@
 #include "SpaceInvadersGame.h"
+#include "GameRegistry.h"
 #include "SpaceInvadersSprites.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -6,7 +7,7 @@
 // ═════════════════════════════════════════════════════════════════════════════
 void SITitleScene::onEnter(Console& ctx) { _frame = 0; }
 
-void SITitleScene::update(Console& ctx, SceneManager& sm) {
+void SITitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
     if (ctx.justPressed(Btn::A)) {
@@ -65,7 +66,7 @@ void SIPlayScene::_initLevel() {
     for (auto& eb : _eBullets) eb.active = false;
 }
 
-void SIPlayScene::update(Console& ctx, SceneManager& sm) {
+void SIPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
@@ -275,7 +276,7 @@ void SIPlayScene::drawField(Console& ctx) const {
 // ═════════════════════════════════════════════════════════════════════════════
 // SIPauseScene & SIGameOverScene
 // ═════════════════════════════════════════════════════════════════════════════
-void SIPauseScene::update(Console& ctx, SceneManager& sm) {
+void SIPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
@@ -295,7 +296,7 @@ void SIPauseScene::draw(Console& ctx) {
 
 void SIGameOverScene::onEnter(Console& ctx) { _frame = 0; }
 
-void SIGameOverScene::update(Console& ctx, SceneManager& sm) {
+void SIGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A)) {
@@ -344,12 +345,14 @@ void SpaceInvadersGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
 }
 
-void SpaceInvadersGame::update(Console& ctx) { 
+void SpaceInvadersGame::update(Console& ctx, float dt) { 
     _camera.update();
-    _sm.update(ctx); 
+    _sm.update(ctx, dt); 
 }
 void SpaceInvadersGame::draw(Console& ctx)   { _sm.draw(ctx); }
 
 bool        SpaceInvadersGame::isRunning() const { return !_sm.empty(); }
 const char* SpaceInvadersGame::getName()   const { return "Invaders"; }
 const uint8_t* SpaceInvadersGame::getCoverArt() const { return rifat_name; }
+
+REGISTER_GAME(SpaceInvadersGame);

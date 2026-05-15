@@ -16,7 +16,7 @@ class OS {
 public:
     OS();
     void begin();
-    void registerGame(GameBase* game);
+    void registerGame(GameBase* game); // Keep for compatibility or remove
     void run();
 
 private:
@@ -28,7 +28,7 @@ private:
     Console      _console;
 
     static constexpr uint8_t MAX_GAMES = 12;
-    GameBase* _games[MAX_GAMES] = {};
+    GameRecord _games[MAX_GAMES] = {};
     uint8_t   _gameCount        = 0;
 
     // The Menu is now just a class instance
