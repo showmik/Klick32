@@ -137,6 +137,7 @@ class DinoDeadScene : public Scene {
 public:
     void setData     (DinoSharedData* d) { _data = d; }
     void setEngine   (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setPlayScene(DinoPlayScene* p) { _play = p; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -146,6 +147,7 @@ private:
     DinoSharedData*   _data      = nullptr;
     Camera*           _camera    = nullptr;
     AnimationManager* _particles = nullptr;
+    DinoPlayScene*    _play      = nullptr;
     uint8_t           _frame     = 0;
 };
 

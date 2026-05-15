@@ -488,11 +488,11 @@ void DinoDeadScene::onEnter(Console& ctx) {
 
     // Explode debris outward based on the current speed
     float inheritSpeed = _data->speed * 0.5f;
-    for (int i = 0; i < 8; i++) {
-        _particles->spawnPixel(24.0f, 48.0f, 
-            inheritSpeed + (random(-15, 25) / 10.0f), 
-            (random(-40, -10) / 10.0f), 
-            random(15, 30));
+    for (int i = 0; i < 15; i++) {
+        _particles->spawnPixel(18.0f, 44.0f, 
+            inheritSpeed + (random(-20, 30) / 10.0f), 
+            (random(-50, -10) / 10.0f), 
+            random(20, 40));
     }
 }
 
@@ -510,7 +510,11 @@ void DinoDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void DinoDeadScene::draw(Console& ctx) {
-    if (_sm) _sm->drawUnder(ctx);
+    if (_play) {
+        _play->drawField(ctx, true);
+    } else if (_sm) {
+        _sm->drawUnder(ctx);
+    }
 
     ctx.setCamera(_camera);
     _particles->draw(ctx);
@@ -545,6 +549,7 @@ void DinoGame::onEnter(Console& ctx) {
 
     _dead.setData(&_data);
     _dead.setEngine(&_camera, &_particles);
+    _dead.setPlayScene(&_play);
 
     // Event Registry Mapping
     _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
