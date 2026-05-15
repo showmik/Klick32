@@ -239,3 +239,8 @@ static const uint8_t PROGMEM spr_rogue_troll[8] = {
 static const uint8_t PROGMEM spr_rogue_spike[8] = {
     0x00, 0x00, 0x00, 0x00, 0x24, 0x5A, 0x7E, 0xFF
 };
+
+// Boss: Giant Skull/Demon shape
+static const uint8_t PROGMEM spr_rogue_boss[8] = {
+    0x3C, 0x7E, 0xFF, 0xA5, 0xFF, 0xDB, 0x66, 0x3C
+};

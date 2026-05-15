@@ -25,7 +25,7 @@ enum class TileType : uint8_t {
 };
 
 enum class MonsterType : uint8_t { 
-    RAT, BAT, GOBLIN, ORC, SKELETON, TROLL 
+    RAT, BAT, GOBLIN, ORC, SKELETON, TROLL, BOSS 
 };
 
 struct Entity {
@@ -153,6 +153,7 @@ private:
     void _generateMap();            // The "Router"
     void _generateBSPMap();         // The Castle generator
     void _generateCaveMap();        // The Cave generator
+    void _generateBossMap();        // The Boss Arena generator
     void _spawnMonsters();          // Shared monster spawner
 
     void _processTurn(Console& ctx, SceneManager& sm, int dx, int dy);

@@ -101,11 +101,15 @@ void RoguePlayScene::_generateMap() {
     // 1. Reset Fog of War
     memset(_data->explored, 0, sizeof(_data->explored));
 
-    // 2. Roll the dice for biome (70% Castle/BSP, 30% Cave/CA)
-    if (random(100) < 70) {
-        _generateBSPMap();
+    // 2. Biomes and Boss Arenas
+    if (_data->currentDepth % 5 == 0) {
+        _generateBossMap(); // Depths 5, 10, 15...
+    } else if (_data->currentDepth < 5) {
+        _generateCaveMap(); // Sewers
+    } else if (_data->currentDepth < 10) {
+        _generateBSPMap();  // Prison
     } else {
-        _generateCaveMap();
+        if (random(100) < 50) _generateBSPMap(); else _generateCaveMap(); // Deep Caves
     }
 
     // 3. Shared Spawning & Setup
@@ -354,11 +358,37 @@ void RoguePlayScene::_generateCaveMap() {
     }
 }
 
+void RoguePlayScene::_generateBossMap() {
+    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
+        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
+            if (x >= 8 && x <= 24 && y >= 8 && y <= 24) {
+                if (x == 8 || x == 24 || y == 8 || y == 24) _data->map[y][x] = TileType::WALL;
+                else _data->map[y][x] = TileType::FLOOR;
+            } else {
+                _data->map[y][x] = TileType::WALL;
+            }
+        }
+    }
+    _data->player.x = 16;
+    _data->player.y = 22;
+}
+
 void RoguePlayScene::_spawnMonsters() {
     for (auto& m : _data->monsters) m.active = false;
 
-    // FIX: Significantly increase enemy density. 
-    // Spawns 8 enemies on Floor 1, scaling up as you descend.
+    if (_data->currentDepth % 5 == 0) {
+        // Boss Room Setup
+        _data->monsters[0].active = true;
+        _data->monsters[0].type = MonsterType::BOSS;
+        _data->monsters[0].x = 16;
+        _data->monsters[0].y = 12;
+        _data->monsters[0].maxHp = 25 + (_data->currentDepth * 5);
+        _data->monsters[0].hp = _data->monsters[0].maxHp;
+        _data->monsters[0].attack = 3 + (_data->currentDepth / 2);
+        _data->monsters[0].alert = true;
+        return;
+    }
+
     int targetMonsters = (_data->currentDepth * 2) + 6;
     if (targetMonsters > RogueSharedData::MAX_MONSTERS) {
         targetMonsters = RogueSharedData::MAX_MONSTERS;
@@ -384,24 +414,29 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
         _data->monsters[i].alert = false;
 
-        int maxRand = 4;
-        if (_data->currentDepth >= 3) maxRand = 5; // Introduce Orcs
-        if (_data->currentDepth >= 5) maxRand = 6; // Introduce Trolls
-
-        int r = random(maxRand);
-        if (r == 0)      _data->monsters[i].type = MonsterType::GOBLIN;
-        else if (r == 1) _data->monsters[i].type = MonsterType::RAT;
-        else if (r == 2) _data->monsters[i].type = MonsterType::BAT;
-        else if (r == 3) _data->monsters[i].type = MonsterType::SKELETON;
-        else if (r == 4) {
-            _data->monsters[i].type = MonsterType::ORC;
-            _data->monsters[i].hp += 4;
-            _data->monsters[i].attack += 1;
-        }
-        else if (r == 5) {
-            _data->monsters[i].type = MonsterType::TROLL;
-            _data->monsters[i].hp += 10;
-            _data->monsters[i].attack += 2;
+        if (_data->currentDepth < 5) {
+            // Sewers
+            int r = random(3);
+            if (r == 0) _data->monsters[i].type = MonsterType::RAT;
+            else if (r == 1) _data->monsters[i].type = MonsterType::BAT;
+            else _data->monsters[i].type = MonsterType::GOBLIN;
+        } else if (_data->currentDepth < 10) {
+            // Prison
+            int r = random(3);
+            if (r == 0) _data->monsters[i].type = MonsterType::SKELETON;
+            else if (r == 1) _data->monsters[i].type = MonsterType::ORC;
+            else _data->monsters[i].type = MonsterType::GOBLIN;
+        } else {
+            // Deep Caves
+            int r = random(3);
+            if (r == 0) _data->monsters[i].type = MonsterType::TROLL;
+            else if (r == 1) _data->monsters[i].type = MonsterType::ORC;
+            else _data->monsters[i].type = MonsterType::BAT;
+            
+            if (_data->monsters[i].type == MonsterType::TROLL) {
+                _data->monsters[i].hp += 8;
+                _data->monsters[i].attack += 2;
+            }
         }
     }
 }
@@ -492,6 +527,7 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
         int aggro = 6;
         if (m.type == MonsterType::BAT) aggro = 8;
         else if (m.type == MonsterType::SKELETON) aggro = 5;
+        else if (m.type == MonsterType::BOSS) aggro = 15; // Boss tracks across the whole room
 
         // Tall grass hides the player, severely reducing monster sight radius
         if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
@@ -624,6 +660,15 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 snprintf(_hudMessage, sizeof(_hudMessage), "LEVEL UP!");
                 _hudMessageTimer = 60;
                 ctx.beep(800, 100); ctx.beep(1200, 150);
+            }
+            if (targetMonster->type == MonsterType::BOSS) {
+                _data->map[targetMonster->y][targetMonster->x] = TileType::STAIRS_DOWN;
+                if (_data->map[targetMonster->y + 1][targetMonster->x] == TileType::FLOOR) {
+                    _data->map[targetMonster->y + 1][targetMonster->x] = TileType::CHEST;
+                }
+                snprintf(_hudMessage, sizeof(_hudMessage), "Boss Defeated!");
+                _hudMessageTimer = 80;
+                ctx.beep(1500, 200);
             }
         }
     }
@@ -1016,6 +1061,7 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 else if (m->type == MonsterType::SKELETON) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_skeleton);
                 else if (m->type == MonsterType::ORC) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_orc);
                 else if (m->type == MonsterType::TROLL) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_troll);
+                else if (m->type == MonsterType::BOSS) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_boss);
                 
                 // Draw sleeping indicator 'z' if unaware of player
                 if (!m->alert && (millis() / 500) % 2 == 0) {
