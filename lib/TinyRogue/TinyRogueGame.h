@@ -21,7 +21,8 @@ struct Item {
 };
 
 enum class TileType : uint8_t { 
-    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE, TALL_GRASS 
+    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE, TALL_GRASS,
+    LOCKED_DOOR, KEY
 };
 
 enum class MonsterType : uint8_t { 
@@ -62,6 +63,7 @@ struct RogueSharedData {
     uint32_t gold = 0;
     uint32_t hiScore = 0;
     uint32_t turnCount = 0;
+    uint8_t keys = 0;
     
     static constexpr int MAX_INVENTORY = 6;
     Item inventory[MAX_INVENTORY];

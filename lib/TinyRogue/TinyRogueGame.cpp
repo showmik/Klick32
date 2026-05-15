@@ -113,6 +113,39 @@ void RoguePlayScene::_generateMap() {
     }
 
     // 3. Shared Spawning & Setup
+    _data->keys = 0;
+    
+    // Only spawn doors on non-boss levels (Boss levels have no corridors)
+    if (_data->currentDepth % 5 != 0) {
+        int numLocked = random(1, 3);
+        int lockedSpawned = 0;
+        int attempts = 0;
+        
+        // Spawn Doors with a timeout to prevent infinite loops
+        while(lockedSpawned < numLocked && attempts < 100) {
+            int rx = random(1, RogueSharedData::MAP_W - 1);
+            int ry = random(1, RogueSharedData::MAP_H - 1);
+            if(_data->map[ry][rx] == TileType::CORRIDOR) {
+                _data->map[ry][rx] = TileType::LOCKED_DOOR;
+                lockedSpawned++;
+            }
+            attempts++;
+        }
+        
+        int keysSpawned = 0;
+        attempts = 0;
+        // Only spawn keys if we successfully spawned doors
+        while(keysSpawned < lockedSpawned && attempts < 100) {
+            int rx = random(1, RogueSharedData::MAP_W - 1);
+            int ry = random(1, RogueSharedData::MAP_H - 1);
+            if(_data->map[ry][rx] == TileType::FLOOR && (rx != _data->player.x || ry != _data->player.y)) {
+                _data->map[ry][rx] = TileType::KEY;
+                keysSpawned++;
+            }
+            attempts++;
+        }
+    }
+
     _spawnMonsters();
     _updateCamera(true); 
     isAiming = false;
@@ -588,6 +621,38 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                 }
             }
         }
+
+        // Boss Summoning Ability
+        if (m.type == MonsterType::BOSS && m.alert && random(100) < 15) {
+            // Find an inactive monster slot
+            for (auto& newM : _data->monsters) {
+                if (!newM.active) {
+                    newM.active = true;
+                    newM.type = (random(2) == 0) ? MonsterType::SKELETON : MonsterType::GOBLIN;
+                    newM.x = m.x + (random(3) - 1);
+                    newM.y = m.y + (random(3) - 1);
+                    
+                    // Validate position
+                    if (newM.x >= 0 && newM.x < RogueSharedData::MAP_W && 
+                        newM.y >= 0 && newM.y < RogueSharedData::MAP_H &&
+                        _data->map[newM.y][newM.x] == TileType::FLOOR && 
+                        (newM.x != _data->player.x || newM.y != _data->player.y)) {
+                        newM.hp = 8 + _data->currentDepth;
+                        newM.maxHp = newM.hp;
+                        newM.attack = 2 + (_data->currentDepth / 3);
+                        newM.alert = true;
+                        
+                        _camera->shake(5);
+                        ctx.beep(200, 100);
+                        snprintf(_hudMessage, sizeof(_hudMessage), "Boss Summons!");
+                        _hudMessageTimer = 60;
+                    } else {
+                        newM.active = false; // Cancel if spot is invalid
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     if (playerHit) {
@@ -622,6 +687,28 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 
     Monster* targetMonster = _getMonsterAt(targetX, targetY);
     
+    if (targetTile == TileType::KEY) {
+        _data->keys++;
+        _data->map[targetY][targetX] = TileType::FLOOR;
+        snprintf(_hudMessage, sizeof(_hudMessage), "Found a Key!");
+        _hudMessageTimer = 60;
+        ctx.beep(1200, 50);
+    }
+    else if (targetTile == TileType::LOCKED_DOOR) {
+        if (_data->keys > 0) {
+            _data->keys--;
+            _data->map[targetY][targetX] = TileType::FLOOR;
+            snprintf(_hudMessage, sizeof(_hudMessage), "Unlocked Door!");
+            _hudMessageTimer = 60;
+            ctx.beep(1000, 100);
+        } else {
+            snprintf(_hudMessage, sizeof(_hudMessage), "Locked!");
+            _hudMessageTimer = 40;
+            ctx.beep(150, 100);
+            return;
+        }
+    }
+
     if (targetMonster) {
         int dmg = _data->player.attack;
         bool crit = false;
@@ -826,10 +913,28 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
 
     if (ctx.justPressed(Btn::A)) {
         int costHealth = 20;
-        int costMaxHp = 50;
-        int costAtk = 100;
-        int costDef = 100;
+        int costPotion = 40;
+        int costDarts  = 30;
+        int costScroll = 150;
         
+        auto giveItem = [&](ItemType type, int count) -> bool {
+            for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                if(_data->inventory[i].type == type) {
+                    _data->inventory[i].count += count;
+                    return true;
+                }
+            }
+            for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                if(_data->inventory[i].type == ItemType::NONE) {
+                    _data->inventory[i].type = type;
+                    _data->inventory[i].count = count;
+                    _data->inventory[i].level = 0;
+                    return true;
+                }
+            }
+            return false;
+        };
+
         if (_cursor == 0) { // Buy Health
             if (_data->player.hp >= _data->player.maxHp) {
                 ctx.beep(150, 100);
@@ -839,47 +944,59 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
                 _data->gold -= costHealth;
                 _data->player.hp = gclamp(_data->player.hp + 5, 0, _data->player.maxHp);
                 ctx.sfxPoint();
-                snprintf(_msg, sizeof(_msg), "BOUGHT HP!");
+                snprintf(_msg, sizeof(_msg), "HEALED HP!");
                 _msgTimer = 40;
             } else {
                 ctx.beep(150, 100);
                 snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
                 _msgTimer = 40;
             }
-        } else if (_cursor == 1) { // Buy Max HP
-            if (_data->gold >= costMaxHp) {
-                _data->gold -= costMaxHp;
-                _data->player.maxHp += 5;
-                _data->player.hp += 5;
-                ctx.sfxPoint();
-                snprintf(_msg, sizeof(_msg), "MAX HP UP!");
-                _msgTimer = 40;
+        } else if (_cursor == 1) { // Buy Potion
+            if (_data->gold >= costPotion) {
+                if (giveItem(ItemType::POTION, 1)) {
+                    _data->gold -= costPotion;
+                    ctx.sfxPoint();
+                    snprintf(_msg, sizeof(_msg), "BOUGHT POTION!");
+                    _msgTimer = 40;
+                } else {
+                    ctx.beep(150, 100);
+                    snprintf(_msg, sizeof(_msg), "PACK FULL!");
+                    _msgTimer = 40;
+                }
             } else {
                 ctx.beep(150, 100);
                 snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
                 _msgTimer = 40;
             }
-        } else if (_cursor == 2) { // Buy ATK
-            if (_data->gold >= costAtk) {
-                _data->gold -= costAtk;
-                _data->player.baseAttack += 1;
-                recalcStats(_data);
-                ctx.sfxPoint();
-                snprintf(_msg, sizeof(_msg), "ATTACK UP!");
-                _msgTimer = 40;
+        } else if (_cursor == 2) { // Buy Darts
+            if (_data->gold >= costDarts) {
+                if (giveItem(ItemType::THROWING_DART, 3)) {
+                    _data->gold -= costDarts;
+                    ctx.sfxPoint();
+                    snprintf(_msg, sizeof(_msg), "BOUGHT DARTS!");
+                    _msgTimer = 40;
+                } else {
+                    ctx.beep(150, 100);
+                    snprintf(_msg, sizeof(_msg), "PACK FULL!");
+                    _msgTimer = 40;
+                }
             } else {
                 ctx.beep(150, 100);
                 snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
                 _msgTimer = 40;
             }
-        } else if (_cursor == 3) { // Buy DEF
-            if (_data->gold >= costDef) {
-                _data->gold -= costDef;
-                _data->player.baseDefense += 1;
-                recalcStats(_data);
-                ctx.sfxPoint();
-                snprintf(_msg, sizeof(_msg), "DEFENSE UP!");
-                _msgTimer = 40;
+        } else if (_cursor == 3) { // Buy Upg Scroll
+            if (_data->gold >= costScroll) {
+                if (giveItem(ItemType::SCROLL_UPGRADE, 1)) {
+                    _data->gold -= costScroll;
+                    ctx.sfxPoint();
+                    snprintf(_msg, sizeof(_msg), "BOUGHT SCROLL!");
+                    _msgTimer = 40;
+                } else {
+                    ctx.beep(150, 100);
+                    snprintf(_msg, sizeof(_msg), "PACK FULL!");
+                    _msgTimer = 40;
+                }
             } else {
                 ctx.beep(150, 100);
                 snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
@@ -918,9 +1035,9 @@ void RogueShopScene::draw(Console& ctx) {
     ctx.setDrawColor(1);
     
     ctx.drawStr(bx + 14, by + 21, "Heal HP   (20g)");
-    ctx.drawStr(bx + 14, by + 29, "Up HP     (50g)");
-    ctx.drawStr(bx + 14, by + 37, "Up ATK   (100g)");
-    ctx.drawStr(bx + 14, by + 45, "Up DEF   (100g)");
+    ctx.drawStr(bx + 14, by + 29, "Potion    (40g)");
+    ctx.drawStr(bx + 14, by + 37, "Darts x3  (30g)");
+    ctx.drawStr(bx + 14, by + 45, "Upg Scrl (150g)");
     ctx.drawStr(bx + 14, by + 53, "Exit Shop");
 
     ctx.drawStr(bx + 4, by + 21 + (_cursor * 8), ">");
@@ -1003,6 +1120,18 @@ void RoguePlayScene::draw(Console& ctx) {
     int coinX = brStartX + 11 + depW + 4;
     ctx.drawBitmap(coinX, botY + 1, 1, 8, spr_icon_coin);
     ctx.drawStr(coinX + 10, botY + 7, goldBuf);
+
+    // Draw Keys
+    if (_data->keys > 0) {
+        char keyBuf[8]; snprintf(keyBuf, sizeof(keyBuf), "x%d", _data->keys);
+        int kw = ctx.strWidth(keyBuf);
+        int keyX = brStartX - 10 - kw - 4;
+        ctx.setDrawColor(0);
+        ctx.drawBox(keyX, botY, 10 + kw + 2, 10);
+        ctx.setDrawColor(1);
+        ctx.drawBitmap(keyX + 1, botY + 1, 1, 8, spr_rogue_key);
+        ctx.drawStr(keyX + 11, botY + 7, keyBuf);
+    }
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
@@ -1047,6 +1176,10 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_merchant);
             } else if (t == TileType::SPIKE) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_spike);
+            } else if (t == TileType::KEY) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_key);
+            } else if (t == TileType::LOCKED_DOOR) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_door);
             }
 
             Monster* m = _getMonsterAt(mapX, mapY);
@@ -1067,6 +1200,15 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 if (!m->alert && (millis() / 500) % 2 == 0) {
                     ctx.setFont(u8g2_font_5x7_tf);
                     ctx.drawStr(renderX + 2, renderY - 1, "z");
+                }
+
+                // Draw HP Bar if damaged
+                if (m->hp < m->maxHp) {
+                    int hpWidth = max(1, (m->hp * 6) / m->maxHp);
+                    ctx.setDrawColor(0);
+                    ctx.drawHLine(renderX + 1, renderY + 7, 6);
+                    ctx.setDrawColor(1);
+                    ctx.drawHLine(renderX + 1, renderY + 7, hpWidth);
                 }
             } 
             else if (mapX == _data->player.x && mapY == _data->player.y) {
@@ -1093,6 +1235,21 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 
     if (isAiming) {
         ctx.setDrawColor(1);
+        int px = (_data->player.x * 8) + 4;
+        int py = (_data->player.y * 8) + 4;
+        int cx = (aimX * 8) + 4;
+        int cy = (aimY * 8) + 4;
+        
+        // Draw dotted trajectory line
+        int steps = max(abs(cx - px), abs(cy - py)) / 2;
+        if (steps > 0) {
+            for (int i = 0; i <= steps; i+=2) {
+                int lx = px + (cx - px) * i / steps;
+                int ly = py + (cy - py) * i / steps;
+                ctx.drawPixel(lx, ly);
+            }
+        }
+        
         ctx.drawFrame(aimX * 8, aimY * 8, 8, 8);
     }
 
