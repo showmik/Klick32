@@ -9,9 +9,15 @@
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
 enum class ItemType : uint8_t { 
-    NONE, POTION, ELIXIR, 
+    NONE, POTION, ELIXIR, SCROLL_UPGRADE, THROWING_DART,
     DAGGER, SWORD, AXE, 
     LEATHER, CHAINMAIL, PLATE 
+};
+
+struct Item {
+    ItemType type = ItemType::NONE;
+    uint8_t level = 0;
+    uint8_t count = 0;
 };
 
 enum class TileType : uint8_t { 
@@ -58,10 +64,10 @@ struct RogueSharedData {
     uint32_t turnCount = 0;
     
     static constexpr int MAX_INVENTORY = 6;
-    ItemType inventory[MAX_INVENTORY] = {ItemType::NONE};
+    Item inventory[MAX_INVENTORY];
     
-    ItemType equippedWeapon = ItemType::NONE;
-    ItemType equippedArmor = ItemType::NONE;
+    Item equippedWeapon;
+    Item equippedArmor;
 };
 
 struct BSPNode {
@@ -90,6 +96,10 @@ private:
     uint8_t _cursor = 0;
     char _msg[32] = "";
     uint8_t _msgTimer = 0;
+    bool _upgrading = false;
+    uint8_t _upgradeSelect = 0;
+
+    void _cleanInventory();
 };
 
 class RogueTitleScene : public Scene {
@@ -121,6 +131,10 @@ public:
     void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
+    
+    // Public state for external triggering (Aim Mode)
+    bool isAiming = false;
+    int aimX = 0, aimY = 0;
     void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
