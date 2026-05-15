@@ -8,6 +8,8 @@
 
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
+enum class ItemType : uint8_t { NONE, POTION, ELIXIR, SWORD, SHIELD };
+
 enum class TileType : uint8_t { 
     WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE 
 };
@@ -47,6 +49,9 @@ struct RogueSharedData {
     uint32_t gold = 0;
     uint32_t hiScore = 0;
     uint32_t turnCount = 0;
+    
+    static constexpr int MAX_INVENTORY = 6;
+    ItemType inventory[MAX_INVENTORY] = {ItemType::NONE};
 };
 
 struct BSPNode {
@@ -62,6 +67,20 @@ class RoguePlayScene;
 class RoguePauseScene;
 class RogueDeadScene;
 class RogueShopScene;
+class RogueInventoryScene;
+
+class RogueInventoryScene : public Scene {
+public:
+    void setData(RogueSharedData* d) { _data = d; }
+    void onEnter(Console& ctx) override;
+    void update (Console& ctx, SceneManager& sm, float dt) override;
+    void draw   (Console& ctx) override;
+private:
+    RogueSharedData* _data = nullptr;
+    uint8_t _cursor = 0;
+    char _msg[32] = "";
+    uint8_t _msgTimer = 0;
+};
 
 class RogueTitleScene : public Scene {
 public:
@@ -161,4 +180,5 @@ private:
     RoguePauseScene _pause;
     RogueDeadScene  _dead;
     RogueShopScene  _shop;
+    RogueInventoryScene _inventory;
 };

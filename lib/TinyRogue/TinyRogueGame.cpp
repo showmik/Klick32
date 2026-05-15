@@ -40,6 +40,9 @@ void RoguePlayScene::onEnter(Console& ctx) {
     _data->currentDepth = 1;
     _data->gold = 0;
     _data->player.hp = _data->player.maxHp;
+    for (int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+        _data->inventory[i] = ItemType::NONE;
+    }
     _generateMap();
 }
 
@@ -357,9 +360,14 @@ void RoguePlayScene::_updateCamera(bool snap) {
 void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_hudMessageTimer > 0) _hudMessageTimer--;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+    if (ctx.justPressed(Btn::MENU2)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::PAUSE);
+        return;
+    }
+    if (ctx.justPressed(Btn::B)) {
+        ctx.sfxMenuNav();
+        sm.emit(ctx, Event::CUSTOM_3); // Open Inventory
         return;
     }
 
@@ -512,9 +520,8 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
     }
     else if (targetTile == TileType::CHEST) {
-        _data->map[targetY][targetX] = TileType::FLOOR; 
-        
         if (random(100) < 15) {
+            _data->map[targetY][targetX] = TileType::FLOOR; 
             snprintf(_hudMessage, sizeof(_hudMessage), "It's a MIMIC!");
             _hudMessageTimer = 60;
             ctx.beep(200, 150);
@@ -534,28 +541,35 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
 
         int roll = random(100);
-        if (roll < 20) { 
-            _data->player.attack += 1;
-            snprintf(_hudMessage, sizeof(_hudMessage), "Found Sword! +1 ATK");
-            _hudMessageTimer = 60; 
-            ctx.beep(800, 40); ctx.beep(1200, 60); 
-        } else if (roll < 40) { 
-            _data->player.defense += 1;
-            snprintf(_hudMessage, sizeof(_hudMessage), "Found Shield! +1 DEF");
+        ItemType itemToGive = ItemType::NONE;
+        const char* itemName = "";
+
+        if (roll < 20) { itemToGive = ItemType::SWORD; itemName = "Sword"; }
+        else if (roll < 40) { itemToGive = ItemType::SHIELD; itemName = "Shield"; }
+        else if (roll < 55) { itemToGive = ItemType::ELIXIR; itemName = "Elixir"; }
+        else if (roll < 75) { itemToGive = ItemType::POTION; itemName = "Potion"; }
+        
+        if (itemToGive != ItemType::NONE) {
+            bool added = false;
+            for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                if(_data->inventory[i] == ItemType::NONE) {
+                    _data->inventory[i] = itemToGive;
+                    added = true; 
+                    break;
+                }
+            }
+            if(!added) {
+                snprintf(_hudMessage, sizeof(_hudMessage), "Pack Full!");
+                _hudMessageTimer = 60;
+                ctx.beep(150, 100);
+                return; // Do not consume chest
+            }
+            _data->map[targetY][targetX] = TileType::FLOOR; 
+            snprintf(_hudMessage, sizeof(_hudMessage), "Got %s!", itemName);
             _hudMessageTimer = 60;
             ctx.beep(800, 40); ctx.beep(1200, 60);
-        } else if (roll < 55) { 
-            _data->player.maxHp += 5;
-            _data->player.hp = _data->player.maxHp;
-            snprintf(_hudMessage, sizeof(_hudMessage), "Elixir! Max HP Up");
-            _hudMessageTimer = 60;
-            ctx.beep(600, 40); ctx.beep(1000, 60);
-        } else if (roll < 75) { 
-            _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
-            snprintf(_hudMessage, sizeof(_hudMessage), "Potion! +15 HP");
-            _hudMessageTimer = 60;
-            ctx.beep(400, 50); ctx.beep(600, 50); ctx.beep(800, 50);
-        } else { 
+        } else {
+            _data->map[targetY][targetX] = TileType::FLOOR; 
             int amount = 15 * _data->currentDepth;
             _data->gold += amount;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found %d Gold", amount);
@@ -959,6 +973,107 @@ void RogueDeadScene::draw(Console& ctx) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// RogueInventoryScene 
+// ═════════════════════════════════════════════════════════════════════════════
+
+void RogueInventoryScene::onEnter(Console& ctx) {
+    _cursor = 0;
+    _msgTimer = 0;
+}
+
+void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
+    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+        ctx.sfxMenuNav();
+        sm.emit(ctx, Event::RESUME);
+        return;
+    }
+
+    if (ctx.justPressed(Btn::UP) || ctx.repeat(Btn::UP)) {
+        if (_cursor > 0) { _cursor--; ctx.sfxMenuNav(); }
+    }
+    if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) {
+        if (_cursor < RogueSharedData::MAX_INVENTORY - 1) { _cursor++; ctx.sfxMenuNav(); }
+    }
+    
+    if (_msgTimer > 0) _msgTimer--;
+
+    if (ctx.justPressed(Btn::A)) {
+        ItemType item = _data->inventory[_cursor];
+        if (item != ItemType::NONE) {
+            // Use Item
+            if (item == ItemType::POTION) {
+                _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
+                snprintf(_msg, sizeof(_msg), "Healed 15 HP!");
+            } else if (item == ItemType::ELIXIR) {
+                _data->player.maxHp += 5;
+                _data->player.hp += 5;
+                snprintf(_msg, sizeof(_msg), "Max HP +5!");
+            } else if (item == ItemType::SWORD) {
+                _data->player.attack += 1;
+                snprintf(_msg, sizeof(_msg), "Attack +1!");
+            } else if (item == ItemType::SHIELD) {
+                _data->player.defense += 1;
+                snprintf(_msg, sizeof(_msg), "Defense +1!");
+            }
+            
+            _msgTimer = 60;
+            ctx.sfxPoint();
+
+            // Shift inventory up
+            for(int i = _cursor; i < RogueSharedData::MAX_INVENTORY - 1; i++) {
+                _data->inventory[i] = _data->inventory[i+1];
+            }
+            _data->inventory[RogueSharedData::MAX_INVENTORY - 1] = ItemType::NONE;
+        }
+    }
+}
+
+void RogueInventoryScene::draw(Console& ctx) {
+    if (_sm) _sm->drawUnder(ctx);
+    int bx = 20, by = 4, bw = 88, bh = 56;
+    
+    ctx.setDrawColor(0);
+    ctx.drawBox(bx + 2, by + 2, bw, bh);
+    ctx.setDrawColor(0);
+    ctx.drawBox(bx, by, bw, bh);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(bx, by, bw, bh);
+    ctx.setDrawColor(1);
+    ctx.drawBox(bx, by, bw, 11);
+    
+    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.setDrawColor(0);
+    ctx.drawStr(bx + 4, by + 9, "PACK  [B]Exit");
+    
+    ctx.setDrawColor(1);
+    for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+        int itemY = by + 19 + (i * 7);
+        
+        if (i == _cursor) {
+            ctx.drawStr(bx + 4, itemY, ">");
+        }
+        
+        ItemType item = _data->inventory[i];
+        const char* name = "- Empty -";
+        if (item == ItemType::POTION) name = "Potion";
+        else if (item == ItemType::ELIXIR) name = "Elixir";
+        else if (item == ItemType::SWORD) name = "Sword";
+        else if (item == ItemType::SHIELD) name = "Shield";
+        
+        ctx.drawStr(bx + 12, itemY, name);
+    }
+
+    if (_msgTimer > 0) {
+        ctx.setDrawColor(0);
+        ctx.drawBox(bx + 2, by + bh - 12, bw - 4, 10);
+        ctx.setDrawColor(1);
+        int mw = ctx.strWidth(_msg);
+        ctx.drawStr(bx + (bw - mw)/2, by + bh - 4, _msg);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // TinyRogueGame - OS Registration Hook
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -976,8 +1091,10 @@ void TinyRogueGame::onEnter(Console& ctx) {
     _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
     _sm.onEvent(Event::RESUME,    SceneManager::POP);
     _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_dead);
+    _inventory.setData(&_data);
     _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
     _sm.onEvent(Event::CUSTOM_2,  SceneManager::PUSH, &_shop);    // Enter Shop
+    _sm.onEvent(Event::CUSTOM_3,  SceneManager::PUSH, &_inventory); // Enter Inventory
 
     _sm.replace(&_title, ctx);
 }
