@@ -9,7 +9,7 @@
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
 enum class TileType : uint8_t { 
-    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT 
+    WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE 
 };
 
 enum class MonsterType : uint8_t { 

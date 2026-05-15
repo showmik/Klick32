@@ -219,3 +219,18 @@ static const uint8_t PROGMEM spr_rogue_merchant[8] = {
     0x1C,
     0x22,
 };
+
+// Orc: Wide, horned silhouette
+static const uint8_t PROGMEM spr_rogue_orc[8] = {
+    0x00, 0x42, 0x7E, 0xFF, 0xDB, 0xFF, 0x42, 0x24
+};
+
+// Troll: Large, bulky silhouette
+static const uint8_t PROGMEM spr_rogue_troll[8] = {
+    0x3C, 0x7E, 0xFF, 0xE7, 0xFF, 0xFF, 0xDB, 0xDB
+};
+
+// Spikes: Floor trap
+static const uint8_t PROGMEM spr_rogue_spike[8] = {
+    0x00, 0x00, 0x00, 0x00, 0x24, 0x5A, 0x7E, 0xFF
+};

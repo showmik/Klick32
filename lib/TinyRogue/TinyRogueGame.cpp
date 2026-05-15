@@ -173,6 +173,17 @@ void RoguePlayScene::_generateBSPMap() {
         my = random(1, RogueSharedData::MAP_H - 1);
     } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
     _data->map[my][mx] = TileType::MERCHANT;
+
+    // Spawn Spikes
+    int numSpikes = random(2, 7);
+    for (int i = 0; i < numSpikes; i++) {
+        int sx, sy;
+        do {
+            sx = random(1, RogueSharedData::MAP_W - 1);
+            sy = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
+        _data->map[sy][sx] = TileType::SPIKE;
+    }
 }
 
 void RoguePlayScene::_generateCaveMap() {
@@ -265,6 +276,17 @@ void RoguePlayScene::_generateCaveMap() {
         my = random(1, RogueSharedData::MAP_H - 1);
     } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
     _data->map[my][mx] = TileType::MERCHANT;
+
+    // Spawn Spikes
+    int numSpikes = random(2, 7);
+    for (int i = 0; i < numSpikes; i++) {
+        int sx, sy;
+        do {
+            sx = random(1, RogueSharedData::MAP_W - 1);
+            sy = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
+        _data->map[sy][sx] = TileType::SPIKE;
+    }
 }
 
 void RoguePlayScene::_spawnMonsters() {
@@ -296,11 +318,25 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[i].hp = 4 + _data->currentDepth;
         _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
 
-        int r = random(4);
+        int maxRand = 4;
+        if (_data->currentDepth >= 3) maxRand = 5; // Introduce Orcs
+        if (_data->currentDepth >= 5) maxRand = 6; // Introduce Trolls
+
+        int r = random(maxRand);
         if (r == 0)      _data->monsters[i].type = MonsterType::GOBLIN;
         else if (r == 1) _data->monsters[i].type = MonsterType::RAT;
         else if (r == 2) _data->monsters[i].type = MonsterType::BAT;
-        else             _data->monsters[i].type = MonsterType::SKELETON;
+        else if (r == 3) _data->monsters[i].type = MonsterType::SKELETON;
+        else if (r == 4) {
+            _data->monsters[i].type = MonsterType::ORC;
+            _data->monsters[i].hp += 4;
+            _data->monsters[i].attack += 1;
+        }
+        else if (r == 5) {
+            _data->monsters[i].type = MonsterType::TROLL;
+            _data->monsters[i].hp += 10;
+            _data->monsters[i].attack += 2;
+        }
     }
 }
 
@@ -360,6 +396,9 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
 
         if (m.type == MonsterType::SKELETON && (_data->turnCount % 2 != 0)) {
             continue; 
+        }
+        if (m.type == MonsterType::TROLL && (_data->turnCount % 2 == 0)) {
+            continue; // Trolls are slow
         }
 
         int steps = (m.type == MonsterType::BAT) ? 2 : 1;
@@ -495,22 +534,27 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
 
         int roll = random(100);
-        if (roll < 25) { 
+        if (roll < 20) { 
             _data->player.attack += 1;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found Sword! +1 ATK");
             _hudMessageTimer = 60; 
             ctx.beep(800, 40); ctx.beep(1200, 60); 
-        } else if (roll < 50) { 
+        } else if (roll < 40) { 
             _data->player.defense += 1;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found Shield! +1 DEF");
             _hudMessageTimer = 60;
             ctx.beep(800, 40); ctx.beep(1200, 60);
-        } else if (roll < 75) { 
+        } else if (roll < 55) { 
             _data->player.maxHp += 5;
             _data->player.hp = _data->player.maxHp;
             snprintf(_hudMessage, sizeof(_hudMessage), "Elixir! Max HP Up");
             _hudMessageTimer = 60;
             ctx.beep(600, 40); ctx.beep(1000, 60);
+        } else if (roll < 75) { 
+            _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
+            snprintf(_hudMessage, sizeof(_hudMessage), "Potion! +15 HP");
+            _hudMessageTimer = 60;
+            ctx.beep(400, 50); ctx.beep(600, 50); ctx.beep(800, 50);
         } else { 
             int amount = 15 * _data->currentDepth;
             _data->gold += amount;
@@ -527,6 +571,20 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
     else {
         _data->player.x = targetX;
         _data->player.y = targetY;
+
+        if (targetTile == TileType::SPIKE) {
+            _data->player.hp -= 2;
+            _camera->shake(4);
+            ctx.sfxDeath();
+            snprintf(_hudMessage, sizeof(_hudMessage), "Stepped on Spikes!");
+            _hudMessageTimer = 60;
+            
+            if (_data->player.hp <= 0) {
+                if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
+                sm.emit(ctx, Event::GAME_OVER);
+                return;
+            }
+        }
 
         if (targetTile == TileType::STAIRS_DOWN) {
             ctx.sfxMenuEnter();
@@ -783,6 +841,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_chest);
             } else if (t == TileType::MERCHANT) {            
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_merchant);
+            } else if (t == TileType::SPIKE) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_spike);
             }
 
             Monster* m = _getMonsterAt(mapX, mapY);
@@ -795,6 +855,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 else if (m->type == MonsterType::GOBLIN) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_goblin);
                 else if (m->type == MonsterType::BAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_bat);
                 else if (m->type == MonsterType::SKELETON) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_skeleton);
+                else if (m->type == MonsterType::ORC) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_orc);
+                else if (m->type == MonsterType::TROLL) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_troll);
             } 
             else if (mapX == _data->player.x && mapY == _data->player.y) {
                 ctx.setDrawColor(0);
