@@ -8,7 +8,11 @@
 
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
-enum class ItemType : uint8_t { NONE, POTION, ELIXIR, SWORD, SHIELD };
+enum class ItemType : uint8_t { 
+    NONE, POTION, ELIXIR, 
+    DAGGER, SWORD, AXE, 
+    LEATHER, CHAINMAIL, PLATE 
+};
 
 enum class TileType : uint8_t { 
     WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE 
@@ -23,6 +27,8 @@ struct Entity {
     int y = 0;
     int hp = 10;
     int maxHp = 10;
+    int baseAttack = 2;
+    int baseDefense = 0;
     int attack = 2;
     int defense = 0;
     int level = 1;
@@ -52,6 +58,9 @@ struct RogueSharedData {
     
     static constexpr int MAX_INVENTORY = 6;
     ItemType inventory[MAX_INVENTORY] = {ItemType::NONE};
+    
+    ItemType equippedWeapon = ItemType::NONE;
+    ItemType equippedArmor = ItemType::NONE;
 };
 
 struct BSPNode {

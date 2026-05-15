@@ -2,6 +2,39 @@
 #include "GameRegistry.h"
 #include "TinyRogueSprites.h"
 
+static int getWeaponAttack(ItemType t) {
+    if (t == ItemType::DAGGER) return 1;
+    if (t == ItemType::SWORD) return 2;
+    if (t == ItemType::AXE) return 3;
+    return 0;
+}
+
+static int getArmorDefense(ItemType t) {
+    if (t == ItemType::LEATHER) return 1;
+    if (t == ItemType::CHAINMAIL) return 2;
+    if (t == ItemType::PLATE) return 3;
+    return 0;
+}
+
+static const char* getItemName(ItemType t) {
+    switch(t) {
+        case ItemType::POTION: return "Potion";
+        case ItemType::ELIXIR: return "Elixir";
+        case ItemType::DAGGER: return "Dagger";
+        case ItemType::SWORD: return "Sword";
+        case ItemType::AXE: return "Axe";
+        case ItemType::LEATHER: return "Leather";
+        case ItemType::CHAINMAIL: return "Chainmail";
+        case ItemType::PLATE: return "Plate";
+        default: return "-";
+    }
+}
+
+static void recalcStats(RogueSharedData* _data) {
+    _data->player.attack = _data->player.baseAttack + getWeaponAttack(_data->equippedWeapon);
+    _data->player.defense = _data->player.baseDefense + getArmorDefense(_data->equippedArmor);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // RogueTitleScene
 // ═════════════════════════════════════════════════════════════════════════════
@@ -39,7 +72,15 @@ void RogueTitleScene::draw(Console& ctx) {
 void RoguePlayScene::onEnter(Console& ctx) {
     _data->currentDepth = 1;
     _data->gold = 0;
-    _data->player.hp = _data->player.maxHp;
+    _data->player.level = 1;
+    _data->player.xp = 0;
+    _data->player.maxHp = 10;
+    _data->player.hp = 10;
+    _data->player.baseAttack = 2;
+    _data->player.baseDefense = 0;
+    _data->equippedWeapon = ItemType::NONE;
+    _data->equippedArmor = ItemType::NONE;
+    recalcStats(_data);
     for (int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
         _data->inventory[i] = ItemType::NONE;
     }
@@ -509,7 +550,8 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 _data->player.level++;
                 _data->player.maxHp += 5;
                 _data->player.hp = _data->player.maxHp; 
-                _data->player.attack += 1;
+                _data->player.baseAttack += 1;
+                recalcStats(_data);
                 leveledUp = true;
             }
             if (leveledUp) {
@@ -542,14 +584,21 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 
         int roll = random(100);
         ItemType itemToGive = ItemType::NONE;
-        const char* itemName = "";
-
-        if (roll < 20) { itemToGive = ItemType::SWORD; itemName = "Sword"; }
-        else if (roll < 40) { itemToGive = ItemType::SHIELD; itemName = "Shield"; }
-        else if (roll < 55) { itemToGive = ItemType::ELIXIR; itemName = "Elixir"; }
-        else if (roll < 75) { itemToGive = ItemType::POTION; itemName = "Potion"; }
+        
+        if (roll < 25) { itemToGive = ItemType::POTION; }
+        else if (roll < 40) { itemToGive = ItemType::ELIXIR; }
+        else if (roll < 65) { 
+            if (_data->currentDepth < 3) itemToGive = (random(2)==0) ? ItemType::DAGGER : ItemType::SWORD;
+            else if (_data->currentDepth < 6) itemToGive = (random(2)==0) ? ItemType::SWORD : ItemType::AXE;
+            else itemToGive = ItemType::AXE;
+        } else if (roll < 90) {
+            if (_data->currentDepth < 3) itemToGive = (random(2)==0) ? ItemType::LEATHER : ItemType::CHAINMAIL;
+            else if (_data->currentDepth < 6) itemToGive = (random(2)==0) ? ItemType::CHAINMAIL : ItemType::PLATE;
+            else itemToGive = ItemType::PLATE;
+        }
         
         if (itemToGive != ItemType::NONE) {
+            const char* itemName = getItemName(itemToGive);
             bool added = false;
             for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
                 if(_data->inventory[i] == ItemType::NONE) {
@@ -676,7 +725,8 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
         } else if (_cursor == 2) { // Buy ATK
             if (_data->gold >= costAtk) {
                 _data->gold -= costAtk;
-                _data->player.attack += 1;
+                _data->player.baseAttack += 1;
+                recalcStats(_data);
                 ctx.sfxPoint();
                 snprintf(_msg, sizeof(_msg), "ATTACK UP!");
                 _msgTimer = 40;
@@ -688,7 +738,8 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
         } else if (_cursor == 3) { // Buy DEF
             if (_data->gold >= costDef) {
                 _data->gold -= costDef;
-                _data->player.defense += 1;
+                _data->player.baseDefense += 1;
+                recalcStats(_data);
                 ctx.sfxPoint();
                 snprintf(_msg, sizeof(_msg), "DEFENSE UP!");
                 _msgTimer = 40;
@@ -1001,37 +1052,48 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::A)) {
         ItemType item = _data->inventory[_cursor];
         if (item != ItemType::NONE) {
-            // Use Item
+            bool consumed = false;
+            
             if (item == ItemType::POTION) {
                 _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
                 snprintf(_msg, sizeof(_msg), "Healed 15 HP!");
+                consumed = true;
             } else if (item == ItemType::ELIXIR) {
                 _data->player.maxHp += 5;
                 _data->player.hp += 5;
                 snprintf(_msg, sizeof(_msg), "Max HP +5!");
-            } else if (item == ItemType::SWORD) {
-                _data->player.attack += 1;
-                snprintf(_msg, sizeof(_msg), "Attack +1!");
-            } else if (item == ItemType::SHIELD) {
-                _data->player.defense += 1;
-                snprintf(_msg, sizeof(_msg), "Defense +1!");
+                consumed = true;
+            } else if (item == ItemType::DAGGER || item == ItemType::SWORD || item == ItemType::AXE) {
+                ItemType temp = _data->equippedWeapon;
+                _data->equippedWeapon = item;
+                _data->inventory[_cursor] = temp;
+                recalcStats(_data);
+                snprintf(_msg, sizeof(_msg), "Equipped Weapon!");
+            } else if (item == ItemType::LEATHER || item == ItemType::CHAINMAIL || item == ItemType::PLATE) {
+                ItemType temp = _data->equippedArmor;
+                _data->equippedArmor = item;
+                _data->inventory[_cursor] = temp;
+                recalcStats(_data);
+                snprintf(_msg, sizeof(_msg), "Equipped Armor!");
             }
             
             _msgTimer = 60;
             ctx.sfxPoint();
 
-            // Shift inventory up
-            for(int i = _cursor; i < RogueSharedData::MAX_INVENTORY - 1; i++) {
-                _data->inventory[i] = _data->inventory[i+1];
+            // Shift inventory up if item was consumed or slot became NONE (from empty unequip)
+            if (consumed || _data->inventory[_cursor] == ItemType::NONE) {
+                for(int i = _cursor; i < RogueSharedData::MAX_INVENTORY - 1; i++) {
+                    _data->inventory[i] = _data->inventory[i+1];
+                }
+                _data->inventory[RogueSharedData::MAX_INVENTORY - 1] = ItemType::NONE;
             }
-            _data->inventory[RogueSharedData::MAX_INVENTORY - 1] = ItemType::NONE;
         }
     }
 }
 
 void RogueInventoryScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
-    int bx = 20, by = 4, bw = 88, bh = 56;
+    int bx = 2, by = 2, bw = 124, bh = 60;
     
     ctx.setDrawColor(0);
     ctx.drawBox(bx + 2, by + 2, bw, bh);
@@ -1040,28 +1102,69 @@ void RogueInventoryScene::draw(Console& ctx) {
     ctx.setDrawColor(1);
     ctx.drawFrame(bx, by, bw, bh);
     ctx.setDrawColor(1);
-    ctx.drawBox(bx, by, bw, 11);
+    ctx.drawBox(bx, by, bw, 9);
     
     ctx.setFont(u8g2_font_5x7_tf);
     ctx.setDrawColor(0);
-    ctx.drawStr(bx + 4, by + 9, "PACK  [B]Exit");
+    ctx.drawStr(bx + 4, by + 7, "GEAR & PACK");
+    int exitW = ctx.strWidth("[B]Exit");
+    ctx.drawStr(bx + bw - exitW - 2, by + 7, "[B]Exit");
     
     ctx.setDrawColor(1);
+
+    // Draw Equipped Gear with Stats
+    char wStr[32];
+    if (_data->equippedWeapon != ItemType::NONE) {
+        snprintf(wStr, sizeof(wStr), "W: %s (+%d)", getItemName(_data->equippedWeapon), getWeaponAttack(_data->equippedWeapon));
+    } else {
+        strcpy(wStr, "W: - None -");
+    }
+    ctx.drawStr(bx + 4, by + 16, wStr);
+
+    char aStr[32];
+    if (_data->equippedArmor != ItemType::NONE) {
+        snprintf(aStr, sizeof(aStr), "A: %s (+%d)", getItemName(_data->equippedArmor), getArmorDefense(_data->equippedArmor));
+    } else {
+        strcpy(aStr, "A: - None -");
+    }
+    ctx.drawStr(bx + 4, by + 24, aStr);
+    
+    ctx.drawHLine(bx, by + 27, bw);
+
+    // Draw 6 inventory items in a 2-Column x 3-Row grid
     for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
-        int itemY = by + 19 + (i * 7);
+        int col = i % 2;
+        int row = i / 2;
+        int itemX = bx + 4 + (col * 60); // Split 124 width into two 60px columns
+        int itemY = by + 36 + (row * 9);
         
         if (i == _cursor) {
-            ctx.drawStr(bx + 4, itemY, ">");
+            ctx.drawStr(itemX, itemY, ">");
         }
         
         ItemType item = _data->inventory[i];
-        const char* name = "- Empty -";
-        if (item == ItemType::POTION) name = "Potion";
-        else if (item == ItemType::ELIXIR) name = "Elixir";
-        else if (item == ItemType::SWORD) name = "Sword";
-        else if (item == ItemType::SHIELD) name = "Shield";
+        char nameBuf[32];
+        if (item == ItemType::NONE) {
+            strcpy(nameBuf, "Empty");
+        } else {
+            // Abbreviate slightly so it fits in the column
+            const char* shortName = getItemName(item);
+            if (item == ItemType::CHAINMAIL) shortName = "Chain";
+            else if (item == ItemType::LEATHER) shortName = "Lthr";
+            else if (item == ItemType::DAGGER) shortName = "Dagr";
+            else if (item == ItemType::SWORD) shortName = "Swrd";
+
+            int atk = getWeaponAttack(item);
+            int def = getArmorDefense(item);
+            
+            if (atk > 0) snprintf(nameBuf, sizeof(nameBuf), "%s(+%d)", shortName, atk);
+            else if (def > 0) snprintf(nameBuf, sizeof(nameBuf), "%s(+%d)", shortName, def);
+            else if (item == ItemType::POTION) strcpy(nameBuf, "Heal(15)");
+            else if (item == ItemType::ELIXIR) strcpy(nameBuf, "MaxHP(5)");
+            else strcpy(nameBuf, shortName);
+        }
         
-        ctx.drawStr(bx + 12, itemY, name);
+        ctx.drawStr(itemX + 6, itemY, nameBuf);
     }
 
     if (_msgTimer > 0) {
