@@ -13,9 +13,9 @@ void RogueTitleScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // Map CUSTOM_1 to PlayScene in Game
     }
 }
 
@@ -319,10 +319,10 @@ void RoguePlayScene::_updateCamera(bool snap) {
 
 void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
     if (_hudMessageTimer > 0) _hudMessageTimer--;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
-        sm.push(_pause, ctx);
+        sm.emit(ctx, Event::PAUSE);
         return;
     }
 
@@ -333,7 +333,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.justPressed(Btn::RIGHT)|| ctx.repeat(Btn::RIGHT)) dx = 1;
 
     if (dx != 0 || dy != 0) {
-        _processTurn(ctx, sm, dx, dy);  // <--- Added 'sm' right here!      
+        _processTurn(ctx, sm, dx, dy);
         _processMonsterTurns(ctx, sm); 
     }
 
@@ -414,10 +414,10 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
         _camera->shake(6);
         
         if (_data->player.hp <= 0) {
-            ctx.saveHiScore(_data->currentDepth); 
-            sm.replace(_dead, ctx);
-        }
-    } else {
+        if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
+        ctx.sfxDeath();
+        sm.emit(ctx, Event::GAME_OVER);
+    }    } else {
         ctx.beep(400, 10); 
     }
 }
@@ -510,9 +510,8 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
     }
     else if (targetTile == TileType::MERCHANT) {
-        // Push the shop overlay without ending the turn
         ctx.sfxMenuEnter();
-        sm.push(_shop, ctx);
+        sm.emit(ctx, Event::CUSTOM_2); // Shop
         return; 
     }
     else {
@@ -520,8 +519,11 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         _data->player.y = targetY;
 
         if (targetTile == TileType::STAIRS_DOWN) {
+            ctx.sfxMenuEnter();
             _data->currentDepth++;
             _generateMap(); 
+            _camera->snapTo((_data->player.x * 8) - (Console::W / 2) + 4, 
+                            (_data->player.y * 8) - (Console::H / 2) + 4);
         }
     }
 }
@@ -533,19 +535,13 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 void RogueShopScene::onEnter(Console& ctx) { 
     _cursor = 0; 
     _msgTimer = 0;
-    _introFrames = 0; // Reset animation
+    _introFrames = 0;
 }
 
 void RogueShopScene::update(Console& ctx, SceneManager& sm) {
     if (_introFrames < 10) _introFrames++;
-    // Exit Shop
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
-        ctx.sfxMenuBack();
-        sm.pop(ctx);
-        return;
-    }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
-    // Navigation
     if (ctx.justPressed(Btn::UP) || ctx.repeat(Btn::UP)) {
         if (_cursor > 0) { _cursor--; ctx.sfxMenuNav(); }
     }
@@ -555,87 +551,75 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm) {
 
     if (_msgTimer > 0) _msgTimer--;
 
-    // Purchasing Logic
     if (ctx.justPressed(Btn::A)) {
-        int cost = (_cursor == 0) ? 20 : 50; // Health is 20g, upgrades are 50g
-
-        if (_data->gold >= cost) {
-            bool purchased = false;
-
-            if (_cursor == 0 && _data->player.hp < _data->player.maxHp) {
-                _data->player.hp = _data->player.maxHp;
-                snprintf(_msg, sizeof(_msg), "Fully Healed!");
-                purchased = true;
-            } else if (_cursor == 0) {
-                snprintf(_msg, sizeof(_msg), "Already full HP!");
-            } else if (_cursor == 1) {
-                _data->player.attack++;
-                snprintf(_msg, sizeof(_msg), "Weapon Sharpened!");
-                purchased = true;
-            } else if (_cursor == 2) {
-                _data->player.defense++;
-                snprintf(_msg, sizeof(_msg), "Armor Fortified!");
-                purchased = true;
-            }
-
-            if (purchased) {
-                _data->gold -= cost;
-                ctx.sfxPoint(); // Happy sound
+        int costHealth = 20;
+        int costMaxHp = 50;
+        if (_cursor == 0) { // Buy Health
+            if (_data->gold >= costHealth) {
+                _data->gold -= costHealth;
+                _data->player.hp = gclamp(_data->player.hp + 5, 0, _data->player.maxHp);
+                ctx.sfxPoint();
+                snprintf(_msg, sizeof(_msg), "BOUGHT HP!");
+                _msgTimer = 40;
             } else {
-                ctx.beep(300, 30); // Error sound
+                ctx.beep(150, 100);
+                snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
+                _msgTimer = 40;
             }
-            _msgTimer = 60;
-
-        } else {
-            ctx.sfxDeath(); // Not enough money sound
-            snprintf(_msg, sizeof(_msg), "Not enough Gold!");
-            _msgTimer = 60;
+        } else if (_cursor == 1) { // Buy Max HP
+            if (_data->gold >= costMaxHp) {
+                _data->gold -= costMaxHp;
+                _data->player.maxHp += 5;
+                _data->player.hp += 5;
+                ctx.sfxPoint();
+                snprintf(_msg, sizeof(_msg), "MAX HP UP!");
+                _msgTimer = 40;
+            } else {
+                ctx.beep(150, 100);
+                snprintf(_msg, sizeof(_msg), "NOT ENOUGH!");
+                _msgTimer = 40;
+            }
+        } else { // Exit
+            ctx.sfxMenuNav();
+            sm.emit(ctx, Event::RESUME);
         }
     }
 }
 
 void RogueShopScene::draw(Console& ctx) {
-    _play->drawDungeon(ctx, 0, 0); 
-    
+    if (_sm) _sm->drawUnder(ctx);
     int yOff = lerpi(Console::H, 0, _introFrames, 10);
     int bx = 10, by = 8 + yOff, bw = 108, bh = 52; 
 
-    // 1. Drop Shadow (Offset +2, +2)
     ctx.setDrawColor(0);
     ctx.drawBox(bx + 2, by + 2, bw, bh);
-
-    // 2. Main Box Background & Border
     ctx.setDrawColor(0);
     ctx.drawBox(bx, by, bw, bh);
     ctx.setDrawColor(1);
     ctx.drawFrame(bx, by, bw, bh);
-
-    // 3. Inverted Header Anchor
     ctx.setDrawColor(1);
     ctx.drawBox(bx, by, bw, 14); 
     
     ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.setDrawColor(0); // Black text for negative space
+    ctx.setDrawColor(0);
     ctx.drawStr(bx + 4, by + 11, "MERCHANT");
 
-    // Embed exit prompt in the right side of the header
     ctx.setFont(u8g2_font_5x7_tf);
     int escW = ctx.strWidth("[B] Exit");
     ctx.drawStr(bx + bw - escW - 4, by + 10, "[B] Exit"); 
 
-    ctx.setDrawColor(1); // Reset back to white for the body
+    ctx.setDrawColor(1);
     
     char gBuf[16]; 
     snprintf(gBuf, sizeof(gBuf), "Wallet: %u g", _data->gold);
     ctx.drawStr(bx + 4, by + 24, gBuf);
 
     ctx.drawStr(bx + 14, by + 34, "Heal HP   (20g)");
-    ctx.drawStr(bx + 14, by + 42, "Up ATK    (50g)");
-    ctx.drawStr(bx + 14, by + 50, "Up DEF    (50g)");
+    ctx.drawStr(bx + 14, by + 42, "Up HP     (50g)");
+    ctx.drawStr(bx + 14, by + 50, "Exit Shop");
 
     ctx.drawStr(bx + 4, by + 34 + (_cursor * 8), ">");
 
-    // Dynamic Event Message Overlay
     if (_msgTimer > 0) {
         ctx.setDrawColor(0);
         ctx.drawBox(bx + 2, by + 36, bw - 4, 14);
@@ -649,16 +633,10 @@ void RogueShopScene::draw(Console& ctx) {
 void RoguePlayScene::draw(Console& ctx) {
     drawDungeon(ctx, 0, 0); 
     
-    // Top Center: HUD Messages
     ctx.setFont(u8g2_font_5x7_tf);
     
-    // Top Center: HUD Messages
     if (_hudMessageTimer > 0) {
-        // Because timer goes from 60 down to 0, lerpi mapping (0, 12) means
-        // it starts at Y=12 and floats UP to Y=0 as the timer runs out.
         int floatY = lerpi(0, 12, _hudMessageTimer, 60);
-        
-        // 1-bit "Fade Out": Flicker rapidly during the last 15 frames
         bool visible = (_hudMessageTimer > 15) || (_hudMessageTimer % 2 == 0);
         
         if (visible) {
@@ -669,7 +647,6 @@ void RoguePlayScene::draw(Console& ctx) {
             ctx.drawStr((Console::W - w) / 2, floatY + 7, _hudMessage);
         }
     } else {
-        // Top Left: HP (Heart Icon) and Level
         char topBuf[32];
         snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", _data->player.hp, _data->player.maxHp, _data->player.level);
         int topW = ctx.strWidth(topBuf);
@@ -680,14 +657,12 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.drawBitmap(1, 1, 1, 8, spr_icon_heart);
         ctx.drawStr(11, 7, topBuf);
 
-        // Top Right: Attack (Sword) and Defense (Shield)
         char atkBuf[8], defBuf[8];
         snprintf(atkBuf, sizeof(atkBuf), "%d", _data->player.attack);
         snprintf(defBuf, sizeof(defBuf), "%d", _data->player.defense);
         
         int atkW = ctx.strWidth(atkBuf);
         int defW = ctx.strWidth(defBuf);
-        // Calculate total width: [Sword] + ATK + space + [Shield] + DEF
         int trTotalW = 8 + 2 + atkW + 4 + 8 + 2 + defW;
         int trStartX = Console::W - trTotalW - 2;
         
@@ -703,14 +678,12 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.drawStr(shieldX + 10, 7, defBuf);
     }
 
-    // Bottom Right: Depth (Stairs) and Gold (Coin)
     char depBuf[8], goldBuf[16];
     snprintf(depBuf, sizeof(depBuf), "%d", _data->currentDepth);
     snprintf(goldBuf, sizeof(goldBuf), "%d", _data->gold);
     
     int depW = ctx.strWidth(depBuf);
     int goldW = ctx.strWidth(goldBuf);
-    // Calculate total width: [Stairs] + Depth + space + [Coin] + Gold
     int brTotalW = 8 + 2 + depW + 4 + 8 + 2 + goldW;
     int brStartX = Console::W - brTotalW - 2;
     int botY = Console::H - 10;
@@ -743,7 +716,6 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 
             if (mapX < 0 || mapX >= RogueSharedData::MAP_W || mapY < 0 || mapY >= RogueSharedData::MAP_H) continue;
 
-            // Line of Sight Math
             int distX = abs(mapX - _data->player.x);
             int distY = abs(mapY - _data->player.y);
             bool inSight = (distX * distX + distY * distY <= 20); 
@@ -787,7 +759,6 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_player);
             }
 
-            // Dither pattern for explored but currently unseen tiles
             if (!inSight) {
                 ctx.setDrawColor(0); 
                 for(int dy=0; dy<8; dy++) {
@@ -809,31 +780,26 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void RoguePauseScene::update(Console& ctx, SceneManager& sm) {
-    if (_introFrames < 8) _introFrames++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (_introFrames < 10) _introFrames++;
+    
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
-        sm.pop(ctx);
+        sm.emit(ctx, Event::RESUME);
     }
 }
 
 void RoguePauseScene::draw(Console& ctx) {
-    _play->drawDungeon(ctx, 0, 0); 
-    
+    if (_sm) _sm->drawUnder(ctx);
     int yOff = lerpi(-30, 0, _introFrames, 8);
     int bx = 30, by = 22 + yOff, bw = 68, bh = 24;
 
-    // 1. Drop Shadow
     ctx.setDrawColor(0);
     ctx.drawBox(bx + 2, by + 2, bw, bh);
-
-    // 2. Main Box Background & Border
     ctx.setDrawColor(0);
     ctx.drawBox(bx, by, bw, bh);
     ctx.setDrawColor(1);
     ctx.drawFrame(bx, by, bw, bh);
-
-    // 3. Inverted Header Anchor
     ctx.setDrawColor(1);
     ctx.drawBox(bx, by, bw, 14);
 
@@ -842,7 +808,6 @@ void RoguePauseScene::draw(Console& ctx) {
     int tw = ctx.strWidth("PAUSED");
     ctx.drawStr(bx + (bw - tw) / 2, by + 11, "PAUSED");
 
-    // Sub-text in the remaining black space
     ctx.setDrawColor(1);
     ctx.setFont(u8g2_font_5x7_tf);
     tw = ctx.strWidth("[B] Resume");
@@ -853,29 +818,23 @@ void RogueDeadScene::onEnter(Console& ctx) { _frame = 0; }
 
 void RogueDeadScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
-    if (ctx.justPressed(Btn::A)) {
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
     }
 }
 
 void RogueDeadScene::draw(Console& ctx) {
-    _play->drawDungeon(ctx, 0, 0); 
-    
+    if (_sm) _sm->drawUnder(ctx);
     int bx = 20, by = 20, bw = 88, bh = 28;
 
-    // 1. Drop Shadow
     ctx.setDrawColor(0);
     ctx.drawBox(bx + 2, by + 2, bw, bh);
-
-    // 2. Main Box Background & Border
     ctx.setDrawColor(0);
     ctx.drawBox(bx, by, bw, bh);
     ctx.setDrawColor(1);
     ctx.drawFrame(bx, by, bw, bh);
-
-    // 3. Inverted Header Anchor
     ctx.setDrawColor(1);
     ctx.drawBox(bx, by, bw, 14);
 
@@ -884,7 +843,6 @@ void RogueDeadScene::draw(Console& ctx) {
     int tw = ctx.strWidth("YOU DIED");
     ctx.drawStr(bx + (bw - tw) / 2, by + 11, "YOU DIED");
     
-    // Blinking prompt in the body
     ctx.setDrawColor(1);
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
@@ -900,18 +858,19 @@ void RogueDeadScene::draw(Console& ctx) {
 void TinyRogueGame::onEnter(Console& ctx) {
     _data.hiScore = ctx.loadHiScore();
 
-    _title.setPlayScene(&_play);
     _play.setData(&_data);
-    _play.setPauseScene(&_pause);
-    _play.setDeadScene(&_dead);
     _play.setEngine(&_camera, &_particles);
     
-    _shop.setData(&_data);      
-    _shop.setPlayScene(&_play); 
-
-    _pause.setPlayScene(&_play);
+    _shop.setData(&_data);
     _dead.setData(&_data);
-    _dead.setPlayScene(&_play);
+
+    // Event Registry Mapping
+    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
+    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
+    _sm.onEvent(Event::RESUME,    SceneManager::POP);
+    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_dead);
+    _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
+    _sm.onEvent(Event::CUSTOM_2,  SceneManager::PUSH, &_shop);    // Enter Shop
 
     _sm.replace(&_title, ctx);
 }

@@ -11,7 +11,7 @@ void SITitleScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
     if (ctx.justPressed(Btn::A)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
     }
 }
 
@@ -66,10 +66,10 @@ void SIPlayScene::_initLevel() {
 }
 
 void SIPlayScene::update(Console& ctx, SceneManager& sm) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
-        sm.push(_pause, ctx);
+        sm.emit(ctx, Event::PAUSE);
         return;
     }
 
@@ -125,7 +125,7 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm) {
             // If aliens reach the player
             if (_swarmY + (ALIEN_ROWS * 8) > 56) {
                 ctx.saveHiScore(_data->hiScore);
-                sm.replace(_gameover, ctx);
+                sm.emit(ctx, Event::GAME_OVER);
                 return;
             }
         }
@@ -210,7 +210,7 @@ void SIPlayScene::_checkCollisions(Console& ctx, SceneManager& sm) {
                     if (_data->lives < 0) {
                         // Out of lives, actual Game Over
                         ctx.saveHiScore(_data->hiScore);
-                        sm.replace(_gameover, ctx);
+                        sm.emit(ctx, Event::GAME_OVER);
                         return;
                     } else {
                         // Lost a life, trigger respawn
@@ -276,15 +276,15 @@ void SIPlayScene::drawField(Console& ctx) const {
 // SIPauseScene & SIGameOverScene
 // ═════════════════════════════════════════════════════════════════════════════
 void SIPauseScene::update(Console& ctx, SceneManager& sm) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
-        sm.pop(ctx);
+        sm.emit(ctx, Event::RESUME);
     }
 }
 
 void SIPauseScene::draw(Console& ctx) {
-    _play->drawField(ctx);
+    if (_sm) _sm->drawUnder(ctx);
     ctx.setDrawColor(0);
     ctx.drawBox(34, 22, 60, 22);
     ctx.setDrawColor(1);
@@ -297,15 +297,15 @@ void SIGameOverScene::onEnter(Console& ctx) { _frame = 0; }
 
 void SIGameOverScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
     }
 }
 
 void SIGameOverScene::draw(Console& ctx) {
-    _play->drawField(ctx);
+    if (_sm) _sm->drawUnder(ctx);
     ctx.setDrawColor(0);
     ctx.drawBox(20, 20, 88, 28);
     ctx.setDrawColor(1);
@@ -325,15 +325,17 @@ void SIGameOverScene::draw(Console& ctx) {
 void SpaceInvadersGame::onEnter(Console& ctx) {
     _data.hiScore = ctx.loadHiScore();
 
-    _title.setPlayScene(&_play);
     _play.setData(&_data);
-    _play.setPauseScene(&_pause);
-    _play.setDeadScene(&_gameover);
     _play.setEngine(&_camera);
     
-    _pause.setPlayScene(&_play);
     _gameover.setData(&_data);
-    _gameover.setPlayScene(&_play);
+
+    // Event Registry Mapping
+    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
+    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
+    _sm.onEvent(Event::RESUME,    SceneManager::POP);
+    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_gameover);
+    _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
 
     _sm.replace(&_title, ctx);
 }

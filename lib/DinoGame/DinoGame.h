@@ -15,19 +15,17 @@ class DinoDeadScene;
 struct DinoSharedData {
     uint32_t score   = 0;
     uint32_t hiScore = 0;
+    float    speed   = 0.0f;
 };
 
 // ─── DinoTitleScene ──────────────────────────────────────────────────────────
 class DinoTitleScene : public Scene {
 public:
-    void setPlayScene(DinoPlayScene* p) { _play = p; }
-
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
 private:
-    DinoPlayScene* _play  = nullptr;
     uint8_t        _frame = 0;
 };
 
@@ -35,8 +33,6 @@ private:
 class DinoPlayScene : public Scene {
 public:
     void setData      (DinoSharedData* d) { _data = d; }
-    void setPauseScene(DinoPauseScene* p) { _pause = p; }
-    void setDeadScene (DinoDeadScene* d)  { _dead = d; }
     void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
@@ -99,8 +95,6 @@ private:
 
     // ── Members ───────────────────────────────────────────────────────────────
     DinoSharedData* _data   = nullptr;
-    DinoPauseScene* _pause  = nullptr;
-    DinoDeadScene*  _dead   = nullptr;
 
     bool       _isDucking     = false;
     float      _dinoY         = 0.0f;
@@ -133,21 +127,15 @@ private:
 // ─── DinoPauseScene ──────────────────────────────────────────────────────────
 class DinoPauseScene : public Scene {
 public:
-    void setPlayScene(DinoPlayScene* p) { _play = p; }
-
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
-
-private:
-    DinoPlayScene* _play = nullptr;
 };
 
 // ─── DinoDeadScene ───────────────────────────────────────────────────────────
 class DinoDeadScene : public Scene {
 public:
     void setData     (DinoSharedData* d) { _data = d; }
-    void setPlayScene(DinoPlayScene*  p) { _play = p; }
     void setEngine   (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
@@ -156,7 +144,6 @@ public:
 
 private:
     DinoSharedData*   _data      = nullptr;
-    DinoPlayScene*    _play      = nullptr;
     Camera*           _camera    = nullptr;
     AnimationManager* _particles = nullptr;
     uint8_t           _frame     = 0;

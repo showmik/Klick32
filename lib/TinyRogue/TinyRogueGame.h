@@ -65,24 +65,20 @@ class RogueShopScene;
 
 class RogueTitleScene : public Scene {
 public:
-    void setPlayScene(RoguePlayScene* p) { _play = p; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 private:
-    RoguePlayScene* _play = nullptr;
-    uint8_t         _frame = 0;
+    uint8_t _frame = 0;
 };
 
 class RogueShopScene : public Scene {
 public:
-    void setPlayScene(RoguePlayScene* p) { _play = p; }
     void setData(RogueSharedData* d)     { _data = d; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 private:
-    RoguePlayScene*  _play = nullptr;
     RogueSharedData* _data = nullptr;
     uint8_t          _cursor = 0;
     char             _msg[32] = "";
@@ -93,9 +89,6 @@ private:
 class RoguePlayScene : public Scene {
 public:
     void setData      (RogueSharedData* d) { _data = d; }
-    void setPauseScene(RoguePauseScene* p) { _pause = p; }
-    void setDeadScene (RogueDeadScene* d)  { _dead = d; }
-    void setShopScene (RogueShopScene* s)  { _shop = s; }
     void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
@@ -106,9 +99,6 @@ public:
 
 private:
     RogueSharedData* _data   = nullptr;
-    RoguePauseScene* _pause  = nullptr;
-    RogueDeadScene*  _dead   = nullptr;
-    RogueShopScene*  _shop   = nullptr;
     Camera*          _camera = nullptr;
     AnimationManager* _particles = nullptr;
     char _hudMessage[32] = "";
@@ -130,25 +120,21 @@ private:
 
 class RoguePauseScene : public Scene {
 public:
-    void setPlayScene(RoguePlayScene* p) { _play = p; }
     void onEnter(Console& ctx) override { _introFrames = 0; } // Reset on enter
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 private:
-    RoguePlayScene* _play = nullptr;
     uint8_t _introFrames = 0; // Track animation state
 };
 
 class RogueDeadScene : public Scene {
 public:
     void setData     (RogueSharedData* d) { _data = d; }
-    void setPlayScene(RoguePlayScene* p)  { _play = p; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 private:
     RogueSharedData* _data = nullptr;
-    RoguePlayScene*  _play = nullptr;
     uint8_t          _frame = 0;
 };
 

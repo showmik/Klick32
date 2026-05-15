@@ -17,7 +17,7 @@ void PongTitleScene::update(Console& ctx, SceneManager& sm) {
 
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // Map to PlayScene
     }
 }
 
@@ -88,7 +88,7 @@ void PongPlayScene::_spawnSparks(float x, float y, float dirX) {
 void PongPlayScene::_handlePaddleCollision(Console& ctx) {
     auto& s = _st;
 
-    // Left paddle (player) - Hitbox expanded by BALL_R
+    // Player paddle
     float lpx = (float)(PongState::PAD_MARGIN);
     if (s.ballVel.x < 0 &&
         s.ballPos.x - PongState::BALL_R <= lpx + PongState::PAD_W &&
@@ -193,12 +193,12 @@ if (_hitStopFrames > 0) {
 }
 
     // MENU1 → hard exit back to OS
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     // MENU2 / B → pause
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
-        sm.push(_pause, ctx);
+        sm.emit(ctx, Event::PAUSE);
         return;
     }
 
@@ -235,7 +235,7 @@ if (_hitStopFrames > 0) {
             s.scoreR++;
             if (_camera) _camera->shake(12); // Big shake!
             ctx.sfxDeath();
-            if (s.scoreR >= PongState::WIN_SCORE) { sm.replace(_gameover, ctx); return; }
+            if (s.scoreR >= PongState::WIN_SCORE) { sm.emit(ctx, Event::GAME_OVER); return; }
             _resetBall(false); 
         }
 
@@ -243,7 +243,7 @@ if (_hitStopFrames > 0) {
             s.scoreL++;
             if (_camera) _camera->shake(12); // Big shake!
             ctx.sfxPoint();
-            if (s.scoreL >= PongState::WIN_SCORE) { _playerWon = true; sm.replace(_gameover, ctx); return; }
+            if (s.scoreL >= PongState::WIN_SCORE) { _playerWon = true; sm.emit(ctx, Event::GAME_OVER); return; }
             _resetBall(true); 
         }
     }
@@ -288,17 +288,16 @@ void PongPlayScene::draw(Console& ctx) {
 void PongPauseScene::onEnter(Console& ctx) {}
 
 void PongPauseScene::update(Console& ctx, SceneManager& sm) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
-        sm.pop(ctx);   // reveals PlayScene underneath
+        sm.emit(ctx, Event::RESUME);
     }
 }
 
 void PongPauseScene::draw(Console& ctx) {
-    // Draw the frozen game state as background with NO shake (0, 0)
-    _play->drawField(ctx);
+    if (_sm) _sm->drawUnder(ctx);
 
     // Overlay: filled box to obscure + border
     ctx.setDrawColor(0);
@@ -316,26 +315,26 @@ void PongPauseScene::draw(Console& ctx) {
 
 void PongGameOverScene::onEnter(Console& ctx) {
     _frame = 0;
-    if (_play->playerWon()) ctx.sfxPoint();
-    else                    ctx.sfxDeath();
+    if (*_playerWon) ctx.sfxPoint();
+    else             ctx.sfxDeath();
 }
 
 void PongGameOverScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);   // fresh match, scores reset in onEnter
+        sm.emit(ctx, Event::CUSTOM_1);   // fresh match, scores reset in onEnter
     }
 }
 
 void PongGameOverScene::draw(Console& ctx) {
-    const PongState& s = _play->state();
-
+    if (_sm) _sm->drawUnder(ctx);
+    
     // Final scoreboard
     ctx.setFont(u8g2_font_7x13B_tf);
     char buf[8];
-    snprintf(buf, sizeof(buf), "%u  %u", s.scoreL, s.scoreR);
+    snprintf(buf, sizeof(buf), "%u  %u", _st->scoreL, _st->scoreR);
     int w = ctx.strWidth(buf);
     ctx.drawStr((Console::W - w) / 2, 16, buf);
 
@@ -347,8 +346,8 @@ void PongGameOverScene::draw(Console& ctx) {
     ctx.setDrawColor(1);
     ctx.drawFrame(14, 20, 100, 26);
     ctx.setFont(u8g2_font_7x13B_tf);
-    if (_play->playerWon()) ctx.drawStr(20, 36, "YOU  WIN!");
-    else                    ctx.drawStr(22, 36, "AI  WINS!");
+    if (*_playerWon) ctx.drawStr(20, 36, "YOU  WIN!");
+    else             ctx.drawStr(22, 36, "AI  WINS!");
 
     // Blinking restart prompt
     if ((_frame / 15) % 2 == 0) {
@@ -362,14 +361,16 @@ void PongGameOverScene::draw(Console& ctx) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void PongGame::onEnter(Console& ctx) {
-    // Wire sibling pointers so scenes can reach each other for transitions
-    // and background-draw calls.  Do this ONCE here, never in scene onEnter.
-    _title.setPlayScene    (&_play);
-    _play .setPauseScene   (&_pause);
-    _play .setGameOverScene(&_gameover);
-    _play .setEngine       (&_camera, &_particles);
-    _pause.setPlayScene    (&_play);
-    _gameover.setPlayScene (&_play);
+    _play.setEngine(&_camera, &_particles);
+    
+    _gameover.setState(_play.getStatePtr(), _play.getPlayerWonPtr());
+
+    // Event Registry Mapping
+    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
+    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
+    _sm.onEvent(Event::RESUME,    SceneManager::POP);
+    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_gameover);
+    _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart
 
     _sm.replace(&_title, ctx);
 }

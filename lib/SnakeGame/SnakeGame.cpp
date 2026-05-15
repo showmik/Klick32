@@ -115,7 +115,7 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
 
     if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
         ctx.sfxMenuNav();
-        sm.push(_pause, ctx);
+        sm.emit(ctx, Event::PAUSE);
         return;
     }
 
@@ -186,11 +186,11 @@ void SnakePlayScene::update(Console& ctx, SceneManager& sm) {
                 _data->newHiScore = true;
                 _data->hiScore = _score;
                 ctx.beep(1200, 100); // Triumphant sound!
-                sm.push(_nameEntry, ctx);
+                sm.emit(ctx, Event::CUSTOM_2); // NameEntry
             } else {
                 _data->newHiScore = false;
                 ctx.sfxDeath();
-                sm.push(_dead, ctx);
+                sm.emit(ctx, Event::GAME_OVER); // DeadScene
             }
             return;
         }
@@ -366,16 +366,16 @@ void SnakePlayScene::draw(Console& ctx) {
 void SnakePauseScene::onEnter(Console& ctx) {}
 
 void SnakePauseScene::update(Console& ctx, SceneManager& sm) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
-        sm.pop(ctx);
+        sm.emit(ctx, Event::RESUME);
     }
 }
 
 void SnakePauseScene::draw(Console& ctx) {
-    _play->drawField(ctx);
+    if (_sm) _sm->drawUnder(ctx);
 
     ctx.setDrawColor(0);
     ctx.drawBox(34, 24, 60, 18);
@@ -411,7 +411,7 @@ void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm) {
     
     if (ctx.justPressed(Btn::MENU1)) { 
         _saveToNVS(ctx); 
-        sm.clear(ctx); 
+        sm.emit(ctx, Event::QUIT); 
         return; 
     }
 
@@ -438,12 +438,12 @@ void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.justPressed(Btn::A)) {
         _saveToNVS(ctx);
         ctx.sfxMenuEnter();
-        sm.replace(_dead, ctx);
+        sm.emit(ctx, Event::GAME_OVER); // DeadScene
     }
 }
 
 void SnakeNameEntryScene::draw(Console& ctx) {
-    _play->drawField(ctx);
+    if (_sm) _sm->drawUnder(ctx);
 
     ctx.setDrawColor(0);
     ctx.drawBox(14, 12, 100, 42);
@@ -480,15 +480,15 @@ void SnakeDeadScene::onEnter(Console& ctx) {
 
 void SnakeDeadScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
+    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
     }
 }
 
 void SnakeDeadScene::draw(Console& ctx) {
-    _play->drawField(ctx);
+    if (_sm) _sm->drawUnder(ctx);
 
     ctx.setDrawColor(0);
     ctx.drawBox(20, 20, 88, 28);
@@ -516,21 +516,21 @@ void SnakeGame::onEnter(Console& ctx) {
 
     // Wire sibling pointers
     _play.setData(&_data);
-    _play.setPauseScene(&_pause);
-    _play.setNameScene(&_nameEntry);
-    _play.setDeadScene(&_dead);
     _play.setEngine(&_camera, &_particles);
 
-    _pause.setPlayScene(&_play);
-
     _nameEntry.setData(&_data);
-    _nameEntry.setDeadScene(&_dead);
-    _nameEntry.setPlayScene(&_play);
     _nameEntry.setEngine(&_camera);
 
     _dead.setData(&_data);
-    _dead.setPlayScene(&_play);
     _dead.setEngine(&_camera);
+
+    // Event Registry Mapping
+    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
+    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
+    _sm.onEvent(Event::RESUME,    SceneManager::POP);
+    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_dead);
+    _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart
+    _sm.onEvent(Event::CUSTOM_2,  SceneManager::REPLACE, &_nameEntry); // Name Entry
 
     _sm.replace(&_play, ctx);
 }

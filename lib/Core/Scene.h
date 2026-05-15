@@ -48,4 +48,9 @@ public:
     // Override to return false when the screen hasn't changed, saving a
     // clearBuffer/sendBuffer cycle.  Defaults to true (always redraw).
     virtual bool needsRedraw() const { return true; }
+
+    void setManager(SceneManager* sm) { _sm = sm; }
+
+protected:
+    SceneManager* _sm = nullptr;
 };

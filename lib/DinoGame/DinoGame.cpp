@@ -32,7 +32,7 @@ void DinoTitleScene::update(Console& ctx, SceneManager& sm) {
 
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
     }
 }
 
@@ -172,7 +172,7 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
     
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
-        sm.push(_pause, ctx);
+        sm.emit(ctx, Event::PAUSE);
         return;
     }
 
@@ -244,6 +244,7 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
     }
 
     _speed = gclamp(_speed + SPEED_INC, INIT_SPEED, MAX_SPEED);
+    _data->speed = _speed;
 
     for (auto& o : _obs) {
         if (!o.active) continue;
@@ -296,7 +297,7 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm) {
         if (o.active && _checkCollision(o)) {
             ctx.sfxDeath();
             ctx.saveHiScore(_data->hiScore);
-            sm.replace(_dead, ctx); 
+            sm.emit(ctx, Event::GAME_OVER); 
             return;
         }
     }
@@ -454,18 +455,18 @@ void DinoPauseScene::onEnter(Console& ctx) {}
 
 void DinoPauseScene::update(Console& ctx, SceneManager& sm) {
     if (ctx.justPressed(Btn::MENU1)) { 
-        sm.clear(ctx); 
+        sm.emit(ctx, Event::QUIT); 
         return; 
     }
 
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
-        sm.pop(ctx);
+        sm.emit(ctx, Event::RESUME);
     }
 }
 
 void DinoPauseScene::draw(Console& ctx) {
-    _play->drawField(ctx, false);
+    if (_sm) _sm->drawUnder(ctx);
 
     ctx.setDrawColor(0);
     ctx.drawBox(34, 22, 60, 22);
@@ -485,7 +486,7 @@ void DinoDeadScene::onEnter(Console& ctx) {
     _camera->shake(12);
 
     // Explode debris outward based on the current speed
-    float inheritSpeed = _play->getSpeed() * 0.5f;
+    float inheritSpeed = _data->speed * 0.5f;
     for (int i = 0; i < 8; i++) {
         _particles->spawnPixel(24.0f, 48.0f, 
             inheritSpeed + (random(-15, 25) / 10.0f), 
@@ -498,17 +499,17 @@ void DinoDeadScene::update(Console& ctx, SceneManager& sm) {
     _frame++;
 
     if (ctx.justPressed(Btn::MENU1)) { 
-        sm.clear(ctx); 
+        sm.emit(ctx, Event::QUIT); 
         return; 
     }
     
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
-        sm.replace(_play, ctx);
+        sm.emit(ctx, Event::CUSTOM_1); // PlayScene
     }
 }
 
 void DinoDeadScene::draw(Console& ctx) {
-    _play->drawField(ctx, true);
+    if (_sm) _sm->drawUnder(ctx);
 
     ctx.setCamera(_camera);
     _particles->draw(ctx);
@@ -538,18 +539,18 @@ void DinoDeadScene::draw(Console& ctx) {
 void DinoGame::onEnter(Console& ctx) {
     _data.hiScore = ctx.loadHiScore();
 
-    _title.setPlayScene(&_play);
-    
     _play.setData(&_data);
-    _play.setPauseScene(&_pause);
-    _play.setDeadScene(&_dead);
     _play.setEngine(&_camera, &_particles);
 
-    _pause.setPlayScene(&_play);
-
     _dead.setData(&_data);
-    _dead.setPlayScene(&_play);
     _dead.setEngine(&_camera, &_particles);
+
+    // Event Registry Mapping
+    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
+    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
+    _sm.onEvent(Event::RESUME,    SceneManager::POP);
+    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_dead);
+    _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
 
     _sm.replace(&_title, ctx); 
 }

@@ -20,12 +20,10 @@ struct SISharedData {
 // ─── SITitleScene ──────────────────────────────────────────────────────────
 class SITitleScene : public Scene {
 public:
-    void setPlayScene(SIPlayScene* p) { _play = p; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 private:
-    SIPlayScene* _play = nullptr;
     uint8_t      _frame = 0;
 };
 
@@ -33,8 +31,6 @@ private:
 class SIPlayScene : public Scene {
 public:
     void setData      (SISharedData* d)    { _data = d; }
-    void setPauseScene(SIPauseScene* p)    { _pause = p; }
-    void setDeadScene (SIGameOverScene* d) { _gameover = d; }
     void setEngine    (Camera* cam)        { _camera = cam; }
 
     void onEnter(Console& ctx) override;
@@ -48,8 +44,6 @@ static constexpr int ALIEN_COLS = 8;
     static constexpr int MAX_EBULLETS = 3;
     
     SISharedData*    _data     = nullptr;
-    SIPauseScene*    _pause    = nullptr;
-    SIGameOverScene* _gameover = nullptr;
     Camera*          _camera   = nullptr;
 
     Sprite _player;
@@ -74,25 +68,20 @@ static constexpr int ALIEN_COLS = 8;
 // ─── SIPauseScene ──────────────────────────────────────────────────────────
 class SIPauseScene : public Scene {
 public:
-    void setPlayScene(SIPlayScene* p) { _play = p; }
     void onEnter(Console& ctx) override {}
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
-private:
-    SIPlayScene* _play = nullptr;
 };
 
 // ─── SIGameOverScene ───────────────────────────────────────────────────────
 class SIGameOverScene : public Scene {
 public:
     void setData     (SISharedData* d) { _data = d; }
-    void setPlayScene(SIPlayScene* p)  { _play = p; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 private:
     SISharedData* _data = nullptr;
-    SIPlayScene*  _play = nullptr;
     uint8_t       _frame = 0;
 };
 

@@ -73,21 +73,16 @@ struct PongState {
 
 class PongTitleScene : public Scene {
 public:
-    void setPlayScene(PongPlayScene* p) { _play = p; }
-
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
 private:
-    PongPlayScene* _play  = nullptr;
     uint8_t        _frame = 0;          // drives blink animation
 };
 
 class PongPlayScene : public Scene {
 public:
-    void setPauseScene   (PongPauseScene*    p) { _pause    = p; }
-    void setGameOverScene(PongGameOverScene* g) { _gameover = g; }
     void setEngine       (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
@@ -97,13 +92,11 @@ public:
     // We've moved drawing here so it can access particles and screen shake
     void drawField(Console& ctx) const;
 
-    const PongState& state()     const { return _st; }
-    bool             playerWon() const { return _playerWon; }
+    const PongState* getStatePtr() const { return &_st; }
+    const bool*      getPlayerWonPtr() const { return &_playerWon; }
 
 private:
     PongState          _st;
-    PongPauseScene*    _pause     = nullptr;
-    PongGameOverScene* _gameover  = nullptr;
     Camera*            _camera    = nullptr;
     AnimationManager*  _particles = nullptr;
     bool               _playerWon = false;
@@ -123,28 +116,22 @@ private:
 
 class PongPauseScene : public Scene {
 public:
-    // Needs play scene to draw the game background behind the overlay.
-    void setPlayScene(PongPlayScene* p) { _play = p; }
-
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
-
-private:
-    PongPlayScene* _play = nullptr;
 };
 
 class PongGameOverScene : public Scene {
 public:
-    void setPlayScene(PongPlayScene* p) { _play = p; }
-
+    void setState(const PongState* s, const bool* pw) { _st = s; _playerWon = pw; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
 
 private:
-    PongPlayScene* _play  = nullptr;
-    uint8_t        _frame = 0;
+    const PongState* _st = nullptr;
+    const bool*      _playerWon = nullptr;
+    uint8_t          _frame = 0;
 };
 
 // ─── PongGame ─────────────────────────────────────────────────────────────────

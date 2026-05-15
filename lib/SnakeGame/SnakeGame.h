@@ -65,9 +65,6 @@ class SnakePlayScene : public Scene {
 public:
     // Wire sibling pointers in SnakeGame::onEnter before first push.
     void setData       (SnakeSharedData*       d) { _data      = d; }
-    void setPauseScene (SnakePauseScene*       p) { _pause     = p; }
-    void setNameScene  (SnakeNameEntryScene*   n) { _nameEntry = n; }
-    void setDeadScene  (SnakeDeadScene*        d) { _dead      = d; }
     void setEngine     (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
@@ -125,9 +122,6 @@ private:
 
     // ── Wired siblings ────────────────────────────────────────────────────────
     SnakeSharedData*     _data      = nullptr;
-    SnakePauseScene*     _pause     = nullptr;
-    SnakeNameEntryScene* _nameEntry = nullptr;
-    SnakeDeadScene*      _dead      = nullptr;
     Camera*              _camera    = nullptr;
     AnimationManager*    _particles = nullptr;
 
@@ -144,14 +138,9 @@ private:
 // ─── SnakePauseScene ─────────────────────────────────────────────────────────
 class SnakePauseScene : public Scene {
 public:
-    void setPlayScene(SnakePlayScene* p) { _play = p; }
-
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm) override;
     void draw   (Console& ctx) override;
-
-private:
-    SnakePlayScene* _play = nullptr;
 };
 
 // ─── SnakeNameEntryScene ─────────────────────────────────────────────────────
@@ -160,8 +149,6 @@ private:
 class SnakeNameEntryScene : public Scene {
 public:
     void setData     (SnakeSharedData*  d) { _data = d; }
-    void setDeadScene(SnakeDeadScene*   d) { _dead = d; }
-    void setPlayScene(SnakePlayScene*   p) { _play = p; }
     void setEngine   (Camera* cam)         { _camera = cam; }
 
     void onEnter(Console& ctx) override;
@@ -170,8 +157,6 @@ public:
 
 private:
     SnakeSharedData* _data    = nullptr;
-    SnakeDeadScene*  _dead    = nullptr;
-    SnakePlayScene*  _play    = nullptr;
     Camera*          _camera  = nullptr;
 
     char    _currName[4] = "AAA";
@@ -185,7 +170,6 @@ private:
 class SnakeDeadScene : public Scene {
 public:
     void setData     (SnakeSharedData*  d) { _data = d; }
-    void setPlayScene(SnakePlayScene*   p) { _play = p; }
     void setEngine   (Camera* cam)         { _camera = cam; }
 
     void onEnter(Console& ctx) override;
@@ -194,7 +178,6 @@ public:
 
 private:
     SnakeSharedData* _data    = nullptr;
-    SnakePlayScene*  _play    = nullptr;
     Camera*          _camera  = nullptr;
 
     uint8_t _frame       = 0;
