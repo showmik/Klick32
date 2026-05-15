@@ -36,6 +36,7 @@ void SIPlayScene::onEnter(Console& ctx) {
     _data->score = 0;
     _data->lives = 3;
     _respawnTimer = 0;
+    _wave = 0;
     
     _player = Sprite(Console::W / 2 - 4, 56, 7, 5, spr_si_player);
     _pb = Sprite(0, 0, 1, 3, nullptr); 
@@ -51,11 +52,12 @@ void SIPlayScene::onEnter(Console& ctx) {
 
 void SIPlayScene::_initLevel() {
     _swarmX = 10.0f;
-    _swarmY = 12.0f;
+    // Lower start position based on wave, capped to max depth
+    _swarmY = min(30.0f, 12.0f + (_wave * 4.0f));
     _swarmVX = 2.0f;
     _pb.active = false;
     _aliensAlive = ALIEN_ROWS * ALIEN_COLS;
-    _moveDelay = 25;
+    _moveDelay = max(10, 25 - (_wave * 2));
     
     for (int r = 0; r < ALIEN_ROWS; r++) {
         for (int c = 0; c < ALIEN_COLS; c++) {
@@ -74,22 +76,22 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         return;
     }
 
-    // Handle Respawn Pause
+    // Handle Respawn Pause (Invulnerability phase)
     if (_respawnTimer > 0) {
         _respawnTimer--;
-    } else {
-        // Player Movement
-        if (ctx.pressed(Btn::LEFT))  _player.x -= 2.0f;
-        if (ctx.pressed(Btn::RIGHT)) _player.x += 2.0f;
-        _player.x = gclamp(_player.x, 2.0f, (float)(Console::W - 10));
+    } 
+    
+    // Player Movement (Allowed even while respawning/invulnerable)
+    if (ctx.pressed(Btn::LEFT))  _player.x -= 2.0f;
+    if (ctx.pressed(Btn::RIGHT)) _player.x += 2.0f;
+    _player.x = gclamp(_player.x, 2.0f, (float)(Console::W - 10));
 
-        // Player Shooting
-        if (ctx.justPressed(Btn::A) && !_pb.active) {
-            _pb.active = true;
-            _pb.x = _player.x + 3;
-            _pb.y = 52.0f;
-            ctx.beep(1200, 20);
-        }
+    // Player Shooting (Allowed even while respawning)
+    if (ctx.justPressed(Btn::A) && !_pb.active) {
+        _pb.active = true;
+        _pb.x = _player.x + 3;
+        _pb.y = 52.0f;
+        ctx.beep(1200, 20);
     }
 
     if (_pb.active) {
@@ -170,10 +172,20 @@ void SIPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         }
     }
 
+    // Update Stars
+    for (int i = 0; i < MAX_STARS; i++) {
+        _stars[i].y += _stars[i].speed;
+        if (_stars[i].y > Console::H) {
+            _stars[i].y = 0;
+            _stars[i].x = (float)random(Console::W);
+        }
+    }
+
     _checkCollisions(ctx, sm);
 
     // Level Clear
     if (_aliensAlive == 0) {
+        _wave++;
         _initLevel();
         ctx.beep(1500, 100);
     }
@@ -190,11 +202,30 @@ void SIPlayScene::_checkCollisions(Console& ctx, SceneManager& sm) {
                         _aliens[r][c].active = false;
                         _pb.active = false;
                         _aliensAlive--;
-                        _data->score += 10;
+                        
+                        // Row-based scoring: Top row 30, Middle 20, Bottom 10
+                        int points = 10;
+                        if (r == 0) points = 30;
+                        else if (r == 1) points = 20;
+                        
+                        _data->score += points;
                         if (_data->score > _data->hiScore) _data->hiScore = _data->score;
-                        _moveDelay = max(2, 25 - ((ALIEN_ROWS * ALIEN_COLS - _aliensAlive) * 2));
+                        _moveDelay = max(2, 25 - (_wave * 2) - ((ALIEN_ROWS * ALIEN_COLS - _aliensAlive) * 2));
                         hit = true;
                         ctx.sfxPoint();
+
+                        // Explosion particles
+                        if (_particles) {
+                            for (int i = 0; i < 6; i++) {
+                                _particles->spawnPixel(
+                                    _aliens[r][c].x + 2.0f, 
+                                    _aliens[r][c].y + 2.0f, 
+                                    (random(-20, 20) / 10.0f), 
+                                    (random(-20, 20) / 10.0f), 
+                                    random(10, 20)
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -236,6 +267,12 @@ void SIPlayScene::draw(Console& ctx) {
 void SIPlayScene::drawField(Console& ctx) const {
     ctx.setCamera(nullptr); // Ensure UI has no camera offset
 
+    // Draw Stars
+    ctx.setDrawColor(1);
+    for (int i = 0; i < MAX_STARS; i++) {
+        ctx.drawPixel((int)_stars[i].x, (int)_stars[i].y);
+    }
+
     // UI
     ctx.setFont(u8g2_font_5x7_tf);
     char buf[24];
@@ -251,6 +288,8 @@ void SIPlayScene::drawField(Console& ctx) const {
     ctx.drawHLine(0, 9, Console::W);
 
     ctx.setCamera(_camera); // Apply camera for game world
+
+    if (_particles) _particles->draw(ctx);
 
     // Player (Blink rapidly if respawning)
     if (_respawnTimer == 0 || (_respawnTimer / 4) % 2 == 0) {
@@ -336,10 +375,11 @@ void SpaceInvadersGame::onEnter(Console& ctx) {
     _data.hiScore = ctx.loadHiScore();
 
     _play.setData(&_data);
-    _play.setEngine(&_camera);
+    _play.setEngine(&_camera, &_particles);
     
     _gameover.setData(&_data);
     _gameover.setPlayScene(&_play);
+    _gameover.setEngine(&_particles);
 
     // Event Registry Mapping
     _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
@@ -357,6 +397,7 @@ void SpaceInvadersGame::onExit(Console& ctx) {
 
 void SpaceInvadersGame::update(Console& ctx, float dt) { 
     _camera.update();
+    _particles.update();
     _sm.update(ctx, dt); 
 }
 void SpaceInvadersGame::draw(Console& ctx)   { _sm.draw(ctx); }

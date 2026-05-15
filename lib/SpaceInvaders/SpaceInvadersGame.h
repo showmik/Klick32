@@ -5,6 +5,7 @@
 #include "Scene.h"
 #include "Sprite.h"
 #include "Camera.h"
+#include "AnimationManager.h"
 
 // Forward declarations
 class SIPlayScene;
@@ -31,7 +32,7 @@ private:
 class SIPlayScene : public Scene {
 public:
     void setData      (SISharedData* d)    { _data = d; }
-    void setEngine    (Camera* cam)        { _camera = cam; }
+    void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -40,11 +41,16 @@ public:
 
 private:
     static constexpr int ALIEN_ROWS = 3;
-static constexpr int ALIEN_COLS = 8; 
+    static constexpr int ALIEN_COLS = 8; 
     static constexpr int MAX_EBULLETS = 3;
+    static constexpr int MAX_STARS = 40;
     
     SISharedData*    _data     = nullptr;
     Camera*          _camera   = nullptr;
+    AnimationManager* _particles = nullptr;
+
+    struct Star { float x, y, speed; };
+    Star _stars[MAX_STARS];
 
     Sprite _player;
     Sprite _pb; // Player Bullet
@@ -52,6 +58,7 @@ static constexpr int ALIEN_COLS = 8;
     Sprite _aliens[ALIEN_ROWS][ALIEN_COLS];
 
     int   _aliensAlive = 0;
+    int   _wave = 0;
     float _swarmX = 10.0f;
     float _swarmY = 10.0f;
     float _swarmVX = 1.0f;
@@ -78,6 +85,7 @@ class SIGameOverScene : public Scene {
 public:
     void setData     (SISharedData* d) { _data = d; }
     void setPlayScene(SIPlayScene* p)  { _play = p; }
+    void setEngine   (AnimationManager* anim) { _particles = anim; }
     
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -85,6 +93,7 @@ public:
 private:
     SISharedData* _data = nullptr;
     SIPlayScene*  _play = nullptr;
+    AnimationManager* _particles = nullptr;
     uint8_t       _frame = 0;
 };
 
@@ -100,11 +109,12 @@ public:
     const uint8_t* getCoverArt() const override;
 
 private:
-    SISharedData    _data;
-    SceneManager    _sm;
-    Camera          _camera;
-    SITitleScene    _title;
-    SIPlayScene     _play;
-    SIPauseScene    _pause;
-    SIGameOverScene _gameover;
+    SISharedData     _data;
+    SceneManager     _sm;
+    Camera           _camera;
+    AnimationManager _particles;
+    SITitleScene     _title;
+    SIPlayScene      _play;
+    SIPauseScene     _pause;
+    SIGameOverScene  _gameover;
 };
