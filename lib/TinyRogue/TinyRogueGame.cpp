@@ -1581,6 +1581,8 @@ void RogueInventoryScene::onEnter(Console& ctx) {
     _cursor = 0;
     _msgTimer = 0;
     _upgrading = false;
+    _itemMenuOpen = false;
+    _itemMenuCursor = 0;
 }
 
 void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
@@ -1618,6 +1620,107 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
         return;
     }
 
+    if (_itemMenuOpen) {
+        if (ctx.justPressed(Btn::UP) || ctx.justPressed(Btn::DOWN)) {
+            _itemMenuCursor = (_itemMenuCursor == 0) ? 1 : 0;
+            ctx.sfxMenuNav();
+        }
+        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::LEFT)) {
+            _itemMenuOpen = false;
+            ctx.sfxMenuNav();
+        }
+        if (ctx.justPressed(Btn::A)) {
+            Item& item = _data->inventory[_cursor];
+            if (_itemMenuCursor == 1) { // Discard
+                item.count--;
+                if (item.count <= 0) item.type = ItemType::NONE;
+                _cleanInventory();
+                snprintf(_msg, sizeof(_msg), "Discarded!");
+                _msgTimer = 40;
+                ctx.beep(200, 100);
+            } else { // Action (Use / Equip / Merge)
+                bool consumed = false;
+                
+                if (item.type == ItemType::POTION) {
+                    _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
+                    snprintf(_msg, sizeof(_msg), "Healed 15 HP!");
+                    _data->inventoryTurnUsed = true;
+                    consumed = true;
+                } else if (item.type == ItemType::ELIXIR) {
+                    _data->player.maxHp += 5;
+                    _data->player.hp += 5;
+                    snprintf(_msg, sizeof(_msg), "Max HP +5!");
+                    _data->inventoryTurnUsed = true;
+                    consumed = true;
+                } else if (item.type == ItemType::SCROLL_UPGRADE) {
+                    if (_data->equippedWeapon.type == ItemType::NONE && _data->equippedArmor.type == ItemType::NONE) {
+                        snprintf(_msg, sizeof(_msg), "No Gear!");
+                        _msgTimer = 60;
+                        ctx.beep(150, 100);
+                    } else {
+                        _upgrading = true;
+                        _upgradeSelect = 0;
+                        ctx.sfxMenuEnter();
+                    }
+                } else if (item.type == ItemType::DAGGER || item.type == ItemType::SWORD || item.type == ItemType::AXE) {
+                    if (_data->equippedWeapon.type == item.type) {
+                        _data->equippedWeapon.level += item.level + 1; // Merge!
+                        recalcStats(_data);
+                        snprintf(_msg, sizeof(_msg), "Weapons Merged!");
+                        ctx.beep(1200, 40); ctx.beep(1500, 60);
+                        consumed = true;
+                        _data->inventoryTurnUsed = true;
+                    } else {
+                        Item temp = _data->equippedWeapon;
+                        _data->equippedWeapon = item;
+                        _data->inventory[_cursor] = temp;
+                        recalcStats(_data);
+                        snprintf(_msg, sizeof(_msg), "Equipped Weapon!");
+                        _data->inventoryTurnUsed = true;
+                        ctx.sfxPoint();
+                        _msgTimer = 60;
+                    }
+                } else if (item.type == ItemType::LEATHER || item.type == ItemType::CHAINMAIL || item.type == ItemType::PLATE) {
+                    if (_data->equippedArmor.type == item.type) {
+                        _data->equippedArmor.level += item.level + 1; // Merge!
+                        recalcStats(_data);
+                        snprintf(_msg, sizeof(_msg), "Armors Merged!");
+                        ctx.beep(1200, 40); ctx.beep(1500, 60);
+                        consumed = true;
+                        _data->inventoryTurnUsed = true;
+                    } else {
+                        Item temp = _data->equippedArmor;
+                        _data->equippedArmor = item;
+                        _data->inventory[_cursor] = temp;
+                        recalcStats(_data);
+                        snprintf(_msg, sizeof(_msg), "Equipped Armor!");
+                        _data->inventoryTurnUsed = true;
+                        ctx.sfxPoint();
+                        _msgTimer = 60;
+                    }
+                } else if (item.type == ItemType::THROWING_DART) {
+                    sm.pop(ctx);
+                    RoguePlayScene* play = (RoguePlayScene*)sm.current(); // Assuming Play is under inventory
+                    play->isAiming = true;
+                    play->aimX = _data->player.x;
+                    play->aimY = _data->player.y;
+                    _itemMenuOpen = false;
+                    return;
+                }
+                
+                if (consumed) {
+                    item.count--;
+                    if (item.count <= 0) item.type = ItemType::NONE;
+                    _msgTimer = 60;
+                    ctx.sfxPoint();
+                }
+                _cleanInventory();
+            }
+            _itemMenuOpen = false;
+        }
+        return;
+    }
+
     if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::RESUME);
@@ -1633,96 +1736,11 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
     
     if (_msgTimer > 0) _msgTimer--;
 
-    // --- Discard Item ---
-    if (ctx.justPressed(Btn::RIGHT)) {
-        if (_data->inventory[_cursor].type != ItemType::NONE) {
-            _data->inventory[_cursor].count--;
-            if (_data->inventory[_cursor].count <= 0) _data->inventory[_cursor].type = ItemType::NONE;
-            _cleanInventory();
-            snprintf(_msg, sizeof(_msg), "Discarded!");
-            _msgTimer = 40;
-            ctx.beep(200, 100); // Crunch sound
-        }
-    }
-
     if (ctx.justPressed(Btn::A)) {
-        Item& item = _data->inventory[_cursor];
-        if (item.type != ItemType::NONE) {
-            bool consumed = false;
-            
-            if (item.type == ItemType::POTION) {
-                _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
-                snprintf(_msg, sizeof(_msg), "Healed 15 HP!");
-                _data->inventoryTurnUsed = true;
-                consumed = true;
-            } else if (item.type == ItemType::ELIXIR) {
-                _data->player.maxHp += 5;
-                _data->player.hp += 5;
-                snprintf(_msg, sizeof(_msg), "Max HP +5!");
-                _data->inventoryTurnUsed = true;
-                consumed = true;
-            } else if (item.type == ItemType::SCROLL_UPGRADE) {
-                if (_data->equippedWeapon.type == ItemType::NONE && _data->equippedArmor.type == ItemType::NONE) {
-                    snprintf(_msg, sizeof(_msg), "No Gear!");
-                    _msgTimer = 60;
-                    ctx.beep(150, 100);
-                } else {
-                    _upgrading = true;
-                    _upgradeSelect = 0;
-                    ctx.sfxMenuEnter();
-                }
-            } else if (item.type == ItemType::DAGGER || item.type == ItemType::SWORD || item.type == ItemType::AXE) {
-                if (_data->equippedWeapon.type == item.type) {
-                    _data->equippedWeapon.level += item.level + 1; // Merge!
-                    recalcStats(_data);
-                    snprintf(_msg, sizeof(_msg), "Weapons Merged!");
-                    ctx.beep(1200, 40); ctx.beep(1500, 60);
-                    consumed = true;
-                    _data->inventoryTurnUsed = true;
-                } else {
-                    Item temp = _data->equippedWeapon;
-                    _data->equippedWeapon = item;
-                    _data->inventory[_cursor] = temp;
-                    recalcStats(_data);
-                    snprintf(_msg, sizeof(_msg), "Equipped Weapon!");
-                    _data->inventoryTurnUsed = true;
-                    ctx.sfxPoint();
-                    _msgTimer = 60;
-                }
-            } else if (item.type == ItemType::LEATHER || item.type == ItemType::CHAINMAIL || item.type == ItemType::PLATE) {
-                if (_data->equippedArmor.type == item.type) {
-                    _data->equippedArmor.level += item.level + 1; // Merge!
-                    recalcStats(_data);
-                    snprintf(_msg, sizeof(_msg), "Armors Merged!");
-                    ctx.beep(1200, 40); ctx.beep(1500, 60);
-                    consumed = true;
-                    _data->inventoryTurnUsed = true;
-                } else {
-                    Item temp = _data->equippedArmor;
-                    _data->equippedArmor = item;
-                    _data->inventory[_cursor] = temp;
-                    recalcStats(_data);
-                    snprintf(_msg, sizeof(_msg), "Equipped Armor!");
-                    _data->inventoryTurnUsed = true;
-                    ctx.sfxPoint();
-                    _msgTimer = 60;
-                }
-            } else if (item.type == ItemType::THROWING_DART) {
-                sm.pop(ctx);
-                RoguePlayScene* play = (RoguePlayScene*)sm.current(); // Assuming Play is under inventory
-                play->isAiming = true;
-                play->aimX = _data->player.x;
-                play->aimY = _data->player.y;
-                return;
-            }
-            
-            if (consumed) {
-                item.count--;
-                if (item.count == 0) item.type = ItemType::NONE;
-                _msgTimer = 60;
-                ctx.sfxPoint();
-            }
-            _cleanInventory();
+        if (_data->inventory[_cursor].type != ItemType::NONE) {
+            _itemMenuOpen = true;
+            _itemMenuCursor = 0;
+            ctx.sfxMenuEnter();
         }
     }
 }
@@ -1742,7 +1760,7 @@ void RogueInventoryScene::draw(Console& ctx) {
     
     ctx.setFont(u8g2_font_5x7_tf);
     ctx.setDrawColor(0);
-    ctx.drawStr(bx + 4, by + 7, "PACK  [>]Drop");
+    ctx.drawStr(bx + 4, by + 7, "PACK");
     int exitW = ctx.strWidth("[B]Exit");
     ctx.drawStr(bx + bw - exitW - 2, by + 7, "[B]Exit");
     
@@ -1812,7 +1830,26 @@ void RogueInventoryScene::draw(Console& ctx) {
         ctx.drawStr(28, 34 + (_upgradeSelect * 10), ">");
     }
 
-    if (_msgTimer > 0) {
+    if (_itemMenuOpen) {
+        ctx.setDrawColor(0);
+        ctx.drawBox(38, 20, 52, 28);
+        ctx.setDrawColor(1);
+        ctx.drawFrame(38, 20, 52, 28);
+        
+        Item& item = _data->inventory[_cursor];
+        const char* actStr = "Use";
+        if (item.type >= ItemType::DAGGER && item.type <= ItemType::AXE) {
+            if (_data->equippedWeapon.type == item.type) actStr = "Merge";
+            else actStr = "Equip";
+        } else if (item.type >= ItemType::LEATHER && item.type <= ItemType::PLATE) {
+            if (_data->equippedArmor.type == item.type) actStr = "Merge";
+            else actStr = "Equip";
+        }
+        
+        ctx.drawStr(48, 30, actStr);
+        ctx.drawStr(48, 42, "Discard");
+        ctx.drawStr(40, 30 + (_itemMenuCursor * 12), ">");
+    } else if (_msgTimer > 0) {
         ctx.setDrawColor(0);
         ctx.drawBox(bx + 2, by + bh - 12, bw - 4, 10);
         ctx.setDrawColor(1);

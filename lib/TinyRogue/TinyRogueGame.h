@@ -101,6 +101,8 @@ private:
     uint8_t _msgTimer = 0;
     bool _upgrading = false;
     uint8_t _upgradeSelect = 0;
+    bool _itemMenuOpen = false;
+    uint8_t _itemMenuCursor = 0;
 
     void _cleanInventory();
 };
