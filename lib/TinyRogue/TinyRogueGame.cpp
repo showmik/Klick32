@@ -607,7 +607,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     int lx = px + (aimX - px) * i / steps;
                     int ly = py + (aimY - py) * i / steps;
                     if (lx < 0 || lx >= RogueSharedData::MAP_W || ly < 0 || ly >= RogueSharedData::MAP_H ||
-                        _data->map[ly][lx] == TileType::WALL) {
+                        _data->map[ly][lx] == TileType::WALL || _data->map[ly][lx] == TileType::LOCKED_DOOR) {
                         hitWall = true; 
                         break;
                     }
@@ -619,26 +619,63 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 _hudMessageTimer = 40;
                 ctx.beep(150, 100);
             } else {
-                // Throw Dart
+                // Consume dart
+                for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                    if (_data->inventory[i].type == ItemType::THROWING_DART) {
+                        _data->inventory[i].count--;
+                        if (_data->inventory[i].count == 0) _data->inventory[i].type = ItemType::NONE;
+                        break;
+                    }
+                }
+
                 Monster* m = _getMonsterAt(aimX, aimY);
                 if (m) {
                     m->hp -= 3;
                     _spawnHitEffect(aimX, aimY);
                     ctx.beep(1200, 30);
-                    // Consume dart
-                    for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
-                        if (_data->inventory[i].type == ItemType::THROWING_DART) {
-                            _data->inventory[i].count--;
-                            if (_data->inventory[i].count == 0) _data->inventory[i].type = ItemType::NONE;
-                            break;
+                    
+                    if (m->hp <= 0) {
+                        m->active = false;
+                        _data->player.xp += m->maxHp;
+                        
+                        bool leveledUp = false;
+                        while (_data->player.xp >= _data->player.level * 10) {
+                            _data->player.xp -= _data->player.level * 10;
+                            _data->player.level++;
+                            _data->player.maxHp += 5;
+                            _data->player.hp = _data->player.maxHp; 
+                            _data->player.baseAttack += 1;
+                            recalcStats(_data);
+                            leveledUp = true;
+                        }
+                        if (leveledUp) {
+                            snprintf(_hudMessage, sizeof(_hudMessage), "LEVEL UP!");
+                            _hudMessageTimer = 60;
+                            ctx.beep(800, 100); ctx.beep(1200, 150);
+                        }
+                        if (m->type == MonsterType::BOSS) {
+                            _data->map[m->y][m->x] = TileType::STAIRS_DOWN;
+                            if (_data->map[m->y + 1][m->x] == TileType::FLOOR) {
+                                _data->map[m->y + 1][m->x] = TileType::CHEST;
+                            }
+                            snprintf(_hudMessage, sizeof(_hudMessage), "Boss Defeated!");
+                            _hudMessageTimer = 80;
+                            ctx.beep(1500, 200);
                         }
                     }
+                } else {
+                    // Missed / Threw at empty floor
+                    ctx.sfxPoint(); 
                 }
+                
                 isAiming = false;
                 _processMonsterTurns(ctx, sm);
             }
         }
-        if (ctx.justPressed(Btn::B)) isAiming = false;
+        else if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
+            isAiming = false;
+            ctx.sfxMenuBack();
+        }
         return;
     }
 
