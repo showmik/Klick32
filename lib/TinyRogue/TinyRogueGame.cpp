@@ -1736,7 +1736,9 @@ void RoguePlayScene::draw(Console& ctx) {
     int goldW = ctx.strWidth(goldBuf);
     int brTotalW = 8 + 2 + depW + 4 + 8 + 2 + goldW;
     int brStartX = Console::W - brTotalW - 2;
-    int botY = Console::H - 10;
+    
+    // Shift bottom HUD up to make room for XP bar
+    int botY = Console::H - 13;
     
     ctx.setDrawColor(0);
     ctx.drawBox(brStartX, botY, brTotalW + 2, 10);
@@ -1761,21 +1763,33 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.drawStr(keyX + 11, botY + 7, keyBuf);
     }
 
+    // Draw XP Bar at the bottom edge
+    int xpNeeded = _data->player.level * 15;
+    int xpWidth = (Console::W * _data->player.xp) / xpNeeded;
+    ctx.setDrawColor(0);
+    ctx.drawBox(0, Console::H - 3, Console::W, 3);
+    ctx.setDrawColor(1);
+    ctx.drawFrame(0, Console::H - 3, Console::W, 3);
+    if (xpWidth > 0) {
+        ctx.drawBox(0, Console::H - 2, xpWidth, 1);
+    }
+
     if (_altarMenuOpen) {
         ctx.setCamera(nullptr);
         ctx.setDrawColor(0);
-        ctx.drawBox(18, 16, 92, 36);
+        // Shift Altar menu up by 2px to prevent overlap with the raised HUD
+        ctx.drawBox(18, 14, 92, 36);
         ctx.setDrawColor(1);
-        ctx.drawFrame(18, 16, 92, 36);
+        ctx.drawFrame(18, 14, 92, 36);
         
         ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStr(22, 25, "Blood Altar:");
-        ctx.drawStr(22, 33, "-5 HP for a Boon?");
+        ctx.drawStr(22, 23, "Blood Altar:");
+        ctx.drawStr(22, 31, "-5 HP for a Boon?");
         
-        ctx.drawStr(32, 43, "Sacrifice");
-        ctx.drawStr(32, 51, "Leave");
+        ctx.drawStr(32, 41, "Sacrifice");
+        ctx.drawStr(32, 49, "Leave");
         
-        ctx.drawStr(24, 43 + (_altarMenuCursor * 8), ">");
+        ctx.drawStr(24, 41 + (_altarMenuCursor * 8), ">");
     }
 
     // Draw Cinematic Fade Effect
