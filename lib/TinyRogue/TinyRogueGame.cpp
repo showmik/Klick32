@@ -40,6 +40,15 @@ static void recalcStats(RogueSharedData* _data) {
     _data->player.attack = _data->player.baseAttack + getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level;
     _data->player.defense = _data->player.baseDefense + getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level;
     
+    // Hard Stat Caps & Secondary Stats
+    _data->player.critChance = (_data->equippedWeapon.type == ItemType::DAGGER) ? 25 : 10;
+    _data->player.critChance += _data->equippedWeapon.level * 2;
+    if (_data->player.critChance > 50) _data->player.critChance = 50;
+
+    _data->player.dodge = (_data->equippedArmor.type == ItemType::LEATHER) ? 15 : 5;
+    if (_data->equippedAccessory.type == ItemType::RING_OWL) _data->player.dodge += 15;
+    if (_data->player.dodge > 60) _data->player.dodge = 60;
+
     // Sword: +1 Passive Defense (Parrying)
     if (_data->equippedWeapon.type == ItemType::SWORD) {
         _data->player.defense += 1;
@@ -546,15 +555,18 @@ void RoguePlayScene::_generateBossMap() {
 void RoguePlayScene::_spawnMonsters() {
     for (auto& m : _data->monsters) m.active = false;
 
+    float depth = (float)_data->currentDepth;
+
     if (_data->currentDepth % 5 == 0) {
         // Boss Room Setup
         _data->monsters[0].active = true;
         _data->monsters[0].type = MonsterType::BOSS;
         _data->monsters[0].x = 16;
         _data->monsters[0].y = 12;
-        _data->monsters[0].maxHp = 30 + (_data->currentDepth * 6);
+        _data->monsters[0].maxHp = (int)(40 * pow(1.18f, depth));
         _data->monsters[0].hp = _data->monsters[0].maxHp;
-        _data->monsters[0].attack = 3 + (_data->currentDepth / 2);
+        _data->monsters[0].attack = (int)(4 * pow(1.14f, depth));
+        _data->monsters[0].defense = (int)(2 * pow(1.12f, depth));
         _data->monsters[0].alert = true;
         return;
     }
@@ -588,13 +600,14 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[i].x = mx;
         _data->monsters[i].y = my;
         _data->monsters[i].active = true;
-        _data->monsters[i].hp = 4 + (_data->currentDepth * 2);
-        _data->monsters[i].maxHp = _data->monsters[i].hp;
-        _data->monsters[i].attack = 1 + (_data->currentDepth / 2);
-        _data->monsters[i].alert = false;
+        
+        _data->monsters[i].maxHp = (int)(6 * pow(1.15f, depth));
+        _data->monsters[i].attack = (int)(2 * pow(1.12f, depth));
+        _data->monsters[i].defense = (int)(pow(1.10f, depth));
 
         if (_data->currentMutator == LevelMutator::INFESTED) {
             _data->monsters[i].type = (random(2) == 0) ? MonsterType::RAT : MonsterType::BAT;
+            _data->monsters[i].maxHp = (_data->monsters[i].maxHp * 80) / 100; // -20% HP for swarms
         } else if (_data->currentDepth < 5) {
             // Sewers
             int r = random(3);
@@ -615,10 +628,12 @@ void RoguePlayScene::_spawnMonsters() {
             else _data->monsters[i].type = MonsterType::BAT;
             
             if (_data->monsters[i].type == MonsterType::TROLL) {
-                _data->monsters[i].hp += 8;
+                _data->monsters[i].maxHp *= 2;
                 _data->monsters[i].attack += 2;
             }
         }
+        _data->monsters[i].hp = _data->monsters[i].maxHp;
+        _data->monsters[i].alert = false;
     }
 }
 
@@ -758,9 +773,19 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             int steps = max(abs(aimX - px), abs(aimY - py));
             
             if (steps > 0) {
-                for (int i = 0; i <= steps; i++) {
+                for (int i = 1; i <= steps; i++) {
                     int lx = px + (aimX - px) * i / steps;
                     int ly = py + (aimY - py) * i / steps;
+
+                    // Diagonal LoS check: Ensure we aren't cutting through a solid corner
+                    int prevX = px + (aimX - px) * (i - 1) / steps;
+                    int prevY = py + (aimY - py) * (i - 1) / steps;
+                    if (lx != prevX && ly != prevY) {
+                        if (_data->map[prevY][lx] == TileType::WALL && _data->map[ly][prevX] == TileType::WALL) {
+                             hitWall = true; break;
+                        }
+                    }
+
                     if (lx < 0 || lx >= RogueSharedData::MAP_W || ly < 0 || ly >= RogueSharedData::MAP_H ||
                         _data->map[ly][lx] == TileType::WALL || _data->map[ly][lx] == TileType::LOCKED_DOOR) {
                         hitWall = true; 
@@ -925,11 +950,27 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                 if (nx < 0 || nx >= RogueSharedData::MAP_W || ny < 0 || ny >= RogueSharedData::MAP_H) continue;
 
                 if (nx == _data->player.x && ny == _data->player.y) {
-                    int damage = m.attack - _data->player.defense;
-                    if (damage < 1) damage = 1; 
+                    if (random(100) < _data->player.dodge) {
+                        snprintf(_hudMessage, sizeof(_hudMessage), "Dodged!");
+                        _hudMessageTimer = 30;
+                    } else {
+                        int rawDmg = m.attack;
+                        
+                        // Infested Flanking Bonus: +1 damage for each additional adjacent monster
+                        if (_data->currentMutator == LevelMutator::INFESTED) {
+                            for (auto& otherM : _data->monsters) {
+                                if (&otherM != &m && otherM.active && abs(otherM.x - _data->player.x) <= 1 && abs(otherM.y - _data->player.y) <= 1) {
+                                    rawDmg += 1;
+                                }
+                            }
+                        }
 
-                    _data->player.hp -= damage;
-                    playerHit = true;
+                        int damage = (rawDmg * 100) / (100 + _data->player.defense * 8);
+                        if (damage < 1) damage = 1; 
+
+                        _data->player.hp -= damage;
+                        playerHit = true;
+                    }
                     break; 
                 }
                 else if (_data->map[ny][nx] != TileType::WALL && !_getMonsterAt(nx, ny)) {
@@ -955,9 +996,12 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                         _data->map[newM.y][newM.x] == TileType::FLOOR && 
                         (newM.x != _data->player.x || newM.y != _data->player.y) &&
                         !_getMonsterAt(newM.x, newM.y)) {
-                        newM.hp = 8 + _data->currentDepth;
-                        newM.maxHp = newM.hp;
-                        newM.attack = 2 + (_data->currentDepth / 3);
+                        
+                        float depthF = (float)_data->currentDepth;
+                        newM.maxHp = (int)(8 * pow(1.15f, depthF));
+                        newM.hp = newM.maxHp;
+                        newM.attack = (int)(2 * pow(1.12f, depthF));
+                        newM.defense = (int)(pow(1.10f, depthF));
                         newM.alert = true;
                         
                         _camera->shake(5);
@@ -1019,10 +1063,15 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
     }
 
     if (targetMonster) {
-        int dmg = _data->player.attack;
+        int rawDmg = _data->player.attack;
         if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->player.hp <= (_data->player.maxHp * 3) / 10) {
-            dmg += 3;
+            rawDmg += 3;
         }
+        
+        // Combat Formula: Diminishing returns from monster defense
+        int dmg = (rawDmg * 100) / (100 + targetMonster->defense * 8);
+        if (dmg < 1) dmg = 1;
+
         bool crit = false;
 
         if (!targetMonster->alert) {
@@ -1031,9 +1080,7 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             snprintf(_hudMessage, sizeof(_hudMessage), "Sneak Attack!");
             _hudMessageTimer = 40;
         } else {
-            // Dagger: 40% Critical Hit chance
-            int critChance = (_data->equippedWeapon.type == ItemType::DAGGER) ? 40 : 20;
-            crit = (random(100) < critChance);
+            crit = (random(100) < _data->player.critChance);
         }
 
         if (crit) dmg *= 2;
@@ -1142,10 +1189,11 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 if (!m.active) {
                     m.x = targetX; m.y = targetY;
                     m.active = true;
-                    m.hp = 10 + (_data->currentDepth * 5);
-                    m.maxHp = m.hp;
-                    // Scale attack reasonably by depth instead of copying the player's attack
-                    m.attack = 2 + (_data->currentDepth / 2); 
+                    float depthF = (float)_data->currentDepth;
+                    m.maxHp = (int)(15 * pow(1.15f, depthF));
+                    m.hp = m.maxHp;
+                    m.attack = (int)(3 * pow(1.12f, depthF));
+                    m.defense = (int)(2 * pow(1.10f, depthF));
                     m.type = MonsterType::GOBLIN; 
                     break;
                 }

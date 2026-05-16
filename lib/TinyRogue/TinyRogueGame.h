@@ -45,6 +45,8 @@ struct Entity {
     int defense = 0;
     int level = 1;
     int xp = 0;
+    int dodge = 0;      // Percentage (0-100)
+    int critChance = 10; // Percentage (0-100)
 };
 
 struct Monster : public Entity {
