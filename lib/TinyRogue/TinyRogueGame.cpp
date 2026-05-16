@@ -182,7 +182,7 @@ void RoguePlayScene::_generateMap() {
         for (int y = 0; y < RogueSharedData::MAP_H; y++) {
             for (int x = 0; x < RogueSharedData::MAP_W; x++) {
                 if (_data->map[y][x] == TileType::STAIRS_DOWN) { sx = x; sy = y; }
-                if (_data->map[y][x] == TileType::FLOOR || _data->map[y][x] == TileType::CORRIDOR) totalFloors++;
+                if (_data->map[y][x] != TileType::WALL) totalFloors++;
             }
         }
 
@@ -704,7 +704,7 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[0].active = true;
         _data->monsters[0].type = MonsterType::BOSS;
         _data->monsters[0].x = 16;
-        _data->monsters[0].y = 12;
+        _data->monsters[0].y = 10;
         _data->monsters[0].maxHp = (int)(40 * pow(1.18f, depth));
         _data->monsters[0].hp = _data->monsters[0].maxHp;
         _data->monsters[0].attack = (int)(4 * pow(1.14f, depth));
@@ -1189,6 +1189,11 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
     } else {
         ctx.beep(400, 10); 
     }
+
+    // Trample Tall Grass AFTER monsters take their turn so stealth checks work
+    if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
+        _data->map[_data->player.y][_data->player.x] = TileType::FLOOR;
+    }
 }
 
 bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy) {
@@ -1465,7 +1470,6 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
 
         if (targetTile == TileType::TALL_GRASS) {
-            _data->map[targetY][targetX] = TileType::FLOOR; // Trample the grass
             if (random(100) < 20 && _data->player.hp < _data->player.maxHp) {
                 _data->player.hp += 2;
                 if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
