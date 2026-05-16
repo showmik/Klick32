@@ -23,7 +23,7 @@ struct Item {
 
 enum class TileType : uint8_t { 
     WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE, TALL_GRASS,
-    LOCKED_DOOR, KEY, ALTAR
+    LOCKED_DOOR, KEY, ALTAR, WATER, RUBBLE, WEB
 };
 
 enum class MonsterType : uint8_t { 
@@ -31,8 +31,11 @@ enum class MonsterType : uint8_t {
 };
 
 enum class LevelMutator : uint8_t {
-    NONE, PITCH_BLACK, INFESTED, TREASURE_TROVE
+    NONE, PITCH_BLACK, INFESTED, TREASURE_TROVE, 
+    FLOODED, OVERGROWN, LABYRINTH
 };
+
+enum class Biome : uint8_t { SEWERS, PRISON, DEEP_CAVES, BOSS_ARENA };
 
 struct Entity {
     int x = 0;
@@ -47,6 +50,7 @@ struct Entity {
     int xp = 0;
     int dodge = 0;      // Percentage (0-100)
     int critChance = 10; // Percentage (0-100)
+    int rootDuration = 0; // NEW: Tracks turns trapped in webs
 };
 
 struct Monster : public Entity {
@@ -67,6 +71,7 @@ struct RogueSharedData {
     Monster monsters[MAX_MONSTERS];
     
     uint32_t currentDepth = 1;
+    Biome currentBiome = Biome::SEWERS; // NEW
     uint32_t gold = 0;
     uint32_t hiScore = 0;
     uint32_t turnCount = 0;

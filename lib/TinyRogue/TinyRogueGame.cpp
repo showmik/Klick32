@@ -131,6 +131,11 @@ void RoguePlayScene::_generateMap() {
     // 1. Reset Fog of War
     memset(_data->explored, 0, sizeof(_data->explored));
 
+    if (_data->currentDepth % 5 == 0) _data->currentBiome = Biome::BOSS_ARENA;
+    else if (_data->currentDepth < 5) _data->currentBiome = Biome::SEWERS;
+    else if (_data->currentDepth < 10) _data->currentBiome = Biome::PRISON;
+    else _data->currentBiome = Biome::DEEP_CAVES;
+
     // Roll for Level Mutator (15% chance, except on Boss levels)
     _data->currentMutator = LevelMutator::NONE;
     if (_data->currentDepth % 5 != 0 && random(100) < 15) {
@@ -412,6 +417,16 @@ void RoguePlayScene::_generateBSPMap() {
             }
         }
     }
+
+    // Spawn Rubble and Webs
+    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+            if (_data->map[y][x] == TileType::FLOOR) {
+                if (random(100) < 4) _data->map[y][x] = TileType::RUBBLE;
+                if (random(100) < 3) _data->map[y][x] = TileType::WEB;
+            }
+        }
+    }
 }
 
 void RoguePlayScene::_generateCaveMap() {
@@ -532,6 +547,19 @@ void RoguePlayScene::_generateCaveMap() {
         for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
             if (_data->map[y][x] == TileType::FLOOR && random(100) < 15) {
                 _data->map[y][x] = TileType::TALL_GRASS;
+            }
+        }
+    }
+
+    // Spawn Water (Clusters) and Webs
+    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+            if (_data->map[y][x] == TileType::FLOOR) {
+                if (_data->currentBiome == Biome::SEWERS && random(100) < 15) {
+                    _data->map[y][x] = TileType::WATER;
+                } else if (random(100) < 5) {
+                    _data->map[y][x] = TileType::WEB;
+                }
             }
         }
     }
@@ -899,6 +927,11 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
     for (auto& m : _data->monsters) {
         if (!m.active || _data->player.hp <= 0) continue;
 
+        if (m.rootDuration > 0) {
+            m.rootDuration--;
+            continue;
+        }
+
         int aggro = 6;
         if (m.type == MonsterType::BAT) aggro = 8;
         else if (m.type == MonsterType::SKELETON) aggro = 5;
@@ -950,7 +983,8 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                 if (nx < 0 || nx >= RogueSharedData::MAP_W || ny < 0 || ny >= RogueSharedData::MAP_H) continue;
 
                 if (nx == _data->player.x && ny == _data->player.y) {
-                    if (random(100) < _data->player.dodge) {
+                    int currentDodge = (_data->map[_data->player.y][_data->player.x] == TileType::WATER) ? 0 : _data->player.dodge;
+                    if (random(100) < currentDodge) {
                         snprintf(_hudMessage, sizeof(_hudMessage), "Dodged!");
                         _hudMessageTimer = 30;
                     } else {
@@ -974,6 +1008,13 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                     break; 
                 }
                 else if (_data->map[ny][nx] != TileType::WALL && !_getMonsterAt(nx, ny)) {
+                    if (_data->map[ny][nx] == TileType::RUBBLE) continue;
+                    
+                    if (_data->map[ny][nx] == TileType::WEB) {
+                        _data->map[ny][nx] = TileType::FLOOR;
+                        m.rootDuration = 1;
+                    }
+
                     m.x = nx;
                     m.y = ny;
                 }
@@ -1038,6 +1079,14 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         return true;
     };
 
+    if (_data->player.rootDuration > 0) {
+        _data->player.rootDuration--;
+        snprintf(_hudMessage, sizeof(_hudMessage), "Stuck in Web!");
+        _hudMessageTimer = 30;
+        ctx.beep(150, 50);
+        return finalizeTurn();
+    }
+
     if (dx == 0 && dy == 0) {
         snprintf(_hudMessage, sizeof(_hudMessage), "Waiting...");
         _hudMessageTimer = 20;
@@ -1051,6 +1100,7 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 
     TileType targetTile = _data->map[targetY][targetX];
     if (targetTile == TileType::WALL) return false; 
+    if (targetTile == TileType::RUBBLE) return false; // Impassable but doesn't block LOS
 
     Monster* targetMonster = _getMonsterAt(targetX, targetY);
     
@@ -1286,6 +1336,14 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
     else {
         _data->player.x = targetX;
         _data->player.y = targetY;
+
+        if (targetTile == TileType::WEB) {
+            _data->map[targetY][targetX] = TileType::FLOOR;
+            _data->player.rootDuration = 1;
+            snprintf(_hudMessage, sizeof(_hudMessage), "Trapped!");
+            _hudMessageTimer = 40;
+            ctx.beep(200, 100);
+        }
 
         if (targetTile == TileType::TALL_GRASS) {
             _data->map[targetY][targetX] = TileType::FLOOR; // Trample the grass
@@ -1643,9 +1701,19 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
             TileType t = _data->map[mapY][mapX];
 
             if (t == TileType::WALL) {
-                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall);
+                if (_data->currentBiome == Biome::SEWERS) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall_sewer);
+                else if (_data->currentBiome == Biome::DEEP_CAVES) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall_cave);
+                else ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_wall); // Default/Prison
             } else if (t == TileType::FLOOR || t == TileType::CORRIDOR) {
-                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_floor);
+                if (_data->currentBiome == Biome::SEWERS) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_floor_sewer);
+                else if (_data->currentBiome == Biome::DEEP_CAVES) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_floor_cave);
+                else ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_floor); // Default/Prison
+            } else if (t == TileType::WATER) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_water);
+            } else if (t == TileType::RUBBLE) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_rubble);
+            } else if (t == TileType::WEB) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_web);
             } else if (t == TileType::TALL_GRASS) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_grass);
             } else if (t == TileType::STAIRS_DOWN) {
