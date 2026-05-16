@@ -64,6 +64,7 @@ public:
     void putFloat(const char* key, float    v) { _prefs.putFloat(key, v); }
     void putBool (const char* key, bool     v) { _prefs.putBool (key, v); }
     void putByte (const char* key, uint8_t  v) { _prefs.putUChar(key, v); }
+    void putBytes(const char* key, const void* v, size_t len) { _prefs.putBytes(key, v, len); }
 
     // ── Read ──────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,7 @@ public:
     float    getFloat(const char* key, float    def = 0.0f)   { return _prefs.getFloat(key, def); }
     bool     getBool (const char* key, bool     def = false)   { return _prefs.getBool (key, def); }
     uint8_t  getByte (const char* key, uint8_t  def = 0)      { return _prefs.getUChar(key, def); }
+    size_t   getBytes(const char* key, void* buf, size_t maxLen) { return _prefs.getBytes(key, buf, maxLen); }
 
     // True if the key exists in the current namespace.
     bool hasKey(const char* key) { return _prefs.isKey(key); }

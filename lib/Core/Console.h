@@ -123,6 +123,7 @@ public:
     void saveFloat(const char* key, float    v) { _save.putFloat(key, v); }
     void saveBool (const char* key, bool     v) { _save.putBool (key, v); }
     void saveByte (const char* key, uint8_t  v) { _save.putByte (key, v); }
+    void saveBytes(const char* key, const void* v, size_t len) { _save.putBytes(key, v, len); }
 
     // ── Read ──────────────────────────────────────────────────────────────────
     uint32_t loadUInt (const char* key, uint32_t def = 0)    { return _save.getUInt (key, def); }
@@ -130,6 +131,7 @@ public:
     float    loadFloat(const char* key, float    def = 0.0f) { return _save.getFloat(key, def); }
     bool     loadBool (const char* key, bool     def = false) { return _save.getBool (key, def); }
     uint8_t  loadByte (const char* key, uint8_t  def = 0)    { return _save.getByte (key, def); }
+    size_t   loadBytes(const char* key, void* buf, size_t maxLen) { return _save.getBytes(key, buf, maxLen); }
 
     // True if the key has been written at least once.
     bool hasSave(const char* key) { return _save.hasKey(key); }

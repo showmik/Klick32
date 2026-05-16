@@ -64,6 +64,7 @@ struct RogueSharedData {
     uint32_t hiScore = 0;
     uint32_t turnCount = 0;
     uint8_t keys = 0;
+    bool inventoryTurnUsed = false;
     
     static constexpr int MAX_INVENTORY = 6;
     Item inventory[MAX_INVENTORY];
@@ -133,6 +134,7 @@ public:
     void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
+    void resumeSavedGame() { _resumed = true; }
     
     // Public state for external triggering (Aim Mode)
     bool isAiming = false;
@@ -148,6 +150,11 @@ private:
     AnimationManager* _particles = nullptr;
     char _hudMessage[32] = "";
     uint8_t _hudMessageTimer = 0;
+    bool _resumed = false;
+    
+    // Fade Transition State
+    bool _descending = false;
+    int8_t _fadeTimer = 0; 
 
     Monster* _getMonsterAt(int x, int y) const;
     void _processMonsterTurns(Console& ctx, SceneManager& sm);
@@ -158,7 +165,7 @@ private:
     void _generateBossMap();        // The Boss Arena generator
     void _spawnMonsters();          // Shared monster spawner
 
-    void _processTurn(Console& ctx, SceneManager& sm, int dx, int dy);
+    bool _processTurn(Console& ctx, SceneManager& sm, int dx, int dy);
     void _updateCamera(bool snap = false);
 
     void _spawnHitEffect(int gridX, int gridY);

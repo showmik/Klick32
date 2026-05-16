@@ -72,6 +72,16 @@ void RogueTitleScene::draw(Console& ctx) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void RoguePlayScene::onEnter(Console& ctx) {
+    _descending = false;
+    _fadeTimer = 0;
+    if (_resumed) {
+        _resumed = false;
+        recalcStats(_data);
+        _updateCamera(true);
+        isAiming = false;
+        return;
+    }
+
     _data->currentDepth = 1;
     _data->gold = 0;
     _data->player.level = 1;
@@ -436,7 +446,13 @@ void RoguePlayScene::_spawnMonsters() {
             my = random(1, RogueSharedData::MAP_H - 1);
             
             if (_data->map[my][mx] == TileType::FLOOR && (mx != _data->player.x || my != _data->player.y)) {
-                validSpot = true;
+                bool occupied = false;
+                for (int j = 0; j < i; j++) {
+                    if (_data->monsters[j].x == mx && _data->monsters[j].y == my) {
+                        occupied = true; break;
+                    }
+                }
+                if (!occupied) validSpot = true;
             }
         }
 
@@ -444,6 +460,7 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[i].y = my;
         _data->monsters[i].active = true;
         _data->monsters[i].hp = 4 + _data->currentDepth;
+        _data->monsters[i].maxHp = _data->monsters[i].hp;
         _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
         _data->monsters[i].alert = false;
 
@@ -475,8 +492,11 @@ void RoguePlayScene::_spawnMonsters() {
 }
 
 void RoguePlayScene::_updateCamera(bool snap) {
-    int targetX = (_data->player.x * 8) - (Console::W / 2) + 4;
-    int targetY = (_data->player.y * 8) - (Console::H / 2) + 4;
+    int focusX = isAiming ? aimX : _data->player.x;
+    int focusY = isAiming ? aimY : _data->player.y;
+
+    int targetX = (focusX * 8) - (Console::W / 2) + 4;
+    int targetY = (focusY * 8) - (Console::H / 2) + 4;
 
     targetX = gclamp(targetX, 0, (RogueSharedData::MAP_W * 8) - Console::W);
     targetY = gclamp(targetY, 0, (RogueSharedData::MAP_H * 8) - Console::H);
@@ -491,6 +511,33 @@ void RoguePlayScene::_updateCamera(bool snap) {
 void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_hudMessageTimer > 0) _hudMessageTimer--;
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
+
+    // --- Fade Transition Logic ---
+    if (_descending) {
+        _fadeTimer--;
+        if (_fadeTimer == 0) {
+            // Screen is completely black, generate the next level!
+            _data->currentDepth++;
+            _generateMap(); 
+            _camera->snapTo((_data->player.x * 8) - (Console::W / 2) + 4, 
+                            (_data->player.y * 8) - (Console::H / 2) + 4);
+            _descending = false;
+            _fadeTimer = -20; // Use negative numbers to track the fade-in opening animation
+        }
+        return; // Block all inputs while fading out
+    }
+    
+    if (_fadeTimer < 0) {
+        _fadeTimer++;
+        if (_fadeTimer < 0) return; // Block all inputs while fading in
+    }
+    // -----------------------------
+
+    if (_data->inventoryTurnUsed) {
+        _data->inventoryTurnUsed = false;
+        _processMonsterTurns(ctx, sm);
+    }
+
     if (ctx.justPressed(Btn::MENU2)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::PAUSE);
@@ -503,42 +550,69 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     }
 
     if (isAiming) {
-        if (ctx.justPressed(Btn::UP))    aimY--;
-        if (ctx.justPressed(Btn::DOWN))  aimY++;
-        if (ctx.justPressed(Btn::LEFT))  aimX--;
-        if (ctx.justPressed(Btn::RIGHT)) aimX++;
+        if (ctx.justPressed(Btn::UP))    aimY = max(1, aimY - 1);
+        if (ctx.justPressed(Btn::DOWN))  aimY = min(RogueSharedData::MAP_H - 2, aimY + 1);
+        if (ctx.justPressed(Btn::LEFT))  aimX = max(1, aimX - 1);
+        if (ctx.justPressed(Btn::RIGHT)) aimX = min(RogueSharedData::MAP_W - 2, aimX + 1);
         
         if (ctx.justPressed(Btn::A)) {
-            // Throw Dart
-            Monster* m = _getMonsterAt(aimX, aimY);
-            if (m) {
-                m->hp -= 3;
-                _spawnHitEffect(aimX, aimY);
-                ctx.beep(1200, 30);
-                // Consume dart
-                for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
-                    if (_data->inventory[i].type == ItemType::THROWING_DART) {
-                        _data->inventory[i].count--;
-                        if (_data->inventory[i].count == 0) _data->inventory[i].type = ItemType::NONE;
+            // Check Line of Sight
+            bool hitWall = false;
+            int px = _data->player.x, py = _data->player.y;
+            int steps = max(abs(aimX - px), abs(aimY - py));
+            
+            if (steps > 0) {
+                for (int i = 0; i <= steps; i++) {
+                    int lx = px + (aimX - px) * i / steps;
+                    int ly = py + (aimY - py) * i / steps;
+                    if (lx < 0 || lx >= RogueSharedData::MAP_W || ly < 0 || ly >= RogueSharedData::MAP_H ||
+                        _data->map[ly][lx] == TileType::WALL || _data->map[ly][lx] == TileType::LOCKED_DOOR) {
+                        hitWall = true; 
                         break;
                     }
                 }
             }
-            isAiming = false;
+
+            if (hitWall) {
+                snprintf(_hudMessage, sizeof(_hudMessage), "Path Blocked!");
+                _hudMessageTimer = 40;
+                ctx.beep(150, 100);
+            } else {
+                // Throw Dart
+                Monster* m = _getMonsterAt(aimX, aimY);
+                if (m) {
+                    m->hp -= 3;
+                    _spawnHitEffect(aimX, aimY);
+                    ctx.beep(1200, 30);
+                    // Consume dart
+                    for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                        if (_data->inventory[i].type == ItemType::THROWING_DART) {
+                            _data->inventory[i].count--;
+                            if (_data->inventory[i].count == 0) _data->inventory[i].type = ItemType::NONE;
+                            break;
+                        }
+                    }
+                }
+                isAiming = false;
+                _processMonsterTurns(ctx, sm);
+            }
         }
         if (ctx.justPressed(Btn::B)) isAiming = false;
         return;
     }
 
     int dx = 0, dy = 0;
+    bool waited = false;
     if (ctx.justPressed(Btn::UP)   || ctx.repeat(Btn::UP))   dy = -1;
-    if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) dy = 1;
-    if (ctx.justPressed(Btn::LEFT) || ctx.repeat(Btn::LEFT)) dx = -1;
-    if (ctx.justPressed(Btn::RIGHT)|| ctx.repeat(Btn::RIGHT)) dx = 1;
+    else if (ctx.justPressed(Btn::DOWN) || ctx.repeat(Btn::DOWN)) dy = 1;
+    else if (ctx.justPressed(Btn::LEFT) || ctx.repeat(Btn::LEFT)) dx = -1;
+    else if (ctx.justPressed(Btn::RIGHT)|| ctx.repeat(Btn::RIGHT)) dx = 1;
+    else if (ctx.justPressed(Btn::A)) waited = true;
 
-    if (dx != 0 || dy != 0) {
-        _processTurn(ctx, sm, dx, dy);
-        _processMonsterTurns(ctx, sm); 
+    if (dx != 0 || dy != 0 || waited) {
+        if (_processTurn(ctx, sm, dx, dy)) {
+            _processMonsterTurns(ctx, sm); 
+        }
     }
 
     _updateCamera(); 
@@ -636,7 +710,8 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
                     if (newM.x >= 0 && newM.x < RogueSharedData::MAP_W && 
                         newM.y >= 0 && newM.y < RogueSharedData::MAP_H &&
                         _data->map[newM.y][newM.x] == TileType::FLOOR && 
-                        (newM.x != _data->player.x || newM.y != _data->player.y)) {
+                        (newM.x != _data->player.x || newM.y != _data->player.y) &&
+                        !_getMonsterAt(newM.x, newM.y)) {
                         newM.hp = 8 + _data->currentDepth;
                         newM.maxHp = newM.hp;
                         newM.attack = 2 + (_data->currentDepth / 3);
@@ -669,21 +744,29 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
     }
 }
 
-void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy) {
-    _data->turnCount++; 
-    
-    // Passive HP Regeneration (1 HP every 20 turns)
-    if (_data->turnCount % 20 == 0 && _data->player.hp < _data->player.maxHp) {
-        _data->player.hp++;
+bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy) {
+    auto finalizeTurn = [&]() {
+        _data->turnCount++; 
+        // Passive HP Regeneration (1 HP every 20 turns)
+        if (_data->turnCount % 20 == 0 && _data->player.hp < _data->player.maxHp) {
+            _data->player.hp++;
+        }
+        return true;
+    };
+
+    if (dx == 0 && dy == 0) {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Waiting...");
+        _hudMessageTimer = 20;
+        return finalizeTurn();
     }
 
     int targetX = _data->player.x + dx;
     int targetY = _data->player.y + dy;
 
-    if (targetX < 0 || targetX >= RogueSharedData::MAP_W || targetY < 0 || targetY >= RogueSharedData::MAP_H) return;
+    if (targetX < 0 || targetX >= RogueSharedData::MAP_W || targetY < 0 || targetY >= RogueSharedData::MAP_H) return false;
 
     TileType targetTile = _data->map[targetY][targetX];
-    if (targetTile == TileType::WALL) return; 
+    if (targetTile == TileType::WALL) return false; 
 
     Monster* targetMonster = _getMonsterAt(targetX, targetY);
     
@@ -705,7 +788,7 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             snprintf(_hudMessage, sizeof(_hudMessage), "Locked!");
             _hudMessageTimer = 40;
             ctx.beep(150, 100);
-            return;
+            return false;
         }
     }
 
@@ -758,6 +841,7 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 ctx.beep(1500, 200);
             }
         }
+        return finalizeTurn();
     }
     else if (targetTile == TileType::CHEST) {
         if (random(100) < 15) {
@@ -772,12 +856,13 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                     m.x = targetX; m.y = targetY;
                     m.active = true;
                     m.hp = 10 + (_data->currentDepth * 3);
+                    m.maxHp = m.hp;
                     m.attack = _data->player.attack + 1; 
                     m.type = MonsterType::GOBLIN; 
                     break;
                 }
             }
-            return; 
+            return finalizeTurn(); 
         }
 
         int roll = random(100);
@@ -825,7 +910,7 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 snprintf(_hudMessage, sizeof(_hudMessage), "Pack Full!");
                 _hudMessageTimer = 60;
                 ctx.beep(150, 100);
-                return; // Do not consume chest
+                return false; // Do not consume chest
             }
             _data->map[targetY][targetX] = TileType::FLOOR; 
             snprintf(_hudMessage, sizeof(_hudMessage), "Got %s!", itemName);
@@ -839,11 +924,12 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             _hudMessageTimer = 60;
             ctx.beep(1200, 20); ctx.beep(1500, 40);
         }
+        return finalizeTurn();
     }
     else if (targetTile == TileType::MERCHANT) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_2); // Shop
-        return; 
+        return false; 
     }
     else {
         _data->player.x = targetX;
@@ -869,17 +955,18 @@ void RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             if (_data->player.hp <= 0) {
                 if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
                 sm.emit(ctx, Event::GAME_OVER);
-                return;
+                return true;
             }
         }
 
         if (targetTile == TileType::STAIRS_DOWN) {
-            ctx.sfxMenuEnter();
-            _data->currentDepth++;
-            _generateMap(); 
-            _camera->snapTo((_data->player.x * 8) - (Console::W / 2) + 4, 
-                            (_data->player.y * 8) - (Console::H / 2) + 4);
+            // Play a descending tone
+            ctx.beep(400, 100); ctx.beep(300, 150); 
+            _descending = true;
+            _fadeTimer = 20; // 20 frames for the cinematic bars to close in
+            return finalizeTurn();
         }
+        return finalizeTurn();
     }
 }
 
@@ -1132,6 +1219,21 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.drawBitmap(keyX + 1, botY + 1, 1, 8, spr_rogue_key);
         ctx.drawStr(keyX + 11, botY + 7, keyBuf);
     }
+
+    // Draw Cinematic Fade Effect
+    if (_descending || _fadeTimer < 0) {
+        // Calculate progress from 0 (open) to 20 (closed)
+        int progress = _descending ? (20 - _fadeTimer) : abs(_fadeTimer);
+        
+        // Calculate how tall the bars should be (max is half the screen height, plus 1 to overlap perfectly)
+        int barHeight = ((Console::H / 2) + 1) * progress / 20;
+        
+        ctx.setCamera(nullptr); // Unset camera to stick bars to the screen
+        ctx.setDrawColor(0);    // Black
+        ctx.drawBox(0, 0, Console::W, barHeight);                             // Top bar wiping down
+        ctx.drawBox(0, Console::H - barHeight, Console::W, barHeight);        // Bottom bar wiping up
+        ctx.setDrawColor(1);    // Reset to White
+    }
 }
 
 void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
@@ -1295,7 +1397,10 @@ void RoguePauseScene::draw(Console& ctx) {
     ctx.drawStr(bx + (bw - tw) / 2, by + 21, "[B] Resume");
 }
 
-void RogueDeadScene::onEnter(Console& ctx) { _frame = 0; }
+void RogueDeadScene::onEnter(Console& ctx) { 
+    _frame = 0; 
+    ctx.removeSave("gamestate");
+}
 
 void RogueDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
@@ -1415,11 +1520,13 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
             if (item.type == ItemType::POTION) {
                 _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
                 snprintf(_msg, sizeof(_msg), "Healed 15 HP!");
+                _data->inventoryTurnUsed = true;
                 consumed = true;
             } else if (item.type == ItemType::ELIXIR) {
                 _data->player.maxHp += 5;
                 _data->player.hp += 5;
                 snprintf(_msg, sizeof(_msg), "Max HP +5!");
+                _data->inventoryTurnUsed = true;
                 consumed = true;
             } else if (item.type == ItemType::SCROLL_UPGRADE) {
                 if (_data->equippedWeapon.type == ItemType::NONE && _data->equippedArmor.type == ItemType::NONE) {
@@ -1437,6 +1544,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                 _data->inventory[_cursor] = temp;
                 recalcStats(_data);
                 snprintf(_msg, sizeof(_msg), "Equipped Weapon!");
+                _data->inventoryTurnUsed = true;
                 ctx.sfxPoint();
                 _msgTimer = 60;
             } else if (item.type == ItemType::LEATHER || item.type == ItemType::CHAINMAIL || item.type == ItemType::PLATE) {
@@ -1445,6 +1553,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                 _data->inventory[_cursor] = temp;
                 recalcStats(_data);
                 snprintf(_msg, sizeof(_msg), "Equipped Armor!");
+                _data->inventoryTurnUsed = true;
                 ctx.sfxPoint();
                 _msgTimer = 60;
             } else if (item.type == ItemType::THROWING_DART) {
@@ -1567,8 +1676,17 @@ void RogueInventoryScene::draw(Console& ctx) {
 
 void TinyRogueGame::onEnter(Console& ctx) {
     _data.hiScore = ctx.loadHiScore();
+    
+    bool loaded = false;
+    if (ctx.hasSave("gamestate")) {
+        size_t bytesRead = ctx.loadBytes("gamestate", &_data, sizeof(RogueSharedData));
+        if (bytesRead == sizeof(RogueSharedData) && _data.player.hp > 0) {
+            loaded = true;
+        }
+    }
 
     _play.setData(&_data);
+    if (loaded) _play.resumeSavedGame();
     _play.setEngine(&_camera, &_particles);
     
     _shop.setData(&_data);
@@ -1589,6 +1707,11 @@ void TinyRogueGame::onEnter(Console& ctx) {
 
 void TinyRogueGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
+    if (_data.player.hp > 0) {
+        ctx.saveBytes("gamestate", &_data, sizeof(RogueSharedData));
+    } else {
+        ctx.removeSave("gamestate");
+    }
 }
 
 void TinyRogueGame::update(Console& ctx, float dt) { 
