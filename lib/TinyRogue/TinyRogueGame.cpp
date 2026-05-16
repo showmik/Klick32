@@ -28,6 +28,10 @@ static const char* getItemName(ItemType t) {
         case ItemType::LEATHER: return "Leather";
         case ItemType::CHAINMAIL: return "Chainmail";
         case ItemType::PLATE: return "Plate";
+        case ItemType::RING_VAMPIRE: return "Vamp Ring";
+        case ItemType::RING_WEALTH: return "Wealth Ring";
+        case ItemType::RING_OWL: return "Owl Ring";
+        case ItemType::RING_BERSERKER: return "Berserk Ring";
         default: return "-";
     }
 }
@@ -98,6 +102,7 @@ void RoguePlayScene::onEnter(Console& ctx) {
     _data->player.baseDefense = 0;
     _data->equippedWeapon.type = ItemType::NONE;
     _data->equippedArmor.type = ItemType::NONE;
+    _data->equippedAccessory.type = ItemType::NONE;
     recalcStats(_data);
     for (int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
         _data->inventory[i].type = ItemType::NONE;
@@ -781,6 +786,9 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 Monster* m = _getMonsterAt(aimX, aimY);
                 if (m) {
                     int dartDamage = _data->player.baseAttack * 2;
+                    if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->player.hp <= (_data->player.maxHp * 3) / 10) {
+                        dartDamage += 3;
+                    }
                     if (dartDamage < 3) dartDamage = 3;
                     m->hp -= dartDamage;
                     _spawnHitEffect(aimX, aimY);
@@ -791,7 +799,8 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                         _data->player.xp += m->maxHp;
                         
                         // Bloodlust heal
-                        _data->player.hp++;
+                        int healAmt = (_data->equippedAccessory.type == ItemType::RING_VAMPIRE) ? 2 : 1;
+                        _data->player.hp += healAmt;
                         if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
                         
                         bool leveledUp = false;
@@ -1011,6 +1020,9 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 
     if (targetMonster) {
         int dmg = _data->player.attack;
+        if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->player.hp <= (_data->player.maxHp * 3) / 10) {
+            dmg += 3;
+        }
         bool crit = false;
 
         if (!targetMonster->alert) {
@@ -1061,7 +1073,8 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 xpGained += m.maxHp;
 
                 // Bloodlust heal
-                _data->player.hp++;
+                int healAmt = (_data->equippedAccessory.type == ItemType::RING_VAMPIRE) ? 2 : 1;
+                _data->player.hp += healAmt;
                 if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
 
                 if (m.type == MonsterType::BOSS) {
@@ -1146,14 +1159,20 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         if (roll < 20) { itemToGive = ItemType::POTION; }
         else if (roll < 30) { itemToGive = ItemType::ELIXIR; }
         else if (roll < 45) { itemToGive = ItemType::SCROLL_UPGRADE; }
-        else if (roll < 70) { 
+        else if (roll < 65) { 
             if (_data->currentDepth < 3) itemToGive = (random(2)==0) ? ItemType::DAGGER : ItemType::SWORD;
             else if (_data->currentDepth < 6) itemToGive = (random(2)==0) ? ItemType::SWORD : ItemType::AXE;
             else itemToGive = ItemType::AXE;
-        } else if (roll < 90) {
+        } else if (roll < 85) {
             if (_data->currentDepth < 3) itemToGive = (random(2)==0) ? ItemType::LEATHER : ItemType::CHAINMAIL;
             else if (_data->currentDepth < 6) itemToGive = (random(2)==0) ? ItemType::CHAINMAIL : ItemType::PLATE;
             else itemToGive = ItemType::PLATE;
+        } else {
+            int r = random(4);
+            if (r == 0) itemToGive = ItemType::RING_VAMPIRE;
+            else if (r == 1) itemToGive = ItemType::RING_WEALTH;
+            else if (r == 2) itemToGive = ItemType::RING_OWL;
+            else itemToGive = ItemType::RING_BERSERKER;
         }
         
         if (itemToGive != ItemType::NONE) {
@@ -1195,6 +1214,7 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             _data->map[targetY][targetX] = TileType::FLOOR; 
             int amount = 10 + (15 * _data->currentDepth);
             if (_data->currentMutator == LevelMutator::TREASURE_TROVE) amount *= 2;
+            if (_data->equippedAccessory.type == ItemType::RING_WEALTH) amount += amount / 2; // +50% Gold
             _data->gold += amount;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found %d Gold", amount);
             _hudMessageTimer = 60;
@@ -1231,18 +1251,23 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
 
         if (targetTile == TileType::SPIKE) {
-            int spikeDmg = 2 + (_data->currentDepth / 3);
-            if (_data->currentMutator == LevelMutator::TREASURE_TROVE) spikeDmg *= 2;
-            _data->player.hp -= spikeDmg;
-            _camera->shake(4);
-            ctx.sfxDeath();
-            snprintf(_hudMessage, sizeof(_hudMessage), "Stepped on Spikes!");
-            _hudMessageTimer = 60;
-            
-            if (_data->player.hp <= 0) {
-                if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
-                sm.emit(ctx, Event::GAME_OVER);
-                return true;
+            if (_data->equippedAccessory.type == ItemType::RING_OWL) {
+                snprintf(_hudMessage, sizeof(_hudMessage), "Owl Ring: Float!");
+                _hudMessageTimer = 40;
+            } else {
+                int spikeDmg = 2 + (_data->currentDepth / 3);
+                if (_data->currentMutator == LevelMutator::TREASURE_TROVE) spikeDmg *= 2;
+                _data->player.hp -= spikeDmg;
+                _camera->shake(4);
+                ctx.sfxDeath();
+                snprintf(_hudMessage, sizeof(_hudMessage), "Stepped on Spikes!");
+                _hudMessageTimer = 60;
+                
+                if (_data->player.hp <= 0) {
+                    if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
+                    sm.emit(ctx, Event::GAME_OVER);
+                    return true;
+                }
             }
         }
 
@@ -1883,6 +1908,15 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                         ctx.sfxPoint();
                         _msgTimer = 60;
                     }
+                } else if (item.type >= ItemType::RING_VAMPIRE && item.type <= ItemType::RING_BERSERKER) {
+                    Item temp = _data->equippedAccessory;
+                    _data->equippedAccessory = item;
+                    _data->inventory[_cursor] = temp;
+                    recalcStats(_data);
+                    snprintf(_msg, sizeof(_msg), "Equipped Ring!");
+                    _data->inventoryTurnUsed = true;
+                    ctx.sfxPoint();
+                    _msgTimer = 60;
                 } else if (item.type == ItemType::THROWING_DART) {
                     sm.pop(ctx);
                     RoguePlayScene* play = (RoguePlayScene*)sm.current(); // Assuming Play is under inventory
@@ -1967,6 +2001,14 @@ void RogueInventoryScene::draw(Console& ctx) {
         strcpy(aStr, "A: - None -");
     }
     ctx.drawStr(bx + 4, by + 24, aStr);
+
+    char acStr[32];
+    if (_data->equippedAccessory.type != ItemType::NONE) {
+        snprintf(acStr, sizeof(acStr), "Ac: %s", getItemName(_data->equippedAccessory.type));
+    } else {
+        strcpy(acStr, "Ac: - None -");
+    }
+    ctx.drawStr(bx + 64, by + 16, acStr);
     
     ctx.drawHLine(bx, by + 27, bw);
 
@@ -1993,6 +2035,10 @@ void RogueInventoryScene::draw(Console& ctx) {
             else if (item.type == ItemType::DAGGER) shortName = "Dagr";
             else if (item.type == ItemType::SWORD) shortName = "Swrd";
             else if (item.type == ItemType::SCROLL_UPGRADE) shortName = "Upg";
+            else if (item.type == ItemType::RING_VAMPIRE) shortName = "VampR";
+            else if (item.type == ItemType::RING_WEALTH) shortName = "WlthR";
+            else if (item.type == ItemType::RING_OWL) shortName = "OwlR";
+            else if (item.type == ItemType::RING_BERSERKER) shortName = "BrskR";
 
             int atk = getWeaponAttack(item.type);
             int def = getArmorDefense(item.type);
@@ -2029,6 +2075,8 @@ void RogueInventoryScene::draw(Console& ctx) {
         } else if (item.type >= ItemType::LEATHER && item.type <= ItemType::PLATE) {
             if (_data->equippedArmor.type == item.type) actStr = "Merge";
             else actStr = "Equip";
+        } else if (item.type >= ItemType::RING_VAMPIRE && item.type <= ItemType::RING_BERSERKER) {
+            actStr = "Equip";
         }
         
         ctx.drawStr(48, 30, actStr);

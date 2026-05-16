@@ -11,7 +11,8 @@
 enum class ItemType : uint8_t { 
     NONE, POTION, ELIXIR, SCROLL_UPGRADE, THROWING_DART,
     DAGGER, SWORD, AXE, 
-    LEATHER, CHAINMAIL, PLATE 
+    LEATHER, CHAINMAIL, PLATE,
+    RING_VAMPIRE, RING_WEALTH, RING_OWL, RING_BERSERKER
 };
 
 struct Item {
@@ -76,6 +77,7 @@ struct RogueSharedData {
     
     Item equippedWeapon;
     Item equippedArmor;
+    Item equippedAccessory;
 };
 
 struct BSPNode {
