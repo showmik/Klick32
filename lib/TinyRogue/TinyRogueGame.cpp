@@ -961,7 +961,8 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
     }
     else if (targetTile == TileType::CHEST) {
-        if (random(100) < 15) {
+        // Prevent mimics on Boss floors (depths 5, 10, 15...)
+        if (_data->currentDepth % 5 != 0 && random(100) < 15) {
             _data->map[targetY][targetX] = TileType::FLOOR; 
             snprintf(_hudMessage, sizeof(_hudMessage), "It's a MIMIC!");
             _hudMessageTimer = 60;
@@ -974,8 +975,8 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                     m.active = true;
                     m.hp = 10 + (_data->currentDepth * 5);
                     m.maxHp = m.hp;
-                    m.attack = _data->player.attack; 
-                    if (m.attack < 1) m.attack = 1;
+                    // Scale attack reasonably by depth instead of copying the player's attack
+                    m.attack = 2 + (_data->currentDepth / 2); 
                     m.type = MonsterType::GOBLIN; 
                     break;
                 }
