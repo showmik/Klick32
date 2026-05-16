@@ -149,6 +149,7 @@ void RoguePlayScene::_generateMap() {
     }
 
     // 2. Biomes and Boss Arenas
+    bool isBSP = false; // FIX: Track if map is BSP
     if (_data->currentDepth % 5 == 0) {
         _data->currentBiome = Biome::BOSS_ARENA;
         _generateBossMap();
@@ -163,16 +164,19 @@ void RoguePlayScene::_generateMap() {
             _generateCaveMap();
         } else if (_data->currentDepth < 10) {
             _generateBSPMap();
+            isBSP = true;
         } else {
-            if (random(100) < 50) _generateBSPMap(); else _generateCaveMap();
+            if (random(100) < 50) { _generateBSPMap(); isBSP = true; }
+            else _generateCaveMap();
         }
     }
 
     // 3. Shared Spawning & Setup
     _data->keys = 0;
     
-    // Only spawn doors on non-boss levels
-    if (_data->currentDepth % 5 != 0) {
+    // FIX: Only spawn doors on non-boss levels that use the BSP generator.
+    // Cave and Maze maps have disconnected areas that break the choke-point key/chest logic.
+    if (_data->currentDepth % 5 != 0 && isBSP) {
         // Find stairs to ensure they are always reachable
         int sx = -1, sy = -1, totalFloors = 0;
         for (int y = 0; y < RogueSharedData::MAP_H; y++) {
@@ -874,7 +878,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     recalcStats(_data);
                     _hudMessageTimer = 60;
                     _data->map[_activeAltarY][_activeAltarX] = TileType::FLOOR;
-                    
+                    _data->turnCount++; // FIX: Advance turn counter to prevent slow monster exploit
                     _processMonsterTurns(ctx, sm); // Consumes a turn
                 }
             }
@@ -884,6 +888,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 
     if (_data->inventoryTurnUsed) {
         _data->inventoryTurnUsed = false;
+        _data->turnCount++; // FIX: Advance turn counter to prevent slow monster exploit
         _processMonsterTurns(ctx, sm);
     }
 
@@ -997,6 +1002,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 }
                 
                 isAiming = false;
+                _data->turnCount++; // FIX: Advance turn counter to prevent slow monster exploit
                 _processMonsterTurns(ctx, sm);
             }
         }
@@ -1136,17 +1142,20 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
             // Find an inactive monster slot
             for (auto& newM : _data->monsters) {
                 if (!newM.active) {
-                    newM.active = true;
-                    newM.type = (random(2) == 0) ? MonsterType::SKELETON : MonsterType::GOBLIN;
-                    newM.x = m.x + (random(3) - 1);
-                    newM.y = m.y + (random(3) - 1);
+                    int targetX = m.x + (random(3) - 1);
+                    int targetY = m.y + (random(3) - 1);
                     
-                    // Validate position
-                    if (newM.x >= 0 && newM.x < RogueSharedData::MAP_W && 
-                        newM.y >= 0 && newM.y < RogueSharedData::MAP_H &&
-                        _data->map[newM.y][newM.x] == TileType::FLOOR && 
-                        (newM.x != _data->player.x || newM.y != _data->player.y) &&
-                        !_getMonsterAt(newM.x, newM.y)) {
+                    // Validate position BEFORE activating
+                    if (targetX >= 0 && targetX < RogueSharedData::MAP_W && 
+                        targetY >= 0 && targetY < RogueSharedData::MAP_H &&
+                        _data->map[targetY][targetX] == TileType::FLOOR && 
+                        (targetX != _data->player.x || targetY != _data->player.y) &&
+                        !_getMonsterAt(targetX, targetY)) {
+                        
+                        newM.active = true;
+                        newM.type = (random(2) == 0) ? MonsterType::SKELETON : MonsterType::GOBLIN;
+                        newM.x = targetX;
+                        newM.y = targetY;
                         
                         float depthF = (float)_data->currentDepth;
                         newM.maxHp = (int)(8 * pow(1.15f, depthF));
