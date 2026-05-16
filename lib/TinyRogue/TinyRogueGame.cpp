@@ -127,56 +127,61 @@ void RoguePlayScene::_generateMap() {
     
     // Only spawn doors on non-boss levels
     if (_data->currentDepth % 5 != 0) {
+        // Find stairs to ensure they are always reachable
+        int sx = -1, sy = -1, totalFloors = 0;
+        for (int y = 0; y < RogueSharedData::MAP_H; y++) {
+            for (int x = 0; x < RogueSharedData::MAP_W; x++) {
+                if (_data->map[y][x] == TileType::STAIRS_DOWN) { sx = x; sy = y; }
+                if (_data->map[y][x] == TileType::FLOOR || _data->map[y][x] == TileType::CORRIDOR) totalFloors++;
+            }
+        }
+
         struct Coord { uint8_t x, y; };
-        static Coord corridors[200];
+        static Coord corridors[300];
         int corridorCount = 0;
         
-        // 1. Find all eligible corridor choke points
         for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
             for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
                 if (_data->map[y][x] == TileType::CORRIDOR) {
-                    if (corridorCount < 200) corridors[corridorCount++] = {(uint8_t)x, (uint8_t)y};
+                    if (corridorCount < 300) corridors[corridorCount++] = {(uint8_t)x, (uint8_t)y};
                 }
             }
         }
 
-        if (corridorCount > 0) {
-            // 2. Pick a random corridor and lock it
-            Coord door = corridors[random(corridorCount)];
-            _data->map[door.y][door.x] = TileType::LOCKED_DOOR;
+        // Shuffle corridors
+        for (int i = 0; i < corridorCount; i++) {
+            int j = random(corridorCount);
+            Coord temp = corridors[i];
+            corridors[i] = corridors[j];
+            corridors[j] = temp;
+        }
+
+        static bool reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
+        static Coord queue[1024];
+
+        // Find a valid choke point
+        for (int i = 0; i < corridorCount; i++) {
+            Coord c = corridors[i];
+            _data->map[c.y][c.x] = TileType::LOCKED_DOOR;
             
-            // 3. Flood-Fill from the player's spawn to find accessible tiles
-            // (Using static memory to prevent ESP32 stack overflow)
-            static bool reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
             memset(reachable, 0, sizeof(reachable));
-            static Coord queue[1024];
-            static Coord reachableFloors[400];
-            
             int head = 0, tail = 0;
-            int floorCount = 0;
-            
             queue[tail++] = {(uint8_t)_data->player.x, (uint8_t)_data->player.y};
             reachable[_data->player.y][_data->player.x] = true;
             
+            int reachableCount = 0;
             while(head < tail) {
                 Coord curr = queue[head++];
-                int cx = curr.x, cy = curr.y;
+                reachableCount++;
                 
-                // Track valid floors for the key to spawn on
-                if (_data->map[cy][cx] == TileType::FLOOR && (cx != _data->player.x || cy != _data->player.y)) {
-                    if (floorCount < 400) reachableFloors[floorCount++] = curr;
-                }
-                
-                // Expand to neighbors
                 int dx[] = {0, 0, -1, 1};
                 int dy[] = {-1, 1, 0, 0};
-                for(int i = 0; i < 4; i++) {
-                    int nx = cx + dx[i];
-                    int ny = cy + dy[i];
+                for(int d = 0; d < 4; d++) {
+                    int nx = curr.x + dx[d];
+                    int ny = curr.y + dy[d];
                     if (nx >= 0 && nx < RogueSharedData::MAP_W && ny >= 0 && ny < RogueSharedData::MAP_H) {
                         if (!reachable[ny][nx]) {
                             TileType t = _data->map[ny][nx];
-                            // Stop expanding if we hit a wall or our new locked door
                             if (t != TileType::WALL && t != TileType::LOCKED_DOOR) {
                                 reachable[ny][nx] = true;
                                 queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
@@ -186,14 +191,40 @@ void RoguePlayScene::_generateMap() {
                 }
             }
             
-            // 4. Spawn the key strictly within the reachable area
-            if (floorCount > 0) {
-                Coord keyPos = reachableFloors[random(floorCount)];
-                _data->map[keyPos.y][keyPos.x] = TileType::KEY;
-            } else {
-                // Failsafe: Remove the door if the player spawned in a closet with no floors
-                _data->map[door.y][door.x] = TileType::CORRIDOR;
+            // Check if valid bridge (Stairs are reachable, but some floors are blocked off)
+            if (reachable[sy][sx] && reachableCount < totalFloors) {
+                // 1. Place Key in reachable area
+                Coord validKeys[400]; int validKeyCount = 0;
+                for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+                    for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+                        if (reachable[y][x] && _data->map[y][x] == TileType::FLOOR && (x != _data->player.x || y != _data->player.y)) {
+                            if (validKeyCount < 400) validKeys[validKeyCount++] = {(uint8_t)x, (uint8_t)y};
+                        }
+                    }
+                }
+                
+                if (validKeyCount > 0) {
+                    Coord kp = validKeys[random(validKeyCount)];
+                    _data->map[kp.y][kp.x] = TileType::KEY;
+                    
+                    // 2. Place Chest in isolated area to guarantee reward
+                    Coord validChests[400]; int validChestCount = 0;
+                    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+                        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+                            if (!reachable[y][x] && _data->map[y][x] == TileType::FLOOR) {
+                                if (validChestCount < 400) validChests[validChestCount++] = {(uint8_t)x, (uint8_t)y};
+                            }
+                        }
+                    }
+                    if (validChestCount > 0) {
+                        Coord cp = validChests[random(validChestCount)];
+                        _data->map[cp.y][cp.x] = TileType::CHEST;
+                    }
+                    break; // Successfully placed door!
+                }
             }
+            // Revert if not a valid choke point
+            _data->map[c.y][c.x] = TileType::CORRIDOR;
         }
     }
 
@@ -1591,6 +1622,18 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
     
     if (_msgTimer > 0) _msgTimer--;
 
+    // --- Discard Item ---
+    if (ctx.justPressed(Btn::RIGHT)) {
+        if (_data->inventory[_cursor].type != ItemType::NONE) {
+            _data->inventory[_cursor].count--;
+            if (_data->inventory[_cursor].count <= 0) _data->inventory[_cursor].type = ItemType::NONE;
+            _cleanInventory();
+            snprintf(_msg, sizeof(_msg), "Discarded!");
+            _msgTimer = 40;
+            ctx.beep(200, 100); // Crunch sound
+        }
+    }
+
     if (ctx.justPressed(Btn::A)) {
         Item& item = _data->inventory[_cursor];
         if (item.type != ItemType::NONE) {
@@ -1618,23 +1661,41 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                     ctx.sfxMenuEnter();
                 }
             } else if (item.type == ItemType::DAGGER || item.type == ItemType::SWORD || item.type == ItemType::AXE) {
-                Item temp = _data->equippedWeapon;
-                _data->equippedWeapon = item;
-                _data->inventory[_cursor] = temp;
-                recalcStats(_data);
-                snprintf(_msg, sizeof(_msg), "Equipped Weapon!");
-                _data->inventoryTurnUsed = true;
-                ctx.sfxPoint();
-                _msgTimer = 60;
+                if (_data->equippedWeapon.type == item.type) {
+                    _data->equippedWeapon.level += item.level + 1; // Merge!
+                    recalcStats(_data);
+                    snprintf(_msg, sizeof(_msg), "Weapons Merged!");
+                    ctx.beep(1200, 40); ctx.beep(1500, 60);
+                    consumed = true;
+                    _data->inventoryTurnUsed = true;
+                } else {
+                    Item temp = _data->equippedWeapon;
+                    _data->equippedWeapon = item;
+                    _data->inventory[_cursor] = temp;
+                    recalcStats(_data);
+                    snprintf(_msg, sizeof(_msg), "Equipped Weapon!");
+                    _data->inventoryTurnUsed = true;
+                    ctx.sfxPoint();
+                    _msgTimer = 60;
+                }
             } else if (item.type == ItemType::LEATHER || item.type == ItemType::CHAINMAIL || item.type == ItemType::PLATE) {
-                Item temp = _data->equippedArmor;
-                _data->equippedArmor = item;
-                _data->inventory[_cursor] = temp;
-                recalcStats(_data);
-                snprintf(_msg, sizeof(_msg), "Equipped Armor!");
-                _data->inventoryTurnUsed = true;
-                ctx.sfxPoint();
-                _msgTimer = 60;
+                if (_data->equippedArmor.type == item.type) {
+                    _data->equippedArmor.level += item.level + 1; // Merge!
+                    recalcStats(_data);
+                    snprintf(_msg, sizeof(_msg), "Armors Merged!");
+                    ctx.beep(1200, 40); ctx.beep(1500, 60);
+                    consumed = true;
+                    _data->inventoryTurnUsed = true;
+                } else {
+                    Item temp = _data->equippedArmor;
+                    _data->equippedArmor = item;
+                    _data->inventory[_cursor] = temp;
+                    recalcStats(_data);
+                    snprintf(_msg, sizeof(_msg), "Equipped Armor!");
+                    _data->inventoryTurnUsed = true;
+                    ctx.sfxPoint();
+                    _msgTimer = 60;
+                }
             } else if (item.type == ItemType::THROWING_DART) {
                 sm.pop(ctx);
                 RoguePlayScene* play = (RoguePlayScene*)sm.current(); // Assuming Play is under inventory
@@ -1670,7 +1731,7 @@ void RogueInventoryScene::draw(Console& ctx) {
     
     ctx.setFont(u8g2_font_5x7_tf);
     ctx.setDrawColor(0);
-    ctx.drawStr(bx + 4, by + 7, "GEAR & PACK");
+    ctx.drawStr(bx + 4, by + 7, "PACK  [>]Drop");
     int exitW = ctx.strWidth("[B]Exit");
     ctx.drawStr(bx + bw - exitW - 2, by + 7, "[B]Exit");
     
