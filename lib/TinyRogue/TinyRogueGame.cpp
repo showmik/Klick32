@@ -35,6 +35,11 @@ static const char* getItemName(ItemType t) {
 static void recalcStats(RogueSharedData* _data) {
     _data->player.attack = _data->player.baseAttack + getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level;
     _data->player.defense = _data->player.baseDefense + getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level;
+    
+    // Sword: +1 Passive Defense (Parrying)
+    if (_data->equippedWeapon.type == ItemType::SWORD) {
+        _data->player.defense += 1;
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -111,6 +116,15 @@ void RoguePlayScene::_spawnHitEffect(int gridX, int gridY) {
 void RoguePlayScene::_generateMap() {
     // 1. Reset Fog of War
     memset(_data->explored, 0, sizeof(_data->explored));
+
+    // Roll for Level Mutator (15% chance, except on Boss levels)
+    _data->currentMutator = LevelMutator::NONE;
+    if (_data->currentDepth % 5 != 0 && random(100) < 15) {
+        int m = random(3);
+        if (m == 0) _data->currentMutator = LevelMutator::PITCH_BLACK;
+        else if (m == 1) _data->currentMutator = LevelMutator::INFESTED;
+        else if (m == 2) _data->currentMutator = LevelMutator::TREASURE_TROVE;
+    }
 
     // 2. Biomes and Boss Arenas
     if (_data->currentDepth % 5 == 0) {
@@ -232,6 +246,18 @@ void RoguePlayScene::_generateMap() {
     _spawnMonsters();
     _updateCamera(true); 
     isAiming = false;
+
+    // Display Level Entry Message
+    if (_data->currentMutator == LevelMutator::PITCH_BLACK) {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Pitch Black...");
+    } else if (_data->currentMutator == LevelMutator::INFESTED) {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Infested!");
+    } else if (_data->currentMutator == LevelMutator::TREASURE_TROVE) {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Treasure Trove!");
+    } else {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Floor %d", _data->currentDepth);
+    }
+    _hudMessageTimer = 80;
 }
 
 void RoguePlayScene::_generateBSPMap() {
@@ -326,7 +352,8 @@ void RoguePlayScene::_generateBSPMap() {
         _data->map[lastRoom.y + lastRoom.h / 2][lastRoom.x + lastRoom.w / 2] = TileType::STAIRS_DOWN;
         
         for (int i = 1; i < leafCount - 1; i++) {
-            if (random(100) < 30) {
+            int chestChance = (_data->currentMutator == LevelMutator::TREASURE_TROVE) ? 60 : 30;
+            if (random(100) < chestChance) {
                 Rect r = nodes[leafIndices[i]].room;
                 _data->map[r.y + 1][r.x + 1] = TileType::CHEST;
             }
@@ -353,6 +380,7 @@ void RoguePlayScene::_generateBSPMap() {
 
     // Spawn Spikes
     int numSpikes = random(2, 7);
+    if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numSpikes *= 2;
     for (int i = 0; i < numSpikes; i++) {
         int sx, sy;
         do {
@@ -475,6 +503,7 @@ void RoguePlayScene::_generateCaveMap() {
 
     // Spawn Spikes
     int numSpikes = random(2, 7);
+    if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numSpikes *= 2;
     for (int i = 0; i < numSpikes; i++) {
         int sx, sy;
         do {
@@ -526,6 +555,8 @@ void RoguePlayScene::_spawnMonsters() {
     }
 
     int targetMonsters = (_data->currentDepth * 2) + 6;
+    if (_data->currentMutator == LevelMutator::INFESTED) targetMonsters *= 2;
+    
     if (targetMonsters > RogueSharedData::MAX_MONSTERS) {
         targetMonsters = RogueSharedData::MAX_MONSTERS;
     }
@@ -557,7 +588,9 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[i].attack = 1 + (_data->currentDepth / 2);
         _data->monsters[i].alert = false;
 
-        if (_data->currentDepth < 5) {
+        if (_data->currentMutator == LevelMutator::INFESTED) {
+            _data->monsters[i].type = (random(2) == 0) ? MonsterType::RAT : MonsterType::BAT;
+        } else if (_data->currentDepth < 5) {
             // Sewers
             int r = random(3);
             if (r == 0) _data->monsters[i].type = MonsterType::RAT;
@@ -763,7 +796,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                         
                         bool leveledUp = false;
                         while (_data->player.xp >= _data->player.level * 15) {
-                            _data->player.xp -= _data->player.level * 10;
+                            _data->player.xp -= _data->player.level * 15;
                             _data->player.level++;
                             _data->player.maxHp += 5;
                             _data->player.hp = _data->player.maxHp; 
@@ -979,34 +1012,72 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
     if (targetMonster) {
         int dmg = _data->player.attack;
         bool crit = false;
-        
+
         if (!targetMonster->alert) {
             crit = true; // Guaranteed Sneak Attack!
             targetMonster->alert = true;
             snprintf(_hudMessage, sizeof(_hudMessage), "Sneak Attack!");
             _hudMessageTimer = 40;
         } else {
-            crit = (random(100) < 20);
+            // Dagger: 40% Critical Hit chance
+            int critChance = (_data->equippedWeapon.type == ItemType::DAGGER) ? 40 : 20;
+            crit = (random(100) < critChance);
         }
-        
+
         if (crit) dmg *= 2;
-        
+
         targetMonster->hp -= dmg;
         _camera->shake(crit ? 6 : 3); 
         _spawnHitEffect(targetX, targetY);
         ctx.beep(crit ? 1500 : 1000, 20); 
-        
-        if (targetMonster->hp <= 0) {
-            targetMonster->active = false;
-            _data->player.xp += targetMonster->maxHp;
-            
-            // Bloodlust heal
-            _data->player.hp++;
-            if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
-            
+
+        // Axe: Cleave Attack (50% damage to adjacent enemies)
+        if (_data->equippedWeapon.type == ItemType::AXE) {
+            int cleaveDmg = dmg / 2;
+            if (cleaveDmg < 1) cleaveDmg = 1;
+            bool cleaved = false;
+            for (auto& m : _data->monsters) {
+                if (m.active && &m != targetMonster) {
+                    // Check if adjacent to the primary target
+                    if (abs(m.x - targetX) <= 1 && abs(m.y - targetY) <= 1) {
+                        m.hp -= cleaveDmg;
+                        _spawnHitEffect(m.x, m.y);
+                        m.alert = true;
+                        cleaved = true;
+                    }
+                }
+            }
+            if (cleaved) ctx.beep(1200, 30);
+        }
+
+        // Check for deaths (Primary target + Cleaved targets)
+        int xpGained = 0;
+        bool bossDefeated = false;
+        int bossX = 0, bossY = 0;
+
+        for (auto& m : _data->monsters) {
+            if (m.active && m.hp <= 0) {
+                m.active = false;
+                xpGained += m.maxHp;
+
+                // Bloodlust heal
+                _data->player.hp++;
+                if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
+
+                if (m.type == MonsterType::BOSS) {
+                    bossDefeated = true;
+                    bossX = m.x;
+                    bossY = m.y;
+                }
+            }
+        }
+
+        if (xpGained > 0) {
+            _data->player.xp += xpGained;
+
             bool leveledUp = false;
             while (_data->player.xp >= _data->player.level * 15) {
-                _data->player.xp -= _data->player.level * 10;
+                _data->player.xp -= _data->player.level * 15;
                 _data->player.level++;
                 _data->player.maxHp += 5;
                 _data->player.hp = _data->player.maxHp; 
@@ -1019,10 +1090,10 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 _hudMessageTimer = 60;
                 ctx.beep(800, 100); ctx.beep(1200, 150);
             }
-            if (targetMonster->type == MonsterType::BOSS) {
-                _data->map[targetMonster->y][targetMonster->x] = TileType::STAIRS_DOWN;
-                if (_data->map[targetMonster->y + 1][targetMonster->x] == TileType::FLOOR) {
-                    _data->map[targetMonster->y + 1][targetMonster->x] = TileType::CHEST;
+            if (bossDefeated) {
+                _data->map[bossY][bossX] = TileType::STAIRS_DOWN;
+                if (_data->map[bossY + 1][bossX] == TileType::FLOOR) {
+                    _data->map[bossY + 1][bossX] = TileType::CHEST;
                 }
                 snprintf(_hudMessage, sizeof(_hudMessage), "Boss Defeated!");
                 _hudMessageTimer = 80;
@@ -1030,8 +1101,7 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             }
         }
         return finalizeTurn();
-    }
-    else if (targetTile == TileType::LOCKED_DOOR) {
+    }    else if (targetTile == TileType::LOCKED_DOOR) {
         if (_data->keys > 0) {
             _data->keys--;
             _data->map[targetY][targetX] = TileType::CORRIDOR; // Remove door
@@ -1124,6 +1194,7 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         } else {
             _data->map[targetY][targetX] = TileType::FLOOR; 
             int amount = 10 + (15 * _data->currentDepth);
+            if (_data->currentMutator == LevelMutator::TREASURE_TROVE) amount *= 2;
             _data->gold += amount;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found %d Gold", amount);
             _hudMessageTimer = 60;
@@ -1161,6 +1232,7 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 
         if (targetTile == TileType::SPIKE) {
             int spikeDmg = 2 + (_data->currentDepth / 3);
+            if (_data->currentMutator == LevelMutator::TREASURE_TROVE) spikeDmg *= 2;
             _data->player.hp -= spikeDmg;
             _camera->shake(4);
             ctx.sfxDeath();
@@ -1486,7 +1558,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 
             int distX = abs(mapX - _data->player.x);
             int distY = abs(mapY - _data->player.y);
-            bool inSight = (distX * distX + distY * distY <= 20); 
+            int sightRadius = (_data->currentMutator == LevelMutator::PITCH_BLACK) ? 5 : 20;
+            bool inSight = (distX * distX + distY * distY <= sightRadius); 
             
             if (inSight) _data->explored[mapY][mapX] = true;
             if (!_data->explored[mapY][mapX]) continue; 

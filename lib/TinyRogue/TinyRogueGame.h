@@ -29,6 +29,10 @@ enum class MonsterType : uint8_t {
     RAT, BAT, GOBLIN, ORC, SKELETON, TROLL, BOSS 
 };
 
+enum class LevelMutator : uint8_t {
+    NONE, PITCH_BLACK, INFESTED, TREASURE_TROVE
+};
+
 struct Entity {
     int x = 0;
     int y = 0;
@@ -52,7 +56,7 @@ struct Monster : public Entity {
 struct RogueSharedData {
     static constexpr int MAP_W = 32;
     static constexpr int MAP_H = 32;
-    static constexpr int MAX_MONSTERS = 15;
+    static constexpr int MAX_MONSTERS = 25; // Increased to support Infested mutator
 
     TileType map[MAP_H][MAP_W];
     bool explored[MAP_H][MAP_W]; // Fog of War tracking
@@ -65,6 +69,7 @@ struct RogueSharedData {
     uint32_t turnCount = 0;
     uint8_t keys = 0;
     bool inventoryTurnUsed = false;
+    LevelMutator currentMutator = LevelMutator::NONE;
     
     static constexpr int MAX_INVENTORY = 6;
     Item inventory[MAX_INVENTORY];
