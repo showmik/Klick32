@@ -2014,80 +2014,98 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void RogueInventoryScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
+    
     int bx = 2, by = 2, bw = 124, bh = 60;
     
+    // Main Window Background & Border
     ctx.setDrawColor(0);
-    ctx.drawBox(bx + 2, by + 2, bw, bh);
-    ctx.setDrawColor(0);
-    ctx.drawBox(bx, by, bw, bh);
+    ctx.drawBox(bx + 2, by + 2, bw, bh); // Drop Shadow
+    ctx.drawBox(bx, by, bw, bh);         // Background Fill
     ctx.setDrawColor(1);
-    ctx.drawFrame(bx, by, bw, bh);
-    ctx.setDrawColor(1);
-    ctx.drawBox(bx, by, bw, 9);
+    ctx.drawFrame(bx, by, bw, bh);       // Main Border
     
+    // Header
+    ctx.drawBox(bx, by, bw, 9);          // Header inverted bg
     ctx.setFont(u8g2_font_5x7_tf);
-    ctx.setDrawColor(0);
-    ctx.drawStr(bx + 4, by + 7, "PACK");
+    ctx.setDrawColor(0);                 // Black text on white header
+    ctx.drawStr(bx + 4, by + 7, "INVENTORY");
     int exitW = ctx.strWidth("[B]Exit");
     ctx.drawStr(bx + bw - exitW - 2, by + 7, "[B]Exit");
     
-    ctx.setDrawColor(1);
+    ctx.setDrawColor(1); // Back to white on black
 
-    // Draw Equipped Gear with Stats
+    auto getShortName = [](ItemType type) -> const char* {
+        switch (type) {
+            case ItemType::CHAINMAIL: return "Chain";
+            case ItemType::LEATHER: return "Lthr";
+            case ItemType::DAGGER: return "Dagr";
+            case ItemType::SWORD: return "Swrd";
+            case ItemType::AXE: return "Axe";
+            case ItemType::SCROLL_UPGRADE: return "Upg Scrl";
+            case ItemType::RING_VAMPIRE: return "Vamp Rg";
+            case ItemType::RING_WEALTH: return "Wlth Rg";
+            case ItemType::RING_OWL: return "Owl Rg";
+            case ItemType::RING_BERSERKER: return "Bersk Rg";
+            case ItemType::THROWING_DART: return "Dart";
+            default: return getItemName(type);
+        }
+    };
+
+    // --- Section 1: Equipped Gear ---
     char wStr[32];
     if (_data->equippedWeapon.type != ItemType::NONE) {
-        snprintf(wStr, sizeof(wStr), "W: %s+%d (+%d)", getItemName(_data->equippedWeapon.type), _data->equippedWeapon.level, getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level);
+        snprintf(wStr, sizeof(wStr), "%s+%d(+%d)", getShortName(_data->equippedWeapon.type), _data->equippedWeapon.level, getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level);
     } else {
-        strcpy(wStr, "W: - None -");
+        strcpy(wStr, "None");
     }
-    ctx.drawStr(bx + 4, by + 16, wStr);
+    ctx.drawBitmap(bx + 4, by + 11, 1, 8, spr_icon_sword);
+    ctx.drawStr(bx + 14, by + 18, wStr);
 
     char aStr[32];
     if (_data->equippedArmor.type != ItemType::NONE) {
-        snprintf(aStr, sizeof(aStr), "A: %s+%d (+%d)", getItemName(_data->equippedArmor.type), _data->equippedArmor.level, getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level);
+        snprintf(aStr, sizeof(aStr), "%s+%d(+%d)", getShortName(_data->equippedArmor.type), _data->equippedArmor.level, getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level);
     } else {
-        strcpy(aStr, "A: - None -");
+        strcpy(aStr, "None");
     }
-    ctx.drawStr(bx + 4, by + 24, aStr);
+    ctx.drawBitmap(bx + 4, by + 20, 1, 8, spr_icon_shield);
+    ctx.drawStr(bx + 14, by + 27, aStr);
 
     char acStr[32];
     if (_data->equippedAccessory.type != ItemType::NONE) {
-        snprintf(acStr, sizeof(acStr), "Ac: %s", getItemName(_data->equippedAccessory.type));
+        snprintf(acStr, sizeof(acStr), "Ac:%s", getShortName(_data->equippedAccessory.type));
     } else {
-        strcpy(acStr, "Ac: - None -");
+        strcpy(acStr, "Ac:None");
     }
-    ctx.drawStr(bx + 64, by + 16, acStr);
+    ctx.drawStr(bx + 64, by + 18, acStr);
     
-    ctx.drawHLine(bx, by + 27, bw);
+    // Gold & Keys
+    char gStr[32];
+    snprintf(gStr, sizeof(gStr), "G:%d K:%d", _data->gold, _data->keys);
+    ctx.drawStr(bx + 64, by + 27, gStr);
+    
+    // Separator line
+    ctx.drawHLine(bx, by + 30, bw);
 
-    // Draw 6 inventory items in a 2-Column x 3-Row grid
+    // --- Section 2: Pack Grid ---
     for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
         int col = i % 2;
         int row = i / 2;
-        int itemX = bx + 4 + (col * 60); // Split 124 width into two 60px columns
-        int itemY = by + 36 + (row * 9);
+        int itemX = bx + 4 + (col * 60); 
+        int itemY = by + 38 + (row * 9);
         
-        if (i == _cursor) {
-            ctx.drawStr(itemX, itemY, ">");
+        bool isFocused = (i == _cursor && !_itemMenuOpen && !_upgrading);
+        
+        if (isFocused) {
+            ctx.drawBox(itemX - 2, itemY - 7, 58, 9);
+            ctx.setDrawColor(0); // Invert text color
         }
         
         Item& item = _data->inventory[i];
         char nameBuf[32];
         if (item.type == ItemType::NONE) {
-            strcpy(nameBuf, "Empty");
+            strcpy(nameBuf, "- Empty -");
         } else {
-            // Abbreviate slightly so it fits in the column
-            const char* shortName = getItemName(item.type);
-            if (item.type == ItemType::CHAINMAIL) shortName = "Chain";
-            else if (item.type == ItemType::LEATHER) shortName = "Lthr";
-            else if (item.type == ItemType::DAGGER) shortName = "Dagr";
-            else if (item.type == ItemType::SWORD) shortName = "Swrd";
-            else if (item.type == ItemType::SCROLL_UPGRADE) shortName = "Upg";
-            else if (item.type == ItemType::RING_VAMPIRE) shortName = "VampR";
-            else if (item.type == ItemType::RING_WEALTH) shortName = "WlthR";
-            else if (item.type == ItemType::RING_OWL) shortName = "OwlR";
-            else if (item.type == ItemType::RING_BERSERKER) shortName = "BrskR";
-
+            const char* shortName = getShortName(item.type);
             int atk = getWeaponAttack(item.type);
             int def = getArmorDefense(item.type);
             
@@ -2095,47 +2113,81 @@ void RogueInventoryScene::draw(Console& ctx) {
             else snprintf(nameBuf, sizeof(nameBuf), "%s x%d", shortName, item.count);
         }
         
-        ctx.drawStr(itemX + 6, itemY, nameBuf);
+        // Center text slightly if empty, or align left if item
+        if (item.type == ItemType::NONE) {
+             int nw = ctx.strWidth(nameBuf);
+             ctx.drawStr(itemX + (54 - nw)/2, itemY, nameBuf);
+        } else {
+             ctx.drawStr(itemX + 2, itemY, nameBuf);
+        }
+        
+        if (isFocused) {
+            ctx.setDrawColor(1); // Restore white
+        }
     }
 
+    // --- Overlays (Action Menu, Upgrading, Messages) ---
     if (_upgrading) {
+        int mx = 24, my = 14, mw = 80, mh = 36;
         ctx.setDrawColor(0);
-        ctx.drawBox(24, 14, 80, 36);
+        ctx.drawBox(mx + 2, my + 2, mw, mh); // shadow
+        ctx.drawBox(mx, my, mw, mh);         // bg
         ctx.setDrawColor(1);
-        ctx.drawFrame(24, 14, 80, 36);
-        ctx.drawStr(28, 23, "Upgrade:");
-        ctx.drawStr(38, 34, "Weapon");
-        ctx.drawStr(38, 44, "Armor");
-        ctx.drawStr(28, 34 + (_upgradeSelect * 10), ">");
+        ctx.drawFrame(mx, my, mw, mh);       // frame
+        
+        int tw = ctx.strWidth("Upgrade Target:");
+        ctx.drawStr(mx + (mw - tw)/2, my + 9, "Upgrade Target:");
+        
+        for (int i = 0; i < 2; i++) {
+            int optY = my + 20 + (i * 11);
+            if (_upgradeSelect == i) {
+                ctx.drawBox(mx + 2, optY - 7, mw - 4, 10);
+                ctx.setDrawColor(0);
+            }
+            const char* optStr = (i == 0) ? "Weapon" : "Armor";
+            int optW = ctx.strWidth(optStr);
+            ctx.drawStr(mx + (mw - optW)/2, optY + 1, optStr);
+            if (_upgradeSelect == i) ctx.setDrawColor(1);
+        }
     }
-
-    if (_itemMenuOpen) {
+    else if (_itemMenuOpen) {
+        int mx = 38, my = 22, mw = 52, mh = 26;
         ctx.setDrawColor(0);
-        ctx.drawBox(38, 20, 52, 28);
+        ctx.drawBox(mx + 2, my + 2, mw, mh); // shadow
+        ctx.drawBox(mx, my, mw, mh);         // bg
         ctx.setDrawColor(1);
-        ctx.drawFrame(38, 20, 52, 28);
+        ctx.drawFrame(mx, my, mw, mh);       // frame
         
         Item& item = _data->inventory[_cursor];
         const char* actStr = "Use";
         if (item.type >= ItemType::DAGGER && item.type <= ItemType::AXE) {
-            if (_data->equippedWeapon.type == item.type) actStr = "Merge";
-            else actStr = "Equip";
+            actStr = (_data->equippedWeapon.type == item.type) ? "Merge" : "Equip";
         } else if (item.type >= ItemType::LEATHER && item.type <= ItemType::PLATE) {
-            if (_data->equippedArmor.type == item.type) actStr = "Merge";
-            else actStr = "Equip";
+            actStr = (_data->equippedArmor.type == item.type) ? "Merge" : "Equip";
         } else if (item.type >= ItemType::RING_VAMPIRE && item.type <= ItemType::RING_BERSERKER) {
             actStr = "Equip";
         }
         
-        ctx.drawStr(48, 30, actStr);
-        ctx.drawStr(48, 42, "Discard");
-        ctx.drawStr(40, 30 + (_itemMenuCursor * 12), ">");
-    } else if (_msgTimer > 0) {
-        ctx.setDrawColor(0);
-        ctx.drawBox(bx + 2, by + bh - 12, bw - 4, 10);
+        for (int i = 0; i < 2; i++) {
+            int optY = my + 10 + (i * 11);
+            if (_itemMenuCursor == i) {
+                ctx.drawBox(mx + 2, optY - 7, mw - 4, 10);
+                ctx.setDrawColor(0);
+            }
+            const char* str = (i == 0) ? actStr : "Discard";
+            int tw = ctx.strWidth(str);
+            ctx.drawStr(mx + (mw - tw)/2, optY + 1, str);
+            if (_itemMenuCursor == i) ctx.setDrawColor(1);
+        }
+    } 
+    else if (_msgTimer > 0) {
         ctx.setDrawColor(1);
+        ctx.drawBox(bx + 4, by + bh - 14, bw - 8, 11); // solid white box
+        ctx.setDrawColor(0);                           // black text
         int mw = ctx.strWidth(_msg);
-        ctx.drawStr(bx + (bw - mw)/2, by + bh - 4, _msg);
+        ctx.drawStr(bx + (bw - mw)/2, by + bh - 6, _msg);
+        ctx.setDrawColor(1);
+        ctx.drawFrame(bx + 4, by + bh - 14, bw - 8, 11);
     }
 }
 
