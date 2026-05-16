@@ -173,7 +173,7 @@ static const uint8_t PROGMEM spr_rogue_chest[8] = {
 };
 
 // Rat: Low-profile, grounded triangle
-static static const uint8_t PROGMEM spr_rogue_rat[8] = {
+static const uint8_t PROGMEM spr_rogue_rat[8] = {
     0x00,
     0x1B,
     0x0E,
@@ -233,7 +233,7 @@ static const uint8_t PROGMEM spr_rogue_merchant[8] = {
 };
 
 // Orc: Wide, horned silhouette
-const uint8_t PROGMEM spr_rogue_orc[] = {
+static const uint8_t PROGMEM spr_rogue_orc[8] = {
   0x28,
   0x44,
   0x38,
@@ -250,7 +250,7 @@ static const uint8_t PROGMEM spr_rogue_troll[8] = {
 };
 
 // Spikes: Floor trap
-const uint8_t PROGMEM spr_rogue_spike[8] = {
+static const uint8_t PROGMEM spr_rogue_spike[8] = {
   0x00,
   0x20,
   0x20,

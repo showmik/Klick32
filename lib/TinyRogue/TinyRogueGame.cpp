@@ -497,7 +497,7 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[0].type = MonsterType::BOSS;
         _data->monsters[0].x = 16;
         _data->monsters[0].y = 12;
-        _data->monsters[0].maxHp = 25 + (_data->currentDepth * 5);
+        _data->monsters[0].maxHp = 30 + (_data->currentDepth * 6);
         _data->monsters[0].hp = _data->monsters[0].maxHp;
         _data->monsters[0].attack = 3 + (_data->currentDepth / 2);
         _data->monsters[0].alert = true;
@@ -531,9 +531,9 @@ void RoguePlayScene::_spawnMonsters() {
         _data->monsters[i].x = mx;
         _data->monsters[i].y = my;
         _data->monsters[i].active = true;
-        _data->monsters[i].hp = 4 + _data->currentDepth;
+        _data->monsters[i].hp = 4 + (_data->currentDepth * 2);
         _data->monsters[i].maxHp = _data->monsters[i].hp;
-        _data->monsters[i].attack = 1 + (_data->currentDepth / 3);
+        _data->monsters[i].attack = 1 + (_data->currentDepth / 2);
         _data->monsters[i].alert = false;
 
         if (_data->currentDepth < 5) {
@@ -661,7 +661,9 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 
                 Monster* m = _getMonsterAt(aimX, aimY);
                 if (m) {
-                    m->hp -= 3;
+                    int dartDamage = _data->player.baseAttack * 2;
+                    if (dartDamage < 3) dartDamage = 3;
+                    m->hp -= dartDamage;
                     _spawnHitEffect(aimX, aimY);
                     ctx.beep(1200, 30);
                     
@@ -669,8 +671,12 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                         m->active = false;
                         _data->player.xp += m->maxHp;
                         
+                        // Bloodlust heal
+                        _data->player.hp++;
+                        if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
+                        
                         bool leveledUp = false;
-                        while (_data->player.xp >= _data->player.level * 10) {
+                        while (_data->player.xp >= _data->player.level * 15) {
                             _data->player.xp -= _data->player.level * 10;
                             _data->player.level++;
                             _data->player.maxHp += 5;
@@ -856,10 +862,7 @@ void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
 bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy) {
     auto finalizeTurn = [&]() {
         _data->turnCount++; 
-        // Passive HP Regeneration (1 HP every 20 turns)
-        if (_data->turnCount % 20 == 0 && _data->player.hp < _data->player.maxHp) {
-            _data->player.hp++;
-        }
+        // Removed passive HP Regeneration - healing now requires combat or items
         return true;
     };
 
@@ -911,8 +914,12 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             targetMonster->active = false;
             _data->player.xp += targetMonster->maxHp;
             
+            // Bloodlust heal
+            _data->player.hp++;
+            if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
+            
             bool leveledUp = false;
-            while (_data->player.xp >= _data->player.level * 10) {
+            while (_data->player.xp >= _data->player.level * 15) {
                 _data->player.xp -= _data->player.level * 10;
                 _data->player.level++;
                 _data->player.maxHp += 5;
@@ -965,9 +972,10 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
                 if (!m.active) {
                     m.x = targetX; m.y = targetY;
                     m.active = true;
-                    m.hp = 10 + (_data->currentDepth * 3);
+                    m.hp = 10 + (_data->currentDepth * 5);
                     m.maxHp = m.hp;
-                    m.attack = _data->player.attack + 1; 
+                    m.attack = _data->player.attack; 
+                    if (m.attack < 1) m.attack = 1;
                     m.type = MonsterType::GOBLIN; 
                     break;
                 }
@@ -1028,7 +1036,7 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
             ctx.beep(800, 40); ctx.beep(1200, 60);
         } else {
             _data->map[targetY][targetX] = TileType::FLOOR; 
-            int amount = 15 * _data->currentDepth;
+            int amount = 10 + (15 * _data->currentDepth);
             _data->gold += amount;
             snprintf(_hudMessage, sizeof(_hudMessage), "Found %d Gold", amount);
             _hudMessageTimer = 60;
@@ -1047,16 +1055,18 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
 
         if (targetTile == TileType::TALL_GRASS) {
             _data->map[targetY][targetX] = TileType::FLOOR; // Trample the grass
-            if (random(100) < 15 && _data->player.hp < _data->player.maxHp) {
-                _data->player.hp++;
-                snprintf(_hudMessage, sizeof(_hudMessage), "Dewdrop: +1 HP");
+            if (random(100) < 20 && _data->player.hp < _data->player.maxHp) {
+                _data->player.hp += 2;
+                if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
+                snprintf(_hudMessage, sizeof(_hudMessage), "Dewdrop: +2 HP");
                 _hudMessageTimer = 40;
                 ctx.beep(1000, 30);
             }
         }
 
         if (targetTile == TileType::SPIKE) {
-            _data->player.hp -= 2;
+            int spikeDmg = 2 + (_data->currentDepth / 3);
+            _data->player.hp -= spikeDmg;
             _camera->shake(4);
             ctx.sfxDeath();
             snprintf(_hudMessage, sizeof(_hudMessage), "Stepped on Spikes!");
