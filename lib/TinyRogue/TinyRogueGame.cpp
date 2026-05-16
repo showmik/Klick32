@@ -74,6 +74,7 @@ void RogueTitleScene::draw(Console& ctx) {
 void RoguePlayScene::onEnter(Console& ctx) {
     _descending = false;
     _fadeTimer = 0;
+    _altarMenuOpen = false;
     if (_resumed) {
         _resumed = false;
         recalcStats(_data);
@@ -340,6 +341,16 @@ void RoguePlayScene::_generateBSPMap() {
     } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
     _data->map[my][mx] = TileType::MERCHANT;
 
+    // Spawn Altar (30% chance per floor)
+    if (random(100) < 30) {
+        int ax, ay;
+        do {
+            ax = random(1, RogueSharedData::MAP_W - 1);
+            ay = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
+        _data->map[ay][ax] = TileType::ALTAR;
+    }
+
     // Spawn Spikes
     int numSpikes = random(2, 7);
     for (int i = 0; i < numSpikes; i++) {
@@ -451,6 +462,16 @@ void RoguePlayScene::_generateCaveMap() {
         my = random(1, RogueSharedData::MAP_H - 1);
     } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
     _data->map[my][mx] = TileType::MERCHANT;
+
+    // Spawn Altar (30% chance per floor)
+    if (random(100) < 30) {
+        int ax, ay;
+        do {
+            ax = random(1, RogueSharedData::MAP_W - 1);
+            ay = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
+        _data->map[ay][ax] = TileType::ALTAR;
+    }
 
     // Spawn Spikes
     int numSpikes = random(2, 7);
@@ -604,6 +625,71 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         if (_fadeTimer < 0) return; // Block all inputs while fading in
     }
     // -----------------------------
+
+    if (_altarMenuOpen) {
+        if (ctx.justPressed(Btn::UP) || ctx.justPressed(Btn::DOWN)) {
+            _altarMenuCursor = (_altarMenuCursor == 0) ? 1 : 0;
+            ctx.sfxMenuNav();
+        }
+        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::LEFT)) {
+            _altarMenuOpen = false;
+            ctx.sfxMenuNav();
+        }
+        if (ctx.justPressed(Btn::A)) {
+            if (_altarMenuCursor == 1) { // Leave
+                _altarMenuOpen = false;
+                ctx.sfxMenuNav();
+            } else { // Sacrifice
+                _altarMenuOpen = false;
+                _data->player.hp -= 5;
+                _camera->shake(6);
+                ctx.sfxDeath();
+                
+                if (_data->player.hp <= 0) {
+                    snprintf(_hudMessage, sizeof(_hudMessage), "Fatal Sacrifice!");
+                    _hudMessageTimer = 60;
+                    if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
+                    sm.emit(ctx, Event::GAME_OVER);
+                    return;
+                } else {
+                    int boon = random(3);
+                    if (boon == 0) {
+                        _data->player.baseAttack += 1;
+                        snprintf(_hudMessage, sizeof(_hudMessage), "Boon: +1 Attack!");
+                    } else if (boon == 1) {
+                        _data->player.baseDefense += 1;
+                        snprintf(_hudMessage, sizeof(_hudMessage), "Boon: +1 Defense!");
+                    } else {
+                        bool added = false;
+                        for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                            if(_data->inventory[i].type == ItemType::SCROLL_UPGRADE) {
+                                _data->inventory[i].count++;
+                                added = true; break;
+                            }
+                        }
+                        if(!added) {
+                            for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                                if(_data->inventory[i].type == ItemType::NONE) {
+                                    _data->inventory[i].type = ItemType::SCROLL_UPGRADE;
+                                    _data->inventory[i].count = 1;
+                                    _data->inventory[i].level = 0;
+                                    added = true; break;
+                                }
+                            }
+                        }
+                        if (added) snprintf(_hudMessage, sizeof(_hudMessage), "Boon: Upg Scroll!");
+                        else snprintf(_hudMessage, sizeof(_hudMessage), "Boon Wasted(Pack Full)");
+                    }
+                    recalcStats(_data);
+                    _hudMessageTimer = 60;
+                    _data->map[_activeAltarY][_activeAltarX] = TileType::FLOOR;
+                    
+                    _processMonsterTurns(ctx, sm); // Consumes a turn
+                }
+            }
+        }
+        return;
+    }
 
     if (_data->inventoryTurnUsed) {
         _data->inventoryTurnUsed = false;
@@ -1050,6 +1136,14 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         sm.emit(ctx, Event::CUSTOM_2); // Shop
         return false; 
     }
+    else if (targetTile == TileType::ALTAR) {
+        _altarMenuOpen = true;
+        _altarMenuCursor = 0;
+        _activeAltarX = targetX;
+        _activeAltarY = targetY;
+        ctx.sfxMenuEnter();
+        return false; 
+    }
     else {
         _data->player.x = targetX;
         _data->player.y = targetY;
@@ -1341,6 +1435,23 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.drawStr(keyX + 11, botY + 7, keyBuf);
     }
 
+    if (_altarMenuOpen) {
+        ctx.setCamera(nullptr);
+        ctx.setDrawColor(0);
+        ctx.drawBox(18, 16, 92, 36);
+        ctx.setDrawColor(1);
+        ctx.drawFrame(18, 16, 92, 36);
+        
+        ctx.setFont(u8g2_font_5x7_tf);
+        ctx.drawStr(22, 25, "Blood Altar:");
+        ctx.drawStr(22, 33, "-5 HP for a Boon?");
+        
+        ctx.drawStr(32, 43, "Sacrifice");
+        ctx.drawStr(32, 51, "Leave");
+        
+        ctx.drawStr(24, 43 + (_altarMenuCursor * 8), ">");
+    }
+
     // Draw Cinematic Fade Effect
     if (_descending || _fadeTimer < 0) {
         // Calculate progress from 0 (open) to 20 (closed)
@@ -1403,8 +1514,9 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_key);
             } else if (t == TileType::LOCKED_DOOR) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_door);
+            } else if (t == TileType::ALTAR) {
+                ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_altar);
             }
-
             Monster* m = _getMonsterAt(mapX, mapY);
             if (m && inSight) {
                 ctx.setDrawColor(0);

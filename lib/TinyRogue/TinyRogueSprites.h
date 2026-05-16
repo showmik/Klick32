@@ -281,3 +281,8 @@ static const uint8_t PROGMEM spr_rogue_key[8] = {
 static const uint8_t PROGMEM spr_rogue_door[8] = {
     0xFF, 0x81, 0xBD, 0xBD, 0xA5, 0xBD, 0x81, 0xFF
 };
+
+// Altar: A small pedestal with a blood drop
+static const uint8_t PROGMEM spr_rogue_altar[8] = {
+    0x18, 0x3C, 0x18, 0x3C, 0x7E, 0xFF, 0xFF, 0x00
+};

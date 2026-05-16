@@ -22,7 +22,7 @@ struct Item {
 
 enum class TileType : uint8_t { 
     WALL, FLOOR, CORRIDOR, DOOR, STAIRS_DOWN, CHEST, MERCHANT, SPIKE, TALL_GRASS,
-    LOCKED_DOOR, KEY
+    LOCKED_DOOR, KEY, ALTAR
 };
 
 enum class MonsterType : uint8_t { 
@@ -157,7 +157,12 @@ private:
     // Fade Transition State
     bool _descending = false;
     int8_t _fadeTimer = 0; 
-
+    
+    // Altar State
+    bool _altarMenuOpen = false;
+    uint8_t _altarMenuCursor = 0;
+    int _activeAltarX = 0;
+    int _activeAltarY = 0;
     Monster* _getMonsterAt(int x, int y) const;
     void _processMonsterTurns(Console& ctx, SceneManager& sm);
 
