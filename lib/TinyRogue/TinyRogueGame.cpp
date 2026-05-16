@@ -131,12 +131,12 @@ void RoguePlayScene::_generateMap() {
         int lockedSpawned = 0;
         int attempts = 0;
         
-        // Spawn Doors with a timeout to prevent infinite loops
+        // Convert some regular Chests into Locked Chests (Lockboxes)
         while(lockedSpawned < numLocked && attempts < 100) {
             int rx = random(1, RogueSharedData::MAP_W - 1);
             int ry = random(1, RogueSharedData::MAP_H - 1);
-            if(_data->map[ry][rx] == TileType::CORRIDOR) {
-                _data->map[ry][rx] = TileType::LOCKED_DOOR;
+            if(_data->map[ry][rx] == TileType::CHEST) {
+                _data->map[ry][rx] = TileType::LOCKED_DOOR; // Reuses the lockbox sprite
                 lockedSpawned++;
             }
             attempts++;
@@ -566,7 +566,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     int lx = px + (aimX - px) * i / steps;
                     int ly = py + (aimY - py) * i / steps;
                     if (lx < 0 || lx >= RogueSharedData::MAP_W || ly < 0 || ly >= RogueSharedData::MAP_H ||
-                        _data->map[ly][lx] == TileType::WALL || _data->map[ly][lx] == TileType::LOCKED_DOOR) {
+                        _data->map[ly][lx] == TileType::WALL) {
                         hitWall = true; 
                         break;
                     }
@@ -777,20 +777,6 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         _hudMessageTimer = 60;
         ctx.beep(1200, 50);
     }
-    else if (targetTile == TileType::LOCKED_DOOR) {
-        if (_data->keys > 0) {
-            _data->keys--;
-            _data->map[targetY][targetX] = TileType::FLOOR;
-            snprintf(_hudMessage, sizeof(_hudMessage), "Unlocked Door!");
-            _hudMessageTimer = 60;
-            ctx.beep(1000, 100);
-        } else {
-            snprintf(_hudMessage, sizeof(_hudMessage), "Locked!");
-            _hudMessageTimer = 40;
-            ctx.beep(150, 100);
-            return false;
-        }
-    }
 
     if (targetMonster) {
         int dmg = _data->player.attack;
@@ -843,7 +829,20 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
         return finalizeTurn();
     }
-    else if (targetTile == TileType::CHEST) {
+    else if (targetTile == TileType::CHEST || targetTile == TileType::LOCKED_DOOR) {
+        if (targetTile == TileType::LOCKED_DOOR) {
+            if (_data->keys > 0) {
+                _data->keys--;
+                ctx.beep(1000, 100); // Play unlock sound
+            } else {
+                snprintf(_hudMessage, sizeof(_hudMessage), "Locked!");
+                _hudMessageTimer = 40;
+                ctx.beep(150, 100);
+                return false; // Blocks turn if no key
+            }
+        }
+
+        // --- Standard Chest Loot Logic ---
         if (random(100) < 15) {
             _data->map[targetY][targetX] = TileType::FLOOR; 
             snprintf(_hudMessage, sizeof(_hudMessage), "It's a MIMIC!");
