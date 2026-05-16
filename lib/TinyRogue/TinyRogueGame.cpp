@@ -125,34 +125,75 @@ void RoguePlayScene::_generateMap() {
     // 3. Shared Spawning & Setup
     _data->keys = 0;
     
-    // Only spawn doors on non-boss levels (Boss levels have no corridors)
+    // Only spawn doors on non-boss levels
     if (_data->currentDepth % 5 != 0) {
-        int numLocked = random(1, 3);
-        int lockedSpawned = 0;
-        int attempts = 0;
+        struct Coord { uint8_t x, y; };
+        static Coord corridors[200];
+        int corridorCount = 0;
         
-        // Convert some regular Chests into Locked Chests (Lockboxes)
-        while(lockedSpawned < numLocked && attempts < 100) {
-            int rx = random(1, RogueSharedData::MAP_W - 1);
-            int ry = random(1, RogueSharedData::MAP_H - 1);
-            if(_data->map[ry][rx] == TileType::CHEST) {
-                _data->map[ry][rx] = TileType::LOCKED_DOOR; // Reuses the lockbox sprite
-                lockedSpawned++;
+        // 1. Find all eligible corridor choke points
+        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+                if (_data->map[y][x] == TileType::CORRIDOR) {
+                    if (corridorCount < 200) corridors[corridorCount++] = {(uint8_t)x, (uint8_t)y};
+                }
             }
-            attempts++;
         }
-        
-        int keysSpawned = 0;
-        attempts = 0;
-        // Only spawn keys if we successfully spawned doors
-        while(keysSpawned < lockedSpawned && attempts < 100) {
-            int rx = random(1, RogueSharedData::MAP_W - 1);
-            int ry = random(1, RogueSharedData::MAP_H - 1);
-            if(_data->map[ry][rx] == TileType::FLOOR && (rx != _data->player.x || ry != _data->player.y)) {
-                _data->map[ry][rx] = TileType::KEY;
-                keysSpawned++;
+
+        if (corridorCount > 0) {
+            // 2. Pick a random corridor and lock it
+            Coord door = corridors[random(corridorCount)];
+            _data->map[door.y][door.x] = TileType::LOCKED_DOOR;
+            
+            // 3. Flood-Fill from the player's spawn to find accessible tiles
+            // (Using static memory to prevent ESP32 stack overflow)
+            static bool reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
+            memset(reachable, 0, sizeof(reachable));
+            static Coord queue[1024];
+            static Coord reachableFloors[400];
+            
+            int head = 0, tail = 0;
+            int floorCount = 0;
+            
+            queue[tail++] = {(uint8_t)_data->player.x, (uint8_t)_data->player.y};
+            reachable[_data->player.y][_data->player.x] = true;
+            
+            while(head < tail) {
+                Coord curr = queue[head++];
+                int cx = curr.x, cy = curr.y;
+                
+                // Track valid floors for the key to spawn on
+                if (_data->map[cy][cx] == TileType::FLOOR && (cx != _data->player.x || cy != _data->player.y)) {
+                    if (floorCount < 400) reachableFloors[floorCount++] = curr;
+                }
+                
+                // Expand to neighbors
+                int dx[] = {0, 0, -1, 1};
+                int dy[] = {-1, 1, 0, 0};
+                for(int i = 0; i < 4; i++) {
+                    int nx = cx + dx[i];
+                    int ny = cy + dy[i];
+                    if (nx >= 0 && nx < RogueSharedData::MAP_W && ny >= 0 && ny < RogueSharedData::MAP_H) {
+                        if (!reachable[ny][nx]) {
+                            TileType t = _data->map[ny][nx];
+                            // Stop expanding if we hit a wall or our new locked door
+                            if (t != TileType::WALL && t != TileType::LOCKED_DOOR) {
+                                reachable[ny][nx] = true;
+                                queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
+                            }
+                        }
+                    }
+                }
             }
-            attempts++;
+            
+            // 4. Spawn the key strictly within the reachable area
+            if (floorCount > 0) {
+                Coord keyPos = reachableFloors[random(floorCount)];
+                _data->map[keyPos.y][keyPos.x] = TileType::KEY;
+            } else {
+                // Failsafe: Remove the door if the player spawned in a closet with no floors
+                _data->map[door.y][door.x] = TileType::CORRIDOR;
+            }
         }
     }
 
@@ -829,20 +870,22 @@ bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy
         }
         return finalizeTurn();
     }
-    else if (targetTile == TileType::CHEST || targetTile == TileType::LOCKED_DOOR) {
-        if (targetTile == TileType::LOCKED_DOOR) {
-            if (_data->keys > 0) {
-                _data->keys--;
-                ctx.beep(1000, 100); // Play unlock sound
-            } else {
-                snprintf(_hudMessage, sizeof(_hudMessage), "Locked!");
-                _hudMessageTimer = 40;
-                ctx.beep(150, 100);
-                return false; // Blocks turn if no key
-            }
+    else if (targetTile == TileType::LOCKED_DOOR) {
+        if (_data->keys > 0) {
+            _data->keys--;
+            _data->map[targetY][targetX] = TileType::CORRIDOR; // Remove door
+            snprintf(_hudMessage, sizeof(_hudMessage), "Door Unlocked!");
+            _hudMessageTimer = 60;
+            ctx.beep(1000, 100);
+            return finalizeTurn(); // Takes a turn to unlock
+        } else {
+            snprintf(_hudMessage, sizeof(_hudMessage), "Locked!");
+            _hudMessageTimer = 40;
+            ctx.beep(150, 100);
+            return false; // Free action if you bump it without a key
         }
-
-        // --- Standard Chest Loot Logic ---
+    }
+    else if (targetTile == TileType::CHEST) {
         if (random(100) < 15) {
             _data->map[targetY][targetX] = TileType::FLOOR; 
             snprintf(_hudMessage, sizeof(_hudMessage), "It's a MIMIC!");
