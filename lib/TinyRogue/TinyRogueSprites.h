@@ -101,7 +101,7 @@ static const uint8_t PROGMEM spr_rogue_floor[8] = {
 };
 
 
-const uint8_t PROGMEM spr_rogue_grass[8] = {
+static const uint8_t PROGMEM spr_rogue_grass[8] = {
   0x00,
   0x00,
   0x02,
@@ -173,7 +173,7 @@ static const uint8_t PROGMEM spr_rogue_chest[8] = {
 };
 
 // Rat: Low-profile, grounded triangle
-static const uint8_t PROGMEM spr_rogue_rat[8] = {
+static static const uint8_t PROGMEM spr_rogue_rat[8] = {
     0x00,
     0x1B,
     0x0E,
@@ -186,38 +186,38 @@ static const uint8_t PROGMEM spr_rogue_rat[8] = {
 
 // Goblin: Jagged, distinct silhouette
 static const uint8_t PROGMEM spr_rogue_goblin[8] = {
-    0x1C,
-    0x2A,
-    0x1C,
-    0x22,
-    0x5D,
-    0x1C,
-    0x14,
-    0x14,
+  0x3C,
+  0xDB,
+  0x3C,
+  0x00,
+  0x3C,
+  0x5A,
+  0x18,
+  0x24
 };
 
 // Bat: Sharp V-shaped wings, hangs near the top of the tile
-static const uint8_t PROGMEM spr_rogue_bat[8] = {
-    0x24,
-    0x99,
-    0xE7,
-    0x7E,
-    0x18,
-    0x24,
-    0x00,
-    0x00,
+static const uint8_t PROGMEM spr_rogue_bat[] = {
+  0x00,
+  0x24,
+  0x99,
+  0x66,
+  0x3C,
+  0x18,
+  0x24,
+  0x00
 };
 
 // Skeleton: Skull and ribs
-static const uint8_t PROGMEM spr_rogue_skeleton[8] = {
-    0x1C,
-    0x2A,
-    0x3E,
-    0x14,
-    0x3E,
-    0x49,
-    0x1C,
-    0x22,
+const uint8_t PROGMEM spr_rogue_skeleton[8] = {
+  0x3E,
+  0x2A,
+  0x1C,
+  0x22,
+  0x55,
+  0x49,
+  0x1C,
+  0x14
 };
 
 // Merchant: A hooded figure with a gleaming coin
@@ -233,8 +233,15 @@ static const uint8_t PROGMEM spr_rogue_merchant[8] = {
 };
 
 // Orc: Wide, horned silhouette
-static const uint8_t PROGMEM spr_rogue_orc[8] = {
-    0x00, 0x42, 0x7E, 0xFF, 0xDB, 0xFF, 0x42, 0x24
+const uint8_t PROGMEM spr_rogue_orc[] = {
+  0x28,
+  0x44,
+  0x38,
+  0x54,
+  0x38,
+  0x44,
+  0xBA,
+  0x28
 };
 
 // Troll: Large, bulky silhouette
@@ -254,7 +261,7 @@ const uint8_t PROGMEM spr_rogue_spike[8] = {
   0xFF
 };
 // Boss: Giant Skull/Demon shape
-const uint8_t PROGMEM spr_rogue_boss[8] = {
+static const uint8_t PROGMEM spr_rogue_boss[8] = {
   0x7E,
   0xFF,
   0x99,
