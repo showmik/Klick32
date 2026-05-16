@@ -136,24 +136,36 @@ void RoguePlayScene::_generateMap() {
     else if (_data->currentDepth < 10) _data->currentBiome = Biome::PRISON;
     else _data->currentBiome = Biome::DEEP_CAVES;
 
-    // Roll for Level Mutator (15% chance, except on Boss levels)
+    // Roll for Level Mutator (25% chance, except on Boss levels)
     _data->currentMutator = LevelMutator::NONE;
-    if (_data->currentDepth % 5 != 0 && random(100) < 15) {
-        int m = random(3);
+    if (_data->currentDepth % 5 != 0 && random(100) < 25) {
+        int m = random(6);
         if (m == 0) _data->currentMutator = LevelMutator::PITCH_BLACK;
         else if (m == 1) _data->currentMutator = LevelMutator::INFESTED;
         else if (m == 2) _data->currentMutator = LevelMutator::TREASURE_TROVE;
+        else if (m == 3) _data->currentMutator = LevelMutator::FLOODED;
+        else if (m == 4) _data->currentMutator = LevelMutator::OVERGROWN;
+        else if (m == 5) _data->currentMutator = LevelMutator::LABYRINTH;
     }
 
     // 2. Biomes and Boss Arenas
     if (_data->currentDepth % 5 == 0) {
-        _generateBossMap(); // Depths 5, 10, 15...
-    } else if (_data->currentDepth < 5) {
-        _generateCaveMap(); // Sewers
-    } else if (_data->currentDepth < 10) {
-        _generateBSPMap();  // Prison
+        _data->currentBiome = Biome::BOSS_ARENA;
+        _generateBossMap();
     } else {
-        if (random(100) < 50) _generateBSPMap(); else _generateCaveMap(); // Deep Caves
+        if (_data->currentDepth < 5) _data->currentBiome = Biome::SEWERS;
+        else if (_data->currentDepth < 10) _data->currentBiome = Biome::PRISON;
+        else _data->currentBiome = Biome::DEEP_CAVES;
+
+        if (_data->currentMutator == LevelMutator::LABYRINTH) {
+            _generateMazeMap();
+        } else if (_data->currentDepth < 5) {
+            _generateCaveMap();
+        } else if (_data->currentDepth < 10) {
+            _generateBSPMap();
+        } else {
+            if (random(100) < 50) _generateBSPMap(); else _generateCaveMap();
+        }
     }
 
     // 3. Shared Spawning & Setup
@@ -262,6 +274,22 @@ void RoguePlayScene::_generateMap() {
         }
     }
 
+    // Apply Flooded and Overgrown mutators
+    if (_data->currentMutator == LevelMutator::FLOODED || _data->currentMutator == LevelMutator::OVERGROWN) {
+        TileType targetTile = (_data->currentMutator == LevelMutator::FLOODED) ? TileType::WATER : TileType::TALL_GRASS;
+        int chance = (_data->currentMutator == LevelMutator::FLOODED) ? 35 : 45;
+        
+        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+                if (_data->map[y][x] == TileType::FLOOR && (x != _data->player.x || y != _data->player.y)) {
+                    if (random(100) < chance) {
+                        _data->map[y][x] = targetTile;
+                    }
+                }
+            }
+        }
+    }
+
     _spawnMonsters();
     _updateCamera(true); 
     isAiming = false;
@@ -273,6 +301,12 @@ void RoguePlayScene::_generateMap() {
         snprintf(_hudMessage, sizeof(_hudMessage), "Infested!");
     } else if (_data->currentMutator == LevelMutator::TREASURE_TROVE) {
         snprintf(_hudMessage, sizeof(_hudMessage), "Treasure Trove!");
+    } else if (_data->currentMutator == LevelMutator::FLOODED) {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Flooded!");
+    } else if (_data->currentMutator == LevelMutator::OVERGROWN) {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Overgrown!");
+    } else if (_data->currentMutator == LevelMutator::LABYRINTH) {
+        snprintf(_hudMessage, sizeof(_hudMessage), "Labyrinth!");
     } else {
         snprintf(_hudMessage, sizeof(_hudMessage), "Floor %d", _data->currentDepth);
     }
@@ -565,14 +599,90 @@ void RoguePlayScene::_generateCaveMap() {
     }
 }
 
+void RoguePlayScene::_generateMazeMap() {
+    // Fill completely with walls
+    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
+        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
+            _data->map[y][x] = TileType::WALL;
+        }
+    }
+
+    int curX = RogueSharedData::MAP_W / 2;
+    int curY = RogueSharedData::MAP_H / 2;
+    int floorCount = 0;
+    int targetFloors = (RogueSharedData::MAP_W * RogueSharedData::MAP_H) * 0.35f; // Carve 35% of the map
+    
+    _data->player.x = curX;
+    _data->player.y = curY;
+    
+    // Tunnel Digger
+    while(floorCount < targetFloors) {
+        if (_data->map[curY][curX] == TileType::WALL) {
+            _data->map[curY][curX] = TileType::FLOOR;
+            floorCount++;
+        }
+        
+        int dir = random(4);
+        int nx = curX + (dir == 0 ? 1 : (dir == 1 ? -1 : 0));
+        int ny = curY + (dir == 2 ? 1 : (dir == 3 ? -1 : 0));
+        
+        // Keep in bounds with 1 tile padding
+        if (nx > 0 && nx < RogueSharedData::MAP_W - 1 && ny > 0 && ny < RogueSharedData::MAP_H - 1) {
+            curX = nx; 
+            curY = ny;
+        }
+    }
+    
+    // Last position becomes the stairs
+    _data->map[curY][curX] = TileType::STAIRS_DOWN;
+
+    // Spawn 1 Merchant
+    int mx, my;
+    do {
+        mx = random(1, RogueSharedData::MAP_W - 1);
+        my = random(1, RogueSharedData::MAP_H - 1);
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    _data->map[my][mx] = TileType::MERCHANT;
+
+    // Scatter Chests
+    int numChests = random(1, 4);
+    for (int i = 0; i < numChests; i++) {
+        int cx, cy;
+        do {
+            cx = random(1, RogueSharedData::MAP_W - 1);
+            cy = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[cy][cx] != TileType::FLOOR || (cx == _data->player.x && cy == _data->player.y));
+        _data->map[cy][cx] = TileType::CHEST;
+    }
+}
+
 void RoguePlayScene::_generateBossMap() {
     for (int y = 0; y < RogueSharedData::MAP_H; y++) {
         for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-            if (x >= 8 && x <= 24 && y >= 8 && y <= 24) {
-                if (x == 8 || x == 24 || y == 8 || y == 24) _data->map[y][x] = TileType::WALL;
-                else _data->map[y][x] = TileType::FLOOR;
-            } else {
+            _data->map[y][x] = TileType::WALL;
+        }
+    }
+
+    int variant = random(3); // 0 = Open, 1 = Pillars, 2 = Moat
+
+    for (int y = 8; y <= 24; y++) {
+        for (int x = 8; x <= 24; x++) {
+            if (x == 8 || x == 24 || y == 8 || y == 24) {
                 _data->map[y][x] = TileType::WALL;
+            } else {
+                _data->map[y][x] = TileType::FLOOR;
+                
+                // Variant 1: Pillars for cover
+                if (variant == 1 && (x % 4 == 0) && (y % 4 == 0)) {
+                    _data->map[y][x] = TileType::WALL;
+                }
+                // Variant 2: Moat around the center
+                else if (variant == 2 && (x >= 12 && x <= 20) && (y >= 12 && y <= 20) && (x == 12 || x == 20 || y == 12 || y == 20)) {
+                    // Leave bridges at the exact midpoints
+                    if (x != 16 && y != 16) {
+                        _data->map[y][x] = TileType::WATER;
+                    }
+                }
             }
         }
     }

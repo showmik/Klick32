@@ -183,6 +183,7 @@ private:
     void _generateMap();            // The "Router"
     void _generateBSPMap();         // The Castle generator
     void _generateCaveMap();        // The Cave generator
+    void _generateMazeMap();        // NEW: The Labyrinth generator
     void _generateBossMap();        // The Boss Arena generator
     void _spawnMonsters();          // Shared monster spawner
 
