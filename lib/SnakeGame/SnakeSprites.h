@@ -54,7 +54,7 @@ static const uint8_t PROGMEM spr_snake_cover[720] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0xFF,
 };
 
-// Normal Apple - A classic fruit with a stem
+// Normal Apple
 static const uint8_t PROGMEM spr_snake_apple[4] = {
     0x60,
     0xF0,
@@ -62,27 +62,27 @@ static const uint8_t PROGMEM spr_snake_apple[4] = {
     0x60,
 };
 
-// Bonus Apple - A shiny star or diamond
-static const uint8_t PROGMEM spr_snake_bonus[8] = {
-    0x3C,
-    0x7E,
-    0xFF,
-    0xFF,
-    0xFF,
-    0xFF,
-    0x7E,
-    0x3C,
+// Bonus Apple
+const uint8_t PROGMEM spr_snake_bonus[8] = {
+  0x3C,
+  0x7E,
+  0xFF,
+  0xFF,
+  0xFF,
+  0xFF,
+  0x7E,
+  0x3C
 };
 
-// Poison Apple - A skull and crossbones
+// Poison Apple
 static const uint8_t PROGMEM spr_snake_poison[4] = {
-    0x90,
-    0x60,
-    0x60,
-    0x90,
+  0x90,
+  0x60,
+  0x60,
+  0x90
 };
 
-// Wall Block - 8x8 (Centered, overlaps block edges visually)
+// Wall Block
 static const uint8_t PROGMEM spr_snake_wall[8] = {
     0xFF,
     0x81,
