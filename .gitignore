@@ -13,3 +13,6 @@ GameEngine_Improvement_Plan.txt
 ARCHITECTURE.md
 .agents/workflows/graphify.md
 .gemini/settings.json
+simulator/build/
+simulator/out.txt
+simulator/err.txt

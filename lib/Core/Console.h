@@ -163,7 +163,10 @@ public:
     // DRAWING
     // ══════════════════════════════════════════════════════════════════════════
 
-    // color: 0 = clear/black, 1 = set/white, 2 = XOR
+    static constexpr uint8_t COLOR_BLACK = 0; // clear/transparent
+    static constexpr uint8_t COLOR_WHITE = 1; // set/solid
+    static constexpr uint8_t COLOR_XOR   = 2; // invert
+
     void setDrawColor(uint8_t color)  { _disp.setDrawColor(color); }
     void setFont(const uint8_t* font) { _disp.setFont(font);       }
 
@@ -176,11 +179,31 @@ public:
     void drawVLine(int x, int y, int h)             { _disp.drawVLine(x + _camX(), y + _camY(), h);        }
     void drawLine (int x1, int y1, int x2, int y2) { _disp.drawLine(x1 + _camX(), y1 + _camY(), x2 + _camX(), y2 + _camY()); }
 
-    // ── Rectangles ────────────────────────────────────────────────────────────
+    // ── Rectangles & Dither ───────────────────────────────────────────────────
     void drawFrame (int x, int y, int w, int h)        { _disp.drawFrame(x + _camX(), y + _camY(), w, h);     }
     void drawBox   (int x, int y, int w, int h)        { _disp.drawBox(x + _camX(), y + _camY(), w, h);       }
     void drawRFrame(int x, int y, int w, int h, int r) { _disp.drawRFrame(x + _camX(), y + _camY(), w, h, r); }
     void drawRBox  (int x, int y, int w, int h, int r) { _disp.drawRBox(x + _camX(), y + _camY(), w, h, r);   }
+
+    // Draws a shaded box using spatial dithering (0=Black, 1=DarkGray 25%, 2=LightGray 50%, 3=Silvery 75%, 4=White)
+    void drawDitherBox(int x, int y, int w, int h, uint8_t shade) {
+        int cx = x + _camX();
+        int cy = y + _camY();
+        for(int py = cy; py < cy + h; py++) {
+            if (py < 0 || py >= H) continue;
+            for(int px = cx; px < cx + w; px++) {
+                if (px < 0 || px >= W) continue;
+                bool draw = false;
+                if (shade == 0)      { draw = false; }
+                else if (shade == 1) { draw = (px % 2 == 0) && (py % 2 == 0); }           // 25% pattern
+                else if (shade == 2) { draw = ((px + py) % 2) == 0; }                     // 50% checkerboard
+                else if (shade == 3) { draw = !((px % 2 != 0) && (py % 2 != 0)); }        // 75% pattern
+                else                 { draw = true; }                                     // 100% solid
+                
+                if (draw) _disp.drawPixel(px, py);
+            }
+        }
+    }
 
     // ── Circles ───────────────────────────────────────────────────────────────
     void drawCircle(int cx, int cy, int r) { _disp.drawCircle(cx + _camX(), cy + _camY(), r); }
@@ -190,13 +213,78 @@ public:
     // y is the baseline, not the top of the character.
     void drawStr(int x, int y, const char* str) { _disp.drawStr(x + _camX(), y + _camY(), str); }
 
-    // ── Bitmaps ───────────────────────────────────────────────────────────────
+    // ── Bitmaps & Tilemaps ────────────────────────────────────────────────────
+    
+    // Flip flags for drawBitmapEx
+    static constexpr uint8_t FLIP_NONE = 0x00;
+    static constexpr uint8_t FLIP_H    = 0x01;
+    static constexpr uint8_t FLIP_V    = 0x02;
+    static constexpr uint8_t FLIP_HV   = 0x03;
+
+    // Standard drawBitmap (unmodified U8g2 passthrough)
     // bytesPerRow = ceil(spriteWidthPx / 8).
-    //   8 px wide  → bytesPerRow = 1
-    //   16 px wide → bytesPerRow = 2
     // bmp must be in PROGMEM.
     void drawBitmap(int x, int y, int bytesPerRow, int h, const uint8_t* bmp) {
         _disp.drawBitmap(x + _camX(), y + _camY(), bytesPerRow, h, bmp);
+    }
+
+    // Extended drawBitmap with flip support and clipping
+    void drawBitmapEx(int x, int y, int bytesPerRow, int h, const uint8_t* bmp, uint8_t flags = FLIP_NONE) {
+        int cx = x + _camX();
+        int cy = y + _camY();
+        int w = bytesPerRow * 8;
+        
+        // Fast path for no flipping
+        if (flags == FLIP_NONE) {
+            _disp.drawBitmap(cx, cy, bytesPerRow, h, bmp);
+            return;
+        }
+
+        // Slow path for flipped (software pixel plotting)
+        // Optimization: check if bounding box is entirely off-screen
+        if (cx >= W || cx + w <= 0 || cy >= H || cy + h <= 0) return;
+
+        for (int py = 0; py < h; py++) {
+            int drawY = cy + ((flags & FLIP_V) ? (h - 1 - py) : py);
+            if (drawY < 0 || drawY >= H) continue;
+
+            for (int px = 0; px < w; px++) {
+                int drawX = cx + ((flags & FLIP_H) ? (w - 1 - px) : px);
+                if (drawX < 0 || drawX >= W) continue;
+
+                uint8_t byteVal = pgm_read_byte(bmp + (py * bytesPerRow) + (px / 8));
+                if (byteVal & (1 << (7 - (px % 8)))) {
+                    _disp.drawPixel(drawX, drawY);
+                }
+            }
+        }
+    }
+
+    // Tilemap renderer with camera culling
+    // mapWidth/mapHeight are in TILES, not pixels. tileW/tileH are pixel dimensions.
+    void drawTilemap(int x, int y, const uint8_t* map, int mapW, int mapH, const uint8_t* tileset, int tileW, int tileH, int tilesetBytesPerRow) {
+        int cx = x + _camX();
+        int cy = y + _camY();
+
+        // Calculate visible tile range
+        int startCol = gclamp(-cx / tileW, 0, mapW - 1);
+        int startRow = gclamp(-cy / tileH, 0, mapH - 1);
+        int endCol   = gclamp((W - cx + tileW - 1) / tileW, 0, mapW - 1);
+        int endRow   = gclamp((H - cy + tileH - 1) / tileH, 0, mapH - 1);
+
+        for (int row = startRow; row <= endRow; row++) {
+            for (int col = startCol; col <= endCol; col++) {
+                uint8_t tileIdx = pgm_read_byte(map + (row * mapW) + col);
+                if (tileIdx == 0) continue; // Assume 0 is empty/transparent
+
+                // Calculate where the tile data starts in the tileset PROGMEM array
+                const uint8_t* tileData = tileset + (tileIdx * tileH * tilesetBytesPerRow);
+                
+                int px = cx + (col * tileW);
+                int py = cy + (row * tileH);
+                _disp.drawBitmap(px, py, tilesetBytesPerRow, tileH, tileData);
+            }
+        }
     }
 
     // ── Escape hatch ──────────────────────────────────────────────────────────
