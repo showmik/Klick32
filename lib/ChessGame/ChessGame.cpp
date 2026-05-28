@@ -197,13 +197,22 @@ void ChessPlayScene::doAIMove(Console& ctx) {
     }
     
     if (bestFx != -1) {
+        Piece captured = _board[bestTy][bestTx];
         _board[bestTy][bestTx] = _board[bestFy][bestFx];
         _board[bestFy][bestFx] = {PieceType::None, PieceColor::White};
+        
+        // Pawn promotion
+        if (_board[bestTy][bestTx].type == PieceType::Pawn && bestTy == 7) {
+            _board[bestTy][bestTx].type = PieceType::Queen;
+        }
+        
         ctx.sfxPoint();
         
-        // Move cursor to where the AI moved to show the user
-        _cx = bestTx;
-        _cy = bestTy;
+        // Game Over check
+        if (captured.type == PieceType::King) {
+            _gameOver = true;
+            _winner = PieceColor::Black;
+        }
     }
     
     _turn = PieceColor::White;
@@ -211,6 +220,14 @@ void ChessPlayScene::doAIMove(Console& ctx) {
 }
 
 void ChessPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
+    if (_gameOver) {
+        if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) {
+            initBoard();
+            _gameOver = false;
+        }
+        return;
+    }
+
     if (_isPvE && _turn == PieceColor::Black) {
         _aiTimer += dt;
         if (_aiTimer > 1.0f) { // 1 second delay
@@ -249,8 +266,21 @@ void ChessPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         } else {
             // Move
             if (isPseudoLegalMove(_sx, _sy, _cx, _cy)) {
+                Piece captured = _board[_cy][_cx];
                 _board[_cy][_cx] = _board[_sy][_sx];
                 _board[_sy][_sx] = {PieceType::None, PieceColor::White};
+                
+                // Pawn promotion
+                if (_board[_cy][_cx].type == PieceType::Pawn && _cy == 0) {
+                    _board[_cy][_cx].type = PieceType::Queen;
+                }
+                
+                // Game over
+                if (captured.type == PieceType::King) {
+                    _gameOver = true;
+                    _winner = PieceColor::White;
+                }
+                
                 _sx = -1;
                 _sy = -1;
                 _turn = (_turn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
@@ -311,10 +341,21 @@ void ChessPlayScene::draw(Console& ctx) {
         }
     }
     
-    // Draw selected highlights
+    // Draw selected highlights and valid moves
     if (_sx != -1) {
         ctx.setDrawColor(Console::COLOR_WHITE);
         ctx.drawFrame(boardX + _sx * tileSize, boardY + _sy * tileSize, tileSize, tileSize);
+        
+        // Draw valid moves
+        for (int ty = 0; ty < 8; ++ty) {
+            for (int tx = 0; tx < 8; ++tx) {
+                if (isPseudoLegalMove(_sx, _sy, tx, ty)) {
+                    ctx.setDrawColor(Console::COLOR_WHITE);
+                    // Draw a 2x2 dot in the center of the tile
+                    ctx.drawBox(boardX + tx * tileSize + 3, boardY + ty * tileSize + 3, 2, 2);
+                }
+            }
+        }
     }
     
     // Draw cursor
@@ -333,6 +374,19 @@ void ChessPlayScene::draw(Console& ctx) {
     ctx.drawStr(66, 35, "A: Select");
     ctx.drawStr(66, 45, "   Move");
     ctx.drawStr(66, 55, "B: Cancel");
+
+    if (_gameOver) {
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawBox(14, 24, 100, 16);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawFrame(14, 24, 100, 16);
+        ctx.setFont(u8g2_font_6x10_tf);
+        if (_winner == PieceColor::White) {
+            ctx.drawStrCentered(35, "WHITE WINS!");
+        } else {
+            ctx.drawStrCentered(35, "BLACK WINS!");
+        }
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -54,6 +54,9 @@ private:
     
     bool _isPvE = true;
     float _aiTimer = 0.0f;
+    
+    bool _gameOver = false;
+    PieceColor _winner = PieceColor::White;
 };
 
 class ChessGame : public SceneGame<ChessData> {
