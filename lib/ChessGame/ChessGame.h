@@ -39,6 +39,8 @@ private:
     bool isPseudoLegalMove(int fx, int fy, int tx, int ty);
     bool isPathClear(int fx, int fy, int tx, int ty);
     void drawPiece(Console& ctx, const Piece& p, int x, int y);
+    void doAIMove(Console& ctx);
+    int evaluateBoard();
 
     ChessData* _data = nullptr;
     
@@ -49,6 +51,9 @@ private:
     int _sy = -1; // selected Y
     
     PieceColor _turn = PieceColor::White;
+    
+    bool _isPvE = true;
+    float _aiTimer = 0.0f;
 };
 
 class ChessGame : public SceneGame<ChessData> {

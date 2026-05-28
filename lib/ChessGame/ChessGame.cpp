@@ -123,7 +123,102 @@ bool ChessPlayScene::isPseudoLegalMove(int fx, int fy, int tx, int ty) {
     }
 }
 
+int ChessPlayScene::evaluateBoard() {
+    int score = 0;
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            if (_board[y][x].isEmpty()) continue;
+            
+            Piece p = _board[y][x];
+            int val = 0;
+            switch(p.type) {
+                case PieceType::Pawn: val = 10; break;
+                case PieceType::Knight: val = 30; break;
+                case PieceType::Bishop: val = 30; break;
+                case PieceType::Rook: val = 50; break;
+                case PieceType::Queen: val = 90; break;
+                case PieceType::King: val = 900; break;
+                default: break;
+            }
+            
+            // Positional bonus: encourage center control
+            int centerDist = abs(x - 3) + abs(x - 4) - 1; 
+            val -= centerDist; 
+            
+            if (p.color == PieceColor::Black) {
+                val += y; // encourage moving forward
+                score += val;
+            } else {
+                val += (7 - y);
+                score -= val;
+            }
+        }
+    }
+    return score;
+}
+
+void ChessPlayScene::doAIMove(Console& ctx) {
+    int bestScore = -99999;
+    int bestFx = -1, bestFy = -1, bestTx = -1, bestTy = -1;
+    
+    // Very simple 1-ply greedy AI
+    for (int fy = 0; fy < 8; ++fy) {
+        for (int fx = 0; fx < 8; ++fx) {
+            if (_board[fy][fx].color != PieceColor::Black || _board[fy][fx].isEmpty()) continue;
+            
+            for (int ty = 0; ty < 8; ++ty) {
+                for (int tx = 0; tx < 8; ++tx) {
+                    if (isPseudoLegalMove(fx, fy, tx, ty)) {
+                        Piece captured = _board[ty][tx];
+                        Piece moved = _board[fy][fx];
+                        
+                        // Do move
+                        _board[ty][tx] = moved;
+                        _board[fy][fx] = {PieceType::None, PieceColor::White};
+                        
+                        // Evaluate board from Black's perspective
+                        int score = evaluateBoard();
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestFx = fx;
+                            bestFy = fy;
+                            bestTx = tx;
+                            bestTy = ty;
+                        }
+                        
+                        // Undo move
+                        _board[fy][fx] = moved;
+                        _board[ty][tx] = captured;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (bestFx != -1) {
+        _board[bestTy][bestTx] = _board[bestFy][bestFx];
+        _board[bestFy][bestFx] = {PieceType::None, PieceColor::White};
+        ctx.sfxPoint();
+        
+        // Move cursor to where the AI moved to show the user
+        _cx = bestTx;
+        _cy = bestTy;
+    }
+    
+    _turn = PieceColor::White;
+    _aiTimer = 0;
+}
+
 void ChessPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
+    if (_isPvE && _turn == PieceColor::Black) {
+        _aiTimer += dt;
+        if (_aiTimer > 1.0f) { // 1 second delay
+            doAIMove(ctx);
+        }
+        return; // Block input
+    }
+
     if (ctx.justPressed(Btn::UP) && _cy > 0) _cy--;
     if (ctx.justPressed(Btn::DOWN) && _cy < 7) _cy++;
     if (ctx.justPressed(Btn::LEFT) && _cx > 0) _cx--;
