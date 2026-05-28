@@ -2,6 +2,7 @@
 #include "ChessSprites.h"
 #include "GameRegistry.h"
 #include <math.h>
+#include <stdlib.h>
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ChessTitleScene
@@ -142,8 +143,12 @@ int ChessPlayScene::evaluateBoard() {
             }
             
             // Positional bonus: encourage center control
-            int centerDist = abs(x - 3) + abs(x - 4) - 1; 
+            int centerDist = abs(x - 3) + abs(y - 3); 
             val -= centerDist; 
+            
+            if (p.type == PieceType::Knight) {
+                val -= centerDist * 2; // Knights need the center
+            } 
             
             if (p.color == PieceColor::Black) {
                 val += y; // encourage moving forward
@@ -157,11 +162,60 @@ int ChessPlayScene::evaluateBoard() {
     return score;
 }
 
+int ChessPlayScene::minimax(int depth, PieceColor turn, int alpha, int beta) {
+    if (depth == 0) return evaluateBoard();
+    
+    int bestScore = (turn == PieceColor::Black) ? -999999 : 999999;
+    
+    for (int fy = 0; fy < 8; ++fy) {
+        for (int fx = 0; fx < 8; ++fx) {
+            if (_board[fy][fx].color != turn || _board[fy][fx].isEmpty()) continue;
+            
+            for (int ty = 0; ty < 8; ++ty) {
+                for (int tx = 0; tx < 8; ++tx) {
+                    if (isPseudoLegalMove(fx, fy, tx, ty)) {
+                        Piece captured = _board[ty][tx];
+                        Piece moved = _board[fy][fx];
+                        
+                        if (captured.type == PieceType::King) {
+                            return (turn == PieceColor::Black) ? 900000 : -900000;
+                        }
+                        
+                        _board[ty][tx] = moved;
+                        _board[fy][fx] = {PieceType::None, PieceColor::White};
+                        
+                        if (moved.type == PieceType::Pawn) {
+                            if (turn == PieceColor::Black && ty == 7) _board[ty][tx].type = PieceType::Queen;
+                            if (turn == PieceColor::White && ty == 0) _board[ty][tx].type = PieceType::Queen;
+                        }
+                        
+                        int score = minimax(depth - 1, (turn == PieceColor::Black) ? PieceColor::White : PieceColor::Black, alpha, beta);
+                        
+                        _board[fy][fx] = moved;
+                        _board[ty][tx] = captured;
+                        
+                        if (turn == PieceColor::Black) {
+                            if (score > bestScore) bestScore = score;
+                            if (bestScore > alpha) alpha = bestScore;
+                            if (beta <= alpha) return bestScore;
+                        } else {
+                            if (score < bestScore) bestScore = score;
+                            if (bestScore < beta) beta = bestScore;
+                            if (beta <= alpha) return bestScore;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return bestScore;
+}
+
 void ChessPlayScene::doAIMove(Console& ctx) {
-    int bestScore = -99999;
+    int bestScore = -999999;
     int bestFx = -1, bestFy = -1, bestTx = -1, bestTy = -1;
     
-    // Very simple 1-ply greedy AI
+    // 2-ply Minimax search
     for (int fy = 0; fy < 8; ++fy) {
         for (int fx = 0; fx < 8; ++fx) {
             if (_board[fy][fx].color != PieceColor::Black || _board[fy][fx].isEmpty()) continue;
@@ -172,12 +226,24 @@ void ChessPlayScene::doAIMove(Console& ctx) {
                         Piece captured = _board[ty][tx];
                         Piece moved = _board[fy][fx];
                         
-                        // Do move
                         _board[ty][tx] = moved;
                         _board[fy][fx] = {PieceType::None, PieceColor::White};
                         
-                        // Evaluate board from Black's perspective
-                        int score = evaluateBoard();
+                        if (moved.type == PieceType::Pawn && ty == 7) {
+                            _board[ty][tx].type = PieceType::Queen;
+                        }
+                        
+                        int score;
+                        if (captured.type == PieceType::King) {
+                            score = 900000;
+                        } else {
+                            score = minimax(2, PieceColor::White, -999999, 999999);
+                        }
+                        
+                        _board[fy][fx] = moved;
+                        _board[ty][tx] = captured;
+                        
+                        score += (rand() % 3); // tiny noise for variety
                         
                         if (score > bestScore) {
                             bestScore = score;
@@ -186,10 +252,6 @@ void ChessPlayScene::doAIMove(Console& ctx) {
                             bestTx = tx;
                             bestTy = ty;
                         }
-                        
-                        // Undo move
-                        _board[fy][fx] = moved;
-                        _board[ty][tx] = captured;
                     }
                 }
             }

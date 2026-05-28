@@ -41,6 +41,7 @@ private:
     void drawPiece(Console& ctx, const Piece& p, int x, int y);
     void doAIMove(Console& ctx);
     int evaluateBoard();
+    int minimax(int depth, PieceColor turn, int alpha, int beta);
 
     ChessData* _data = nullptr;
     
