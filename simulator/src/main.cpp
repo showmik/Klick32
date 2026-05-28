@@ -45,6 +45,7 @@ bool g_simPins[256] = {false};
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 SDL_Texture* texture = nullptr;
+SDL_GameController* controller = nullptr;
 
 bool g_quit = false;
 
@@ -80,16 +81,44 @@ void RenderDisplay() {
     SDL_RenderPresent(renderer);
 }
 
+void SaveScreenshot() {
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, 128, 64, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (!surface) return;
+    
+    std::lock_guard<std::mutex> lock(g_displayMutex);
+    uint32_t* pixels = (uint32_t*)surface->pixels;
+    for (int y = 0; y < 64; y++) {
+        for (int x = 0; x < 128; x++) {
+            int byteIdx = (y / 8) * 128 + x;
+            int bitIdx = y % 8;
+            bool isOn = (g_simFrontBuffer[byteIdx] & (1 << bitIdx)) != 0;
+            pixels[y * 128 + x] = isOn ? 0xFFFFFFFF : 0xFF000000;
+        }
+    }
+    
+    char filename[64];
+    sprintf(filename, "screenshot_%u.bmp", SDL_GetTicks());
+    SDL_SaveBMP(surface, filename);
+    SDL_FreeSurface(surface);
+    std::cout << "Screenshot saved to " << filename << std::endl;
+}
+
 // Injected into Arduino.h mock
 void SimInjectKey(int sdlKey, bool down) {
     uint8_t pin = 255;
     switch (sdlKey) {
-        case SDLK_UP:     pin = PIN_UP; break;
-        case SDLK_DOWN:   pin = PIN_DOWN; break;
-        case SDLK_LEFT:   pin = PIN_LEFT; break;
-        case SDLK_RIGHT:  pin = PIN_RIGHT; break;
-        case SDLK_z:      pin = PIN_BTN_A; break;
-        case SDLK_x:      pin = PIN_BTN_B; break;
+        case SDLK_UP:
+        case SDLK_w:      pin = PIN_UP; break;
+        case SDLK_DOWN:
+        case SDLK_s:      pin = PIN_DOWN; break;
+        case SDLK_LEFT:
+        case SDLK_a:      pin = PIN_LEFT; break;
+        case SDLK_RIGHT:
+        case SDLK_d:      pin = PIN_RIGHT; break;
+        case SDLK_z:
+        case SDLK_j:      pin = PIN_BTN_A; break;
+        case SDLK_x:
+        case SDLK_k:      pin = PIN_BTN_B; break;
         case SDLK_RETURN: pin = PIN_MENU1; break;
         case SDLK_ESCAPE: pin = PIN_MENU2; break;
         default: break;
@@ -106,21 +135,51 @@ void PumpEvents() {
             g_quit = true;
         } else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
             bool down = (e.type == SDL_KEYDOWN);
-            SimInjectKey(e.key.keysym.sym, down);
+            if (down && e.key.keysym.sym == SDLK_F12) {
+                SaveScreenshot();
+            } else {
+                SimInjectKey(e.key.keysym.sym, down);
+            }
+        } else if (e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_CONTROLLERBUTTONUP) {
+            bool down = (e.type == SDL_CONTROLLERBUTTONDOWN);
+            int key = 0;
+            switch(e.cbutton.button) {
+                case SDL_CONTROLLER_BUTTON_DPAD_UP:    key = SDLK_UP; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  key = SDLK_DOWN; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  key = SDLK_LEFT; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: key = SDLK_RIGHT; break;
+                case SDL_CONTROLLER_BUTTON_A:          key = SDLK_z; break;
+                case SDL_CONTROLLER_BUTTON_B:          key = SDLK_x; break;
+                case SDL_CONTROLLER_BUTTON_X:          key = SDLK_x; break;
+                case SDL_CONTROLLER_BUTTON_START:      key = SDLK_RETURN; break;
+                case SDL_CONTROLLER_BUTTON_BACK:       key = SDLK_ESCAPE; break;
+            }
+            if (key != 0) {
+                SimInjectKey(key, down);
+            }
+        } else if (e.type == SDL_CONTROLLERDEVICEADDED) {
+            if (!controller) {
+                controller = SDL_GameControllerOpen(e.cdevice.which);
+            }
+        } else if (e.type == SDL_CONTROLLERDEVICEREMOVED) {
+            if (controller && e.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) {
+                SDL_GameControllerClose(controller);
+                controller = nullptr;
+            }
         }
     }
 }
 
 int main(int argc, char* argv[]) {
     try {
-        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
             MessageBoxA(NULL, SDL_GetError(), "SDL_Init Failed", MB_OK | MB_ICONERROR);
             return 1;
         }
 
         window = SDL_CreateWindow("Klick32 Simulator", 
             SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
-            128 * 4, 64 * 4, SDL_WINDOW_SHOWN);
+            128 * 4, 64 * 4, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
             
         if (!window) {
             return 1;
@@ -130,6 +189,7 @@ int main(int argc, char* argv[]) {
         if (!renderer) {
             return 1;
         }
+        SDL_RenderSetLogicalSize(renderer, 128, 64);
 
         texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, 
             SDL_TEXTUREACCESS_STREAMING, 128, 64);
@@ -149,12 +209,18 @@ int main(int argc, char* argv[]) {
         });
 
         while (!g_quit) {
+            uint32_t startTick = SDL_GetTicks();
             PumpEvents();
             RenderDisplay();
-            SDL_Delay(16);
+            uint32_t elapsed = SDL_GetTicks() - startTick;
+            if (elapsed < 16) {
+                SDL_Delay(16 - elapsed);
+            }
         }
         
-        osThread.detach();
+        osThread.join();
+
+        if (controller) SDL_GameControllerClose(controller);
 
         SDL_DestroyTexture(texture);
         SDL_DestroyRenderer(renderer);

@@ -68,6 +68,10 @@ void OS::run() {
     uint32_t lastTime = millis();
 
     while (true) {
+#ifdef SIMULATOR
+        extern bool g_quit;
+        if (g_quit) return;
+#endif
         uint32_t now = millis();
         float dt = (now - lastTime) / 1000.0f;
         if (dt <= 0.001f) dt = 0.001f;
