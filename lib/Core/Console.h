@@ -4,6 +4,13 @@
 #include "Sound.h"
 #include "SaveManager.h"
 #include "Camera.h"
+#include <stdarg.h>
+
+#ifdef __GNUC__
+#define KLICK32_PRINTF_LIKE(fmt_arg, var_arg) __attribute__((format(printf, fmt_arg, var_arg)))
+#else
+#define KLICK32_PRINTF_LIKE(fmt_arg, var_arg)
+#endif
 
 // ─── Console ──────────────────────────────────────────────────────────────────
 // The single context object passed to every game's update() and draw() calls.
@@ -272,7 +279,7 @@ public:
     // Printf-style formatted text.
     // Eliminates the char buf[32]; snprintf(buf,...); drawStr(x,y,buf) pattern.
     //   ctx.drawPrintf(2, 10, "Score: %d", score);
-    void drawPrintf(int x, int y, const char* fmt, ...) __attribute__((format(printf, 4, 5))) {
+    void drawPrintf(int x, int y, const char* fmt, ...) KLICK32_PRINTF_LIKE(4, 5) {
         char buf[48];
         va_list args;
         va_start(args, fmt);
@@ -283,7 +290,7 @@ public:
 
     // Printf-style, horizontally centered.
     //   ctx.drawPrintfCentered(32, "Level %d", level);
-    void drawPrintfCentered(int y, const char* fmt, ...) __attribute__((format(printf, 3, 4))) {
+    void drawPrintfCentered(int y, const char* fmt, ...) KLICK32_PRINTF_LIKE(3, 4) {
         char buf[48];
         va_list args;
         va_start(args, fmt);
@@ -296,10 +303,10 @@ public:
     // ── Bitmaps & Tilemaps ────────────────────────────────────────────────────
     
     // Flip flags for drawBitmapEx
-    static constexpr uint8_t FLIP_NONE = 0x00;
-    static constexpr uint8_t FLIP_H    = 0x01;
-    static constexpr uint8_t FLIP_V    = 0x02;
-    static constexpr uint8_t FLIP_HV   = 0x03;
+    static constexpr uint8_t BMP_FLIP_NONE = 0x00;
+    static constexpr uint8_t BMP_FLIP_H    = 0x01;
+    static constexpr uint8_t BMP_FLIP_V    = 0x02;
+    static constexpr uint8_t BMP_FLIP_HV   = 0x03;
 
     // Fluent builder for drawing bitmaps.
     // Eliminates positional parameter confusion.
@@ -311,14 +318,14 @@ public:
         int _h;
         int _x = 0;
         int _y = 0;
-        uint8_t _flags = FLIP_NONE;
+        uint8_t _flags = BMP_FLIP_NONE;
     public:
         BitmapBuilder(Console& ctx, const uint8_t* bmp, int bytesPerRow, int h)
             : _ctx(ctx), _bmp(bmp), _bytesPerRow(bytesPerRow), _h(h) {}
         
         BitmapBuilder& at(int x, int y) { _x = x; _y = y; return *this; }
-        BitmapBuilder& flipX(bool flip = true) { if(flip) _flags |= FLIP_H; else _flags &= ~FLIP_H; return *this; }
-        BitmapBuilder& flipY(bool flip = true) { if(flip) _flags |= FLIP_V; else _flags &= ~FLIP_V; return *this; }
+        BitmapBuilder& flipX(bool flip = true) { if(flip) _flags |= BMP_FLIP_H; else _flags &= ~BMP_FLIP_H; return *this; }
+        BitmapBuilder& flipY(bool flip = true) { if(flip) _flags |= BMP_FLIP_V; else _flags &= ~BMP_FLIP_V; return *this; }
         void draw() { _ctx.drawBitmapEx(_x, _y, _bytesPerRow, _h, _bmp, _flags); }
     };
 
@@ -334,13 +341,13 @@ public:
     }
 
     // Extended drawBitmap with flip support and clipping
-    void drawBitmapEx(int x, int y, int bytesPerRow, int h, const uint8_t* bmp, uint8_t flags = FLIP_NONE) {
+    void drawBitmapEx(int x, int y, int bytesPerRow, int h, const uint8_t* bmp, uint8_t flags = BMP_FLIP_NONE) {
         int cx = x + _camX();
         int cy = y + _camY();
         int w = bytesPerRow * 8;
         
         // Fast path for no flipping
-        if (flags == FLIP_NONE) {
+        if (flags == BMP_FLIP_NONE) {
             _disp.drawBitmap(cx, cy, bytesPerRow, h, bmp);
             return;
         }
@@ -350,11 +357,11 @@ public:
         if (cx >= W || cx + w <= 0 || cy >= H || cy + h <= 0) return;
 
         for (int py = 0; py < h; py++) {
-            int drawY = cy + ((flags & FLIP_V) ? (h - 1 - py) : py);
+            int drawY = cy + ((flags & BMP_FLIP_V) ? (h - 1 - py) : py);
             if (drawY < 0 || drawY >= H) continue;
 
             for (int px = 0; px < w; px++) {
-                int drawX = cx + ((flags & FLIP_H) ? (w - 1 - px) : px);
+                int drawX = cx + ((flags & BMP_FLIP_H) ? (w - 1 - px) : px);
                 if (drawX < 0 || drawX >= W) continue;
 
                 uint8_t byteVal = pgm_read_byte(bmp + (py * bytesPerRow) + (px / 8));

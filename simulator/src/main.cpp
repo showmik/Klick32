@@ -97,7 +97,7 @@ void SaveScreenshot() {
     }
     
     char filename[64];
-    sprintf(filename, "screenshot_%u.bmp", SDL_GetTicks());
+    snprintf(filename, sizeof(filename), "screenshot_%u.bmp", SDL_GetTicks());
     SDL_SaveBMP(surface, filename);
     SDL_FreeSurface(surface);
     std::cout << "Screenshot saved to " << filename << std::endl;

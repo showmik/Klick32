@@ -106,6 +106,7 @@ extern ESPMock ESP;
 // ─── Serial Mocking ───────────────────────────────────────────────────────────
 #include <iostream>
 #include <fstream>
+#include <stdarg.h>
 struct SerialMock {
     std::ofstream logFile;
     void begin(uint32_t baud) {
@@ -129,6 +130,14 @@ struct SerialMock {
     void println(int n) { 
         std::cout << n << std::endl; 
         if (logFile.is_open()) { logFile << n << std::endl; logFile.flush(); }
+    }
+    void printf(const char* fmt, ...) {
+        char buf[256];
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(buf, sizeof(buf), fmt, args);
+        va_end(args);
+        print(buf);
     }
 };
 extern SerialMock Serial;
