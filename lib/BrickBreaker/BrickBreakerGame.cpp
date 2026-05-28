@@ -53,31 +53,68 @@ void BBPlayScene::_generateLevel() {
     _padX = (Console::W - _padW) / 2.0f;
     _stickyPaddle = false;
 
+    int pattern = (_data->level - 1) % 5;
+    
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            // Leave some empty space based on level
-            if (random(10) < 2) {
-                _bricks[r][c].active = false;
-                continue;
+            bool active = true;
+            BrickType type = BrickType::NORMAL;
+            int hp = 1;
+
+            if (pattern == 0) {
+                // Pattern 1: Standard Block (top rows only)
+                if (r > 2) active = false; 
+            } 
+            else if (pattern == 1) {
+                // Pattern 2: Checkerboard
+                if ((r + c) % 2 == 0) active = false;
+                if (r == 0) { type = BrickType::HARD; hp = 2; }
+            }
+            else if (pattern == 2) {
+                // Pattern 3: Pyramid
+                int centerDist = abs(c - (COLS / 2));
+                if (centerDist > r) active = false;
+                if (r == ROWS - 1) { type = BrickType::HARD; hp = 2; }
+            }
+            else if (pattern == 3) {
+                // Pattern 4: Solid Barriers
+                if (r == 2 && c % 4 == 2) {
+                    type = BrickType::SOLID; hp = -1;
+                } else if (r > 3) {
+                    active = false;
+                }
+            }
+            else if (pattern == 4) {
+                // Pattern 5: Alternating Rows
+                if (r % 2 == 0) { type = BrickType::HARD; hp = 2; }
             }
 
-            _bricks[r][c].active = true;
-            _bricksLeft++;
+            // Slowly increase overall difficulty by upgrading some random normal bricks to hard ones
+            if (active && type == BrickType::NORMAL) {
+                if (random(100) < _data->level * 2) {
+                    type = BrickType::HARD;
+                    hp = 2;
+                }
+            }
+
+            _bricks[r][c].active = active;
+            _bricks[r][c].type = type;
+            _bricks[r][c].hp = hp;
             
-            int rnd = random(100);
-            if (rnd < 10 + _data->level * 2) {
-                _bricks[r][c].type = BrickType::HARD;
-                _bricks[r][c].hp = 2;
-            } else if (rnd < 15 + _data->level * 3 && r < 2) {
-                _bricks[r][c].type = BrickType::SOLID;
-                _bricks[r][c].hp = -1; // Indestructible
-                _bricksLeft--; // Doesn't count towards completion
-            } else {
-                _bricks[r][c].type = BrickType::NORMAL;
-                _bricks[r][c].hp = 1;
+            if (active && type != BrickType::SOLID) {
+                _bricksLeft++;
             }
         }
     }
+    
+    // Safety check: ensure at least one breakable brick exists
+    if (_bricksLeft == 0) {
+        _bricks[0][0].active = true;
+        _bricks[0][0].type = BrickType::NORMAL;
+        _bricks[0][0].hp = 1;
+        _bricksLeft = 1;
+    }
+
     _msgTimer = MESSAGE_DURATION;
     snprintf(_msg, sizeof(_msg), "Level %d", _data->level);
 }
@@ -289,10 +326,16 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         _balls[i].x += _balls[i].vx;
         _balls[i].y += _balls[i].vy;
 
-        // Fireball trail
-        if (_balls[i].fireball && _particles) {
-            if (random(100) < 60) { // 60% chance per frame to leave a spark
-                _particles->spawnPixel(_balls[i].x + 1, _balls[i].y + 1, random(-10, 10)*0.02f, random(-10, 10)*0.02f, random(10, 20));
+        // Ball trail
+        if (_particles) {
+            if (_balls[i].fireball) {
+                if (random(100) < 60) {
+                    _particles->spawnPixel(_balls[i].x + 1, _balls[i].y + 1, random(-10, 10)*0.02f, random(-10, 10)*0.02f, random(10, 20));
+                }
+            } else {
+                if (random(100) < 40) { // Subtle ghost trail for normal balls
+                    _particles->spawnPixel(_balls[i].x + 1, _balls[i].y + 1, 0, 0, random(3, 8));
+                }
             }
         }
 
