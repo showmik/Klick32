@@ -5,6 +5,7 @@
 #include "BrickBreakerGame.h"
 #include "ChessGame.h"
 #include "DinoGame.h"
+#include "DoomGame.h"
 #include "PongGame.h"
 #include "SnakeGame.h"
 #include "SpaceInvadersGame.h"
