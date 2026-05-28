@@ -12,14 +12,13 @@ public:
     }
 
     // Play a tone at freqHz for durationMs milliseconds (non-blocking).
-    // By default uses voice 3 (SFX channel).
     void beep(uint16_t freqHz, uint32_t durationMs = 50) {
-        SynthEngine::playTone(3, freqHz, durationMs, Waveform::SQUARE);
+        SynthEngine::playTone(freqHz, durationMs, Waveform::SQUARE);
     }
     
     // Play a noise burst (explosions, hits)
     void noise(uint32_t durationMs = 50) {
-        SynthEngine::playTone(3, 440, durationMs, Waveform::NOISE);
+        SynthEngine::playTone(440, durationMs, Waveform::NOISE);
     }
 
     void stop() { SynthEngine::stopAll(); }

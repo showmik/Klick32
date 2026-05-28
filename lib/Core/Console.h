@@ -124,6 +124,7 @@ public:
     void saveBool (const char* key, bool     v) { _save.putBool (key, v); }
     void saveByte (const char* key, uint8_t  v) { _save.putByte (key, v); }
     void saveBytes(const char* key, const void* v, size_t len) { _save.putBytes(key, v, len); }
+    void saveStr  (const char* key, const char* v)              { _save.putStr(key, v); }
 
     // ── Read ──────────────────────────────────────────────────────────────────
     uint32_t loadUInt (const char* key, uint32_t def = 0)    { return _save.getUInt (key, def); }
@@ -132,6 +133,7 @@ public:
     bool     loadBool (const char* key, bool     def = false) { return _save.getBool (key, def); }
     uint8_t  loadByte (const char* key, uint8_t  def = 0)    { return _save.getByte (key, def); }
     size_t   loadBytes(const char* key, void* buf, size_t maxLen) { return _save.getBytes(key, buf, maxLen); }
+    size_t   loadStr  (const char* key, char* buf, size_t bufSize, const char* def = "") { return _save.getStr(key, buf, bufSize, def); }
 
     // True if the key has been written at least once.
     bool hasSave(const char* key) { return _save.hasKey(key); }
@@ -158,6 +160,12 @@ public:
     // ══════════════════════════════════════════════════════════════════════════
     void setCamera(Camera* cam) { _camera = cam; }
     Camera* getCamera() const { return _camera; }
+
+    // Call this before drawing HUD elements (score, lives) that should not scroll.
+    void beginScreenSpace() { _screenSpace = true; }
+
+    // Call this after drawing the HUD to resume scrolling for game world elements.
+    void endScreenSpace() { _screenSpace = false; }
 
     // ══════════════════════════════════════════════════════════════════════════
     // DRAWING
@@ -212,6 +220,52 @@ public:
     // ── Text ──────────────────────────────────────────────────────────────────
     // y is the baseline, not the top of the character.
     void drawStr(int x, int y, const char* str) { _disp.drawStr(x + _camX(), y + _camY(), str); }
+
+    // Horizontally centered text.
+    //   ctx.drawStrCentered(32, "GAME OVER");
+    void drawStrCentered(int y, const char* str) {
+        int w = (int)_disp.getStrWidth(str);
+        _disp.drawStr((W - w) / 2 + _camX(), y + _camY(), str);
+    }
+
+    // Centered both horizontally and vertically.
+    // Vertical centering uses font ascent (approximate — assumes ~7px glyph height).
+    void drawStrCenteredBoth(const char* str) {
+        int w = (int)_disp.getStrWidth(str);
+        int fontH = _disp.getMaxCharHeight();
+        _disp.drawStr((W - w) / 2 + _camX(), (H + fontH) / 2 + _camY(), str);
+    }
+
+    // Right-aligned text.
+    //   ctx.drawStrRight(W - 2, 10, "99");
+    void drawStrRight(int x, int y, const char* str) {
+        int w = (int)_disp.getStrWidth(str);
+        _disp.drawStr(x - w + _camX(), y + _camY(), str);
+    }
+
+    // Printf-style formatted text.
+    // Eliminates the char buf[32]; snprintf(buf,...); drawStr(x,y,buf) pattern.
+    //   ctx.drawPrintf(2, 10, "Score: %d", score);
+    void drawPrintf(int x, int y, const char* fmt, ...) __attribute__((format(printf, 4, 5))) {
+        char buf[48];
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(buf, sizeof(buf), fmt, args);
+        va_end(args);
+        _disp.drawStr(x + _camX(), y + _camY(), buf);
+    }
+
+    // Printf-style, horizontally centered.
+    //   ctx.drawPrintfCentered(32, "Level %d", level);
+    void drawPrintfCentered(int y, const char* fmt, ...) __attribute__((format(printf, 3, 4))) {
+        char buf[48];
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(buf, sizeof(buf), fmt, args);
+        va_end(args);
+        int w = (int)_disp.getStrWidth(buf);
+        _disp.drawStr((W - w) / 2 + _camX(), y + _camY(), buf);
+    }
 
     // ── Bitmaps & Tilemaps ────────────────────────────────────────────────────
     
@@ -299,12 +353,13 @@ private:
 
     friend class OS;
 
-    int _camX() const { return _camera ? _camera->getOffsetX() : 0; }
-    int _camY() const { return _camera ? _camera->getOffsetY() : 0; }
+    int _camX() const { return (_camera && !_screenSpace) ? _camera->getOffsetX() : 0; }
+    int _camY() const { return (_camera && !_screenSpace) ? _camera->getOffsetY() : 0; }
 
     U8G2&         _disp;
     InputManager& _input;
     Sound&        _sound;
     SaveManager&  _save;
     Camera*       _camera = nullptr;
+    bool          _screenSpace = false;
 };

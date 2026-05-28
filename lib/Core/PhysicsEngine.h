@@ -67,7 +67,7 @@ public:
         float exitTime  = min(exitTimeX, exitTimeY);
 
         // Check if there was no collision
-        if (entryTime > exitTime || entryTimeX < 0.0f && entryTimeY < 0.0f || entryTimeX > 1.0f || entryTimeY > 1.0f) {
+        if (entryTime > exitTime || (entryTimeX < 0.0f && entryTimeY < 0.0f) || entryTimeX > 1.0f || entryTimeY > 1.0f) {
             return res; // No hit
         } else {
             // Collision occurred

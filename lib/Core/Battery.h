@@ -15,13 +15,16 @@
 class Battery {
 public:
     void begin() {
+#ifndef SIMULATOR
         analogReadResolution(12); // 12-bit ADC (0–4095)
         pinMode(PIN_CHRG, INPUT_PULLUP);
+#endif
     }
 
     // Returns 0–100. Averages 8 samples to reduce ADC noise.
     // Call once every few seconds, not every frame.
     uint8_t readPercent() {
+#ifndef SIMULATOR
         uint32_t sum = 0;
         for (uint8_t i = 0; i < 8; i++) {
             sum += analogReadMilliVolts(PIN_BATT_ADC);
@@ -37,10 +40,17 @@ public:
         if (vbat_mv <= VMIN) return 0;
         if (vbat_mv >= VMAX) return 100;
         return (uint8_t)((vbat_mv - VMIN) * 100UL / (VMAX - VMIN));
+#else
+        return 100;
+#endif
     }
 
     // True when charging IC asserts CHRG LOW.
     bool isCharging() const {
+#ifndef SIMULATOR
         return digitalRead(PIN_CHRG) == LOW;
+#else
+        return false;
+#endif
     }
 };

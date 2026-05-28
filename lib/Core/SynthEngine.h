@@ -16,12 +16,19 @@ struct Voice {
     uint32_t startTimeMs = 0;
     float phase = 0.0f;
     float phaseInc = 0.0f;
+    
+    // Envelope (Attack/Release in ms)
+    uint16_t attackMs = 5;
+    uint16_t releaseMs = 50;
 };
 
 class SynthEngine {
 public:
     static void begin(uint8_t pin);
-    static void playTone(uint8_t voiceIdx, uint16_t freqHz, uint32_t durationMs, Waveform wave = Waveform::SQUARE);
+    
+    // Automatically selects a free voice (or steals the oldest). Returns the voice index.
+    static int playTone(uint16_t freqHz, uint32_t durationMs, Waveform wave = Waveform::SQUARE);
+    
     static void stopAll();
     static void setMuted(bool m);
     static bool isMuted();

@@ -15,6 +15,15 @@
 //   • Helpers are prefixed (g-) to avoid collisions with Arduino / C++ stdlib.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Clamp v into the closed interval [lo, hi].
+// Prefixed 'g' to avoid conflict with std::clamp (C++17).
+//
+//   float speed = gclamp(speed + inc, 0.0f, MAX_SPEED);
+template<typename T>
+inline T gclamp(T v, T lo, T hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
 
 // ─── Vec2 ────────────────────────────────────────────────────────────────────
 // General-purpose float vector.
@@ -32,9 +41,13 @@ struct Vec2 {
     Vec2  operator+ (const Vec2& o) const { return {x + o.x, y + o.y}; }
     Vec2  operator- (const Vec2& o) const { return {x - o.x, y - o.y}; }
     Vec2  operator* (float s)       const { return {x * s,   y * s  }; }
+    Vec2  operator/ (float s)       const { return {x / s,   y / s  }; }
     Vec2& operator+=(const Vec2& o)       { x += o.x; y += o.y; return *this; }
     Vec2& operator-=(const Vec2& o)       { x -= o.x; y -= o.y; return *this; }
     Vec2& operator*=(float s)             { x *= s;   y *= s;   return *this; }
+    Vec2& operator/=(float s)             { x /= s;   y /= s;   return *this; }
+    bool  operator==(const Vec2& o) const { return x == o.x && y == o.y; }
+    bool  operator!=(const Vec2& o) const { return !(*this == o); }
 
     // ── Convenience ───────────────────────────────────────────────────────────
 
@@ -43,6 +56,44 @@ struct Vec2 {
 
     // Integer screen-space y (truncates toward zero).
     int iy() const { return (int)y; }
+
+    // ── Vector math ──────────────────────────────────────────────────────────
+
+    // Squared length (avoids sqrt — use for comparisons).
+    //   if (vel.lengthSq() > MAX_SPEED*MAX_SPEED) { /* too fast */ }
+    float lengthSq() const { return x * x + y * y; }
+
+    // Actual length (uses sqrt — prefer lengthSq for comparisons).
+    float length() const { return sqrtf(x * x + y * y); }
+
+    // Manhattan distance (|x| + |y|). Good for grid-based games.
+    float manhattan() const { return fabsf(x) + fabsf(y); }
+
+    // Dot product.
+    float dot(const Vec2& o) const { return x * o.x + y * o.y; }
+
+    // Returns a unit vector. If length is zero, returns {0,0}.
+    Vec2 normalized() const {
+        float len = length();
+        return len > 0.0001f ? Vec2{x / len, y / len} : Vec2{0, 0};
+    }
+
+    // Returns a vector with each component's sign: -1, 0, or +1.
+    Vec2 sign() const {
+        return {(float)((x > 0) - (x < 0)), (float)((y > 0) - (y < 0))};
+    }
+
+    // Component-wise clamp.
+    Vec2 clamped(Vec2 lo, Vec2 hi) const {
+        return {gclamp(x, lo.x, hi.x), gclamp(y, lo.y, hi.y)};
+    }
+
+    // Squared distance between two points.
+    //   if (Vec2::distSq(a, b) < 64) { /* within 8 px */ }
+    static float distSq(Vec2 a, Vec2 b) { return (a - b).lengthSq(); }
+
+    // Distance between two points.
+    static float dist(Vec2 a, Vec2 b) { return (a - b).length(); }
 };
 
 
@@ -67,6 +118,16 @@ struct Rect {
                  y + h <= o.y || o.y + o.h <= y);
     }
 
+    // True if point (px, py) lies within the rect.
+    bool contains(int px, int py) const {
+        return px >= x && px < x + w && py >= y && py < y + h;
+    }
+
+    // Center point of the rect.
+    Vec2 center() const {
+        return {x + w * 0.5f, y + h * 0.5f};
+    }
+
     // Returns a new Rect shrunk by dx pixels on the left AND right sides,
     // and by dy pixels on the top AND bottom. Use for hitbox insets.
     //
@@ -80,15 +141,6 @@ struct Rect {
 
 // ─── Math helpers ─────────────────────────────────────────────────────────────
 
-// Clamp v into the closed interval [lo, hi].
-// Prefixed 'g' to avoid conflict with std::clamp (C++17).
-//
-//   float speed = gclamp(speed + inc, 0.0f, MAX_SPEED);
-template<typename T>
-inline T gclamp(T v, T lo, T hi) {
-    return v < lo ? lo : (v > hi ? hi : v);
-}
-
 // Integer linear interpolation. Returns a + (b – a) * t / tmax.
 // Useful for UI slide-ins, camera tracking, and score animations.
 // t is clamped to [0, tmax] automatically.
@@ -97,6 +149,22 @@ inline T gclamp(T v, T lo, T hi) {
 inline int lerpi(int a, int b, int t, int tmax) {
     t = gclamp(t, 0, tmax);
     return a + (b - a) * t / tmax;
+}
+
+// Float linear interpolation. Returns a + (b – a) * t.
+// t is clamped to [0, 1] automatically.
+//
+//   float alpha = lerpf(0.0f, 1.0f, progress);
+inline float lerpf(float a, float b, float t) {
+    t = gclamp(t, 0.0f, 1.0f);
+    return a + (b - a) * t;
+}
+
+// Map a value from one range to another.
+//   float pct = mapRange(health, 0, maxHealth, 0.0f, 1.0f);
+inline float mapRange(float v, float inMin, float inMax, float outMin, float outMax) {
+    if (inMax == inMin) return outMin;
+    return outMin + (v - inMin) * (outMax - outMin) / (inMax - inMin);
 }
 
 // Sign of a value: returns -1, 0, or +1.

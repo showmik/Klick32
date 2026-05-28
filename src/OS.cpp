@@ -50,7 +50,7 @@ void OS::begin() {
         _games[_gameCount].name = temp->getName();
         _games[_gameCount].icon = temp->getIcon();
         _games[_gameCount].cover = temp->getCoverArt();
-        delete temp;
+        // Do NOT delete temp; it is a static instance
         _gameCount++;
         curr = curr->next;
     }
@@ -115,7 +115,7 @@ void OS::run() {
                 // Game wants to exit -> Return to the menu!
                 activeGame->onExit(_console);
                 _save.end();                         // Close NVS namespace
-                delete activeGame;                   // DYNAMIC DELETION
+                // Do NOT delete activeGame; it is a static instance
                 activeGame = &_sysMenu;
                 activeGame->onEnter(_console);
                 SFX::menuBack(_sound);

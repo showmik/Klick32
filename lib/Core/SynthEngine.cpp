@@ -43,11 +43,25 @@ void SynthEngine::begin(uint8_t pin) {
 #endif
 }
 
-void SynthEngine::playTone(uint8_t voiceIdx, uint16_t freqHz, uint32_t durationMs, Waveform wave) {
-    if (voiceIdx >= 4) return;
-    if (_muted) return;
+int SynthEngine::playTone(uint16_t freqHz, uint32_t durationMs, Waveform wave) {
+    if (_muted) return -1;
 
-    Voice& v = _voices[voiceIdx];
+    // Find a free voice, or the oldest active voice to steal
+    int bestVoice = 0;
+    uint32_t oldestTime = 0xFFFFFFFF;
+    
+    for (int i = 0; i < 4; i++) {
+        if (!_voices[i].active) {
+            bestVoice = i;
+            break;
+        }
+        if (_voices[i].startTimeMs < oldestTime) {
+            oldestTime = _voices[i].startTimeMs;
+            bestVoice = i;
+        }
+    }
+
+    Voice& v = _voices[bestVoice];
     v.freqHz = freqHz;
     v.durationMs = durationMs;
     v.wave = wave;
@@ -55,13 +69,21 @@ void SynthEngine::playTone(uint8_t voiceIdx, uint16_t freqHz, uint32_t durationM
     v.phase = 0.0f;
     v.phaseInc = (float)freqHz / (float)SAMPLE_RATE;
     v.active = true;
+    
+    // Default envelope based on waveform
+    v.attackMs = (wave == Waveform::NOISE) ? 1 : 10;
+    v.releaseMs = (wave == Waveform::NOISE) ? durationMs / 2 : 50;
+
+    return bestVoice;
 }
 
 void SynthEngine::stopAll() {
     for (int i = 0; i < 4; i++) {
         _voices[i].active = false;
     }
+#ifndef SIMULATOR
     ledcWrite(_pin, 0);
+#endif
 }
 
 void SynthEngine::setMuted(bool m) {
@@ -108,7 +130,16 @@ void SynthEngine::_audioTask(void* userdata, uint8_t* stream, int len) {
                 sample = ((float)random(0, 1000) / 500.0f) - 1.0f;
             }
             
-            mixedSample += (int32_t)(sample * 127.0f);
+            // Apply Attack / Release envelope
+            uint32_t elapsed = nowMs - v.startTimeMs;
+            float env = 1.0f;
+            if (elapsed < v.attackMs) {
+                env = (float)elapsed / (float)v.attackMs;
+            } else if (elapsed > v.durationMs - v.releaseMs) {
+                env = (float)(v.durationMs - elapsed) / (float)v.releaseMs;
+            }
+            
+            mixedSample += (int32_t)(sample * env * 127.0f);
         }
 
         if (activeCount > 0) {
@@ -160,7 +191,16 @@ void SynthEngine::_audioTask(void* pvParameters) {
                 sample = ((float)random(0, 1000) / 500.0f) - 1.0f;
             }
             
-            mixedSample += (int32_t)(sample * 127.0f);
+            // Apply Attack / Release envelope
+            uint32_t elapsed = nowMs - v.startTimeMs;
+            float env = 1.0f;
+            if (v.attackMs > 0 && elapsed < v.attackMs) {
+                env = (float)elapsed / (float)v.attackMs;
+            } else if (v.releaseMs > 0 && v.durationMs >= v.releaseMs && elapsed > (v.durationMs - v.releaseMs)) {
+                env = (float)(v.durationMs - elapsed) / (float)v.releaseMs;
+            }
+            
+            mixedSample += (int32_t)(sample * env * 127.0f);
         }
 
         if (activeCount > 0) {

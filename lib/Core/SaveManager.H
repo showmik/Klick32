@@ -29,6 +29,7 @@
 //   float     — physics constants, persistent floats
 //   bool      — feature flags, one-time events
 //   uint8_t   — small enums, levels 0-255
+//   string    — player names, short labels (≤ 15 chars)
 //
 // Convenience shortcut:
 //   saveHiScore(n) / loadHiScore()  — uses the reserved key "hi".
@@ -65,6 +66,7 @@ public:
     void putBool (const char* key, bool     v) { _prefs.putBool (key, v); }
     void putByte (const char* key, uint8_t  v) { _prefs.putUChar(key, v); }
     void putBytes(const char* key, const void* v, size_t len) { _prefs.putBytes(key, v, len); }
+    void putStr  (const char* key, const char* v)              { _prefs.putString(key, v); }
 
     // ── Read ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +76,16 @@ public:
     bool     getBool (const char* key, bool     def = false)   { return _prefs.getBool (key, def); }
     uint8_t  getByte (const char* key, uint8_t  def = 0)      { return _prefs.getUChar(key, def); }
     size_t   getBytes(const char* key, void* buf, size_t maxLen) { return _prefs.getBytes(key, buf, maxLen); }
+
+    // Read a string. Returns actual length written (excluding null terminator), 0 if key not found.
+    size_t   getStr(const char* key, char* buf, size_t bufSize, const char* def = "") {
+        String s = _prefs.getString(key, def);
+        size_t len = s.length();
+        if (len >= bufSize) len = bufSize - 1;
+        memcpy(buf, s.c_str(), len);
+        buf[len] = '\0';
+        return len;
+    }
 
     // True if the key exists in the current namespace.
     bool hasKey(const char* key) { return _prefs.isKey(key); }

@@ -17,7 +17,7 @@ struct GameRegistryNode {
 };
 
 #define REGISTER_GAME(ClassName) \
-    static GameBase* _factory_##ClassName() { return new ClassName(); } \
+    static GameBase* _factory_##ClassName() { static ClassName instance; return &instance; } \
     static GameRegistryNode _node_##ClassName = { _factory_##ClassName, nullptr }; \
     struct _Register_##ClassName { \
         _Register_##ClassName() { \
