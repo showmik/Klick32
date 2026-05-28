@@ -70,9 +70,12 @@ static const uint8_t tex_medkit_mask[8] = {
 // DoomTitleScene
 // =============================================================================
 
-void DoomTitleScene::onEnter(Console& ctx) {}
+void DoomTitleScene::onEnter(Console& ctx) {
+    frame_counter = 0;
+}
 
 void DoomTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
+    frame_counter++;
     if (ctx.justPressed(Btn::A)) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Play
@@ -81,9 +84,35 @@ void DoomTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void DoomTitleScene::draw(Console& ctx) {
+    // Draw huge skull in the background
+    int sx = Console::W / 2 - 16;
+    int sy = Console::H / 2 - 24;
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            if (tex_skull[y] & (1 << (7 - x))) {
+                ctx.drawBox(sx + x * 4, sy + y * 4, 4, 4);
+            }
+        }
+    }
+    
+    // Draw pulsing title overlay
+    ctx.setDrawColor(Console::COLOR_BLACK);
+    ctx.drawBox(0, Console::H / 2 + 5, Console::W, 15); // Clear text area
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    
     ctx.setFont(u8g2_font_6x10_tf);
-    ctx.drawStrCenteredBoth("DOOM");
-    if (_data->hiScore > 0) ctx.drawPrintfCentered(50, "HI: %d", _data->hiScore);
+    ctx.drawStrCentered(Console::H / 2 + 15, "DOOM 1-BIT");
+    
+    if (_data->hiScore > 0) {
+        ctx.setFont(u8g2_font_4x6_tf);
+        ctx.drawPrintfCentered(Console::H - 6, "HI: %d", _data->hiScore);
+    }
+    
+    if (frame_counter % 30 < 15) {
+        ctx.setFont(u8g2_font_4x6_tf);
+        ctx.drawStrCentered(Console::H - 15, "PRESS A");
+    }
 }
 
 // =============================================================================
@@ -103,7 +132,11 @@ void DoomWinScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void DoomWinScene::draw(Console& ctx) {
     ctx.setFont(u8g2_font_6x10_tf);
-    ctx.drawStrCentered(20, "YOU ESCAPED!");
+    if (_data->hp <= 0) {
+        ctx.drawStrCentered(20, "YOU DIED!");
+    } else {
+        ctx.drawStrCentered(20, "YOU ESCAPED!");
+    }
     ctx.drawPrintfCentered(35, "SCORE: %d", _data->score);
     ctx.drawPrintfCentered(50, "HP: %d AMMO: %d", _data->hp, _data->ammo);
 }
@@ -118,6 +151,9 @@ void DoomPlayScene::onEnter(Console& ctx) {
     player_dir = 0.0f;
     weapon_bob = 0.0f;
     fire_timer = 0;
+    frame_counter = 0;
+    damage_timer = 0;
+    show_minimap = false;
     _data->score = 0;
     _data->hp = 100;
     _data->ammo = 20;
@@ -141,8 +177,14 @@ void DoomPlayScene::onEnter(Console& ctx) {
 
 void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::B)) { sm.emit(ctx, Event::QUIT); return; }
-    if (dt > 0.1f) dt = 0.1f;
+    if (ctx.justPressed(Btn::MENU2)) { show_minimap = !show_minimap; }
     
+    if (dt > 0.1f) dt = 0.1f;
+    frame_counter++;
+    
+    if (damage_timer > 0) damage_timer--;
+    if (fire_timer > 0) fire_timer--;
+
     float move_speed = 3.0f * dt;
     float rot_speed = 2.0f * dt;
     bool moved = false;
@@ -170,8 +212,7 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         if (weapon_bob > 3.14159f * 2.0f) weapon_bob -= 3.14159f * 2.0f;
     }
 
-    if (fire_timer > 0) fire_timer--;
-
+    // Player Shooting
     if (ctx.justPressed(Btn::A) && fire_timer == 0 && _data->ammo > 0) {
         fire_timer = 10;
         _data->ammo--;
@@ -193,7 +234,6 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 _data->score += 100;
                 ctx.beep(800, 50);
                 
-                // Spawn death particles
                 for (int p = 0; p < 10; p++) {
                     float a = (rand() % 360) * 3.14159f / 180.0f;
                     float s = (rand() % 100) / 50.0f;
@@ -204,16 +244,28 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         }
     }
     
+    // Enemy Attacks & Pickups
     for (int i = 0; i < num_sprites; i++) {
         if (!sprites[i].active) continue;
         float dx = sprites[i].x - player_x;
         float dy = sprites[i].y - player_y;
-        if (dx*dx + dy*dy < 0.3f) { // Touch radius
-            if (sprites[i].type == 2) { // Medkit
-                _data->hp += 25;
-                if (_data->hp > 100) _data->hp = 100;
-                sprites[i].active = false;
-                ctx.sfxPoint();
+        float dist = std::sqrt(dx*dx + dy*dy);
+        
+        if (sprites[i].type == 2 && dist < 0.5f) { // Medkit
+            _data->hp += 25;
+            if (_data->hp > 100) _data->hp = 100;
+            sprites[i].active = false;
+            ctx.sfxPoint();
+        }
+        else if (sprites[i].type == 1 && dist < 4.0f) { // Enemy attack range
+            if ((rand() % 100) < 2) { // 2% chance per frame to attack
+                _data->hp -= 10;
+                damage_timer = 5;
+                ctx.beep(150, 100);
+                if (_data->hp <= 0) {
+                    _data->hp = 0;
+                    sm.emit(ctx, Event::CUSTOM_3); // Game Over (WinScene handles death text)
+                }
             }
         }
     }
@@ -225,8 +277,14 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void DoomPlayScene::draw(Console& ctx) {
-    // Room Illumination Flash on Fire
-    if (fire_timer > 8) {
+    // Room Illumination Flash on Fire, Screen Shake on Damage
+    int shakeX = 0, shakeY = 0;
+    if (damage_timer > 0) {
+        shakeX = (rand() % 5) - 2;
+        shakeY = (rand() % 5) - 2;
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawDitherBox(0, 0, Console::W, Console::H, 2);
+    } else if (fire_timer > 8) {
         ctx.setDrawColor(Console::COLOR_WHITE);
         ctx.drawDitherBox(0, 0, Console::W, Console::H, 2);
     } else {
@@ -243,7 +301,6 @@ void DoomPlayScene::draw(Console& ctx) {
     int lastMapX = -1;
     int lastMapY = -1;
     
-    // View bob offset (makes the whole 3D projection bounce slightly)
     int viewBobY = static_cast<int>(std::cos(weapon_bob * 2.0f) * 2.0f);
     
     for (int x = 0; x < Console::W; x++) {
@@ -302,27 +359,29 @@ void DoomPlayScene::draw(Console& ctx) {
         zBuffer[x] = perpWallDist;
         
         int lineHeight = static_cast<int>(Console::H / (perpWallDist + 0.0001f));
-        int drawStart = -lineHeight / 2 + Console::H / 2 + viewBobY;
+        int drawStart = -lineHeight / 2 + Console::H / 2 + viewBobY + shakeY;
         if (drawStart < 0) drawStart = 0;
-        int drawEnd = lineHeight / 2 + Console::H / 2 + viewBobY;
+        int drawEnd = lineHeight / 2 + Console::H / 2 + viewBobY + shakeY;
         if (drawEnd >= Console::H) drawEnd = Console::H - 1;
         
+        int drawX = x + shakeX;
+        if (drawX < 0 || drawX >= Console::W) continue;
+
         ctx.setDrawColor(Console::COLOR_WHITE);
-        if (hit == 9) { // Exit
-            if (x % 2 == 0) ctx.drawVLine(x, drawStart, drawEnd - drawStart + 1);
+        if (hit == 9) { 
+            if (x % 2 == 0) ctx.drawVLine(drawX, drawStart, drawEnd - drawStart + 1);
         } else {
             uint8_t shade = (side == 0) ? 4 : 2;
             if (perpWallDist > 8.0f) shade = (side == 0) ? 2 : 1;
             
-            ctx.drawDitherBox(x, drawStart, 1, drawEnd - drawStart + 1, shade);
+            ctx.drawDitherBox(drawX, drawStart, 1, drawEnd - drawStart + 1, shade);
             
-            // Draw a black outline separating geometric faces, and cap top/bottom
             ctx.setDrawColor(Console::COLOR_BLACK);
             if (x > 0 && (mapX != lastMapX || mapY != lastMapY)) {
-                ctx.drawVLine(x, drawStart, drawEnd - drawStart + 1);
+                ctx.drawVLine(drawX, drawStart, drawEnd - drawStart + 1);
             }
-            ctx.drawPixel(x, drawStart);
-            ctx.drawPixel(x, drawEnd);
+            ctx.drawPixel(drawX, drawStart);
+            ctx.drawPixel(drawX, drawEnd);
         }
         
         lastMapX = mapX;
@@ -357,8 +416,8 @@ void DoomPlayScene::draw(Console& ctx) {
         
         int spriteScreenX = static_cast<int>((Console::W / 2) * (1 + transformX / transformY));
         int spriteHeight = std::abs(static_cast<int>(Console::H / transformY));
-        int drawStartY = -spriteHeight / 2 + Console::H / 2 + viewBobY;
-        int drawEndY = spriteHeight / 2 + Console::H / 2 + viewBobY;
+        int drawStartY = -spriteHeight / 2 + Console::H / 2 + viewBobY + shakeY;
+        int drawEndY = spriteHeight / 2 + Console::H / 2 + viewBobY + shakeY;
         
         int spriteWidth = std::abs(static_cast<int>(Console::H / transformY));
         int drawStartX = -spriteWidth / 2 + spriteScreenX;
@@ -368,21 +427,23 @@ void DoomPlayScene::draw(Console& ctx) {
         const uint8_t* tex_mask = (sprites[i].type == 1) ? tex_skull_mask : tex_medkit_mask;
         
         for (int stripe = drawStartX; stripe < drawEndX; stripe++) {
+            if (stripe < 0 || stripe >= Console::W) continue; // FIX out of bounds access to zBuffer
+            
             int texX = static_cast<int>(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * 8 / spriteWidth) / 256;
-            if (transformY > 0 && stripe >= 0 && stripe < Console::W && transformY < zBuffer[stripe]) {
+            int drawX = stripe + shakeX;
+            
+            if (transformY > 0 && drawX >= 0 && drawX < Console::W && transformY < zBuffer[stripe]) {
                 for (int y = drawStartY; y < drawEndY; y++) {
-                    int d = y * 256 - Console::H * 128 - viewBobY * 256 + spriteHeight * 128;
+                    int d = y * 256 - Console::H * 128 - viewBobY * 256 - shakeY * 256 + spriteHeight * 128;
                     int texY = ((d * 8) / spriteHeight) / 256;
                     if (texX >= 0 && texX < 8 && texY >= 0 && texY < 8) {
-                        // Draw black mask first to separate from background
                         if (tex_mask[texY] & (1 << (7 - texX))) {
                             ctx.setDrawColor(Console::COLOR_BLACK);
-                            ctx.drawPixel(stripe, y);
+                            ctx.drawPixel(drawX, y);
                         }
-                        // Draw white fill
                         if (tex[texY] & (1 << (7 - texX))) {
                             ctx.setDrawColor(Console::COLOR_WHITE);
-                            ctx.drawPixel(stripe, y);
+                            ctx.drawPixel(drawX, y);
                         }
                     }
                 }
@@ -390,26 +451,21 @@ void DoomPlayScene::draw(Console& ctx) {
         }
     }
     
-    // Draw Particles
     _particles->draw(ctx);
     
     // Draw Gun HUD 
     int bobY = static_cast<int>(std::sin(weapon_bob) * 3.0f);
     int gunX = Console::W / 2;
     int gunY = Console::H - 12 + bobY;
-    if (fire_timer > 5) gunY += 5; // Recoil
+    if (fire_timer > 5) gunY += 5; 
     
-    // Shadow/outline
     ctx.setDrawColor(Console::COLOR_BLACK);
     ctx.drawBox(gunX - 5, gunY - 1, 10, Console::H - gunY + 2); 
     ctx.drawBox(gunX - 3, gunY - 5, 6, 6);
-    
-    // Fill
     ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.drawBox(gunX - 4, gunY, 8, Console::H - gunY); 
     ctx.drawBox(gunX - 2, gunY - 4, 4, 4); 
     
-    // Muzzle flash
     if (fire_timer > 7) {
         ctx.setDrawColor(Console::COLOR_BLACK);
         ctx.drawCircle(gunX, gunY - 6, 6);
@@ -417,12 +473,47 @@ void DoomPlayScene::draw(Console& ctx) {
         ctx.drawCircle(gunX, gunY - 6, 4);
     }
     
-    ctx.setDrawColor(Console::COLOR_WHITE);
-    ctx.drawPixel(Console::W / 2, Console::H / 2); // Crosshair
+    // Crosshair
+    if (fire_timer == 0) {
+        ctx.setDrawColor(Console::COLOR_XOR);
+        ctx.drawPixel(Console::W / 2 - 2, Console::H / 2);
+        ctx.drawPixel(Console::W / 2 + 2, Console::H / 2);
+        ctx.drawPixel(Console::W / 2, Console::H / 2 - 2);
+        ctx.drawPixel(Console::W / 2, Console::H / 2 + 2);
+        ctx.drawPixel(Console::W / 2,     Console::H / 2);
+    }
     
-    // Stats
+    // HUD Stats Bar at Top
+    ctx.setDrawColor(Console::COLOR_BLACK);
+    ctx.drawBox(0, 0, Console::W, 9);
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    ctx.drawHLine(0, 8, Console::W);
     ctx.setFont(u8g2_font_4x6_tf);
     ctx.drawPrintf(2, 6, "SC:%d HP:%d AMMO:%d", _data->score, _data->hp, _data->ammo);
+    
+    // Minimap
+    if (show_minimap) {
+        int mm_size = MAP_WIDTH * 2;
+        int mm_x = Console::W - mm_size - 4;
+        int mm_y = Console::H - mm_size - 4; // Bottom right corner
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawBox(mm_x - 2, mm_y - 2, mm_size + 4, mm_size + 4);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawFrame(mm_x - 2, mm_y - 2, mm_size + 4, mm_size + 4);
+        
+        for (int my = 0; my < MAP_HEIGHT; my++) {
+            for (int mx = 0; mx < MAP_WIDTH; mx++) {
+                if (map[my][mx] > 0 && map[my][mx] < 5) {
+                    ctx.drawBox(mm_x + mx * 2, mm_y + my * 2, 2, 2);
+                } else if (map[my][mx] == 9) {
+                    if (frame_counter % 10 < 5) ctx.drawBox(mm_x + mx * 2, mm_y + my * 2, 2, 2);
+                }
+            }
+        }
+        if (frame_counter % 4 < 2) {
+            ctx.drawPixel(mm_x + (int)(player_x * 2), mm_y + (int)(player_y * 2));
+        }
+    }
 }
 
 // =============================================================================

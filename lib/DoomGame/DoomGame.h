@@ -24,6 +24,7 @@ public:
     void draw(Console& ctx) override;
 private:
     DoomData* _data = nullptr;
+    int frame_counter = 0;
 };
 
 class DoomWinScene : public Scene {
@@ -56,6 +57,10 @@ private:
     
     float weapon_bob = 0;
     int fire_timer = 0;
+    
+    int frame_counter = 0;
+    int damage_timer = 0;
+    bool show_minimap = false;
     
     uint8_t map[12][12];
     DoomSprite sprites[20];
