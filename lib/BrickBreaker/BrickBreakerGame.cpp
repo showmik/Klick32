@@ -303,6 +303,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::A)) {
         for (int i = 0; i < MAX_BALLS; ++i) {
             if (_balls[i].active && _balls[i].sticky) {
+                _msgTimer = 0; // Clear any active level overlay instantly
                 _balls[i].sticky = false;
                 _balls[i].vy = -INIT_SPEED;
                 _balls[i].vx = ((_balls[i].x - (_padX + _padW/2.0f)) / (_padW/2.0f)) * INIT_SPEED;
@@ -342,7 +343,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         // Wall collisions
         if (_balls[i].x <= 0) { _balls[i].x = 0; _balls[i].vx = -_balls[i].vx; ctx.beep(300, 10); }
         if (_balls[i].x >= Console::W - 1) { _balls[i].x = Console::W - 1; _balls[i].vx = -_balls[i].vx; ctx.beep(300, 10); }
-        if (_balls[i].y <= 0) { _balls[i].y = 0; _balls[i].vy = -_balls[i].vy; ctx.beep(300, 10); }
+        if (_balls[i].y <= 8) { _balls[i].y = 8; _balls[i].vy = -_balls[i].vy; ctx.beep(300, 10); }
 
         // Paddle collision
         if (_balls[i].vy > 0 && _balls[i].y >= PAD_Y - 2 && _balls[i].y <= PAD_Y + 2) {
@@ -459,12 +460,46 @@ void BBPlayScene::draw(Console& ctx) {
 
     // HUD
     ctx.beginScreenSpace();
-    ctx.drawPrintf(0, 8, "Sc:%d", _data->score);
-    ctx.drawPrintf(80, 8, "L:%d", _data->lives);
     
-    if (_msgTimer > 0) {
-        ctx.drawStrCentered(40, _msg);
+    // Top Bar Background
+    ctx.pushDrawState();
+    ctx.setDrawColor(Console::COLOR_BLACK);
+    ctx.drawBox(0, 0, Console::W, 7);
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    ctx.drawLine(0, 7, Console::W, 7);
+    
+    ctx.setFont(u8g2_font_4x6_tr);
+    ctx.drawPrintf(2, 6, "%06d", _data->score);
+    ctx.drawPrintfCentered(6, "LVL %d", _data->level);
+    
+    // Hearts for lives
+    auto drawHeart = [](Console& c, int hx, int hy) {
+        c.drawPixel(hx+1, hy); c.drawPixel(hx+3, hy);
+        c.drawBox(hx, hy+1, 5, 2);
+        c.drawBox(hx+1, hy+3, 3, 1);
+        c.drawPixel(hx+2, hy+4);
+    };
+    
+    for (int l = 0; l < _data->lives; ++l) {
+        drawHeart(ctx, Console::W - 8 - (l * 7), 1);
     }
+    
+    // Dynamic Combo Multiplier
+    if (_combo > 1) {
+        if ((millis() / 150) % 2 == 0) {
+            ctx.drawPrintf(Console::W - 16, Console::H - 8, "x%d", _combo);
+        }
+    }
+    
+    // Level/Action Message Pop-up
+    if (_msgTimer > 0) {
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawBox(Console::W/2 - 25, 30, 50, 15);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawFrame(Console::W/2 - 25, 30, 50, 15);
+        ctx.drawStrCentered(39, _msg);
+    }
+    ctx.popDrawState();
     ctx.endScreenSpace();
 }
 
