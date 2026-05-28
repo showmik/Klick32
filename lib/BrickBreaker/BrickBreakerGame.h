@@ -4,7 +4,7 @@
 #include "SceneManager.h"
 #include "Scene.h"
 #include "Camera.h"
-#include "AnimationManager.h"
+#include "ParticleManager.h"
 
 // ─── Shared Game State ──────────────────────────────────────────────────────
 struct BBSharedData {
@@ -58,7 +58,7 @@ private:
 class BBPlayScene : public Scene {
 public:
     void setData   (BBSharedData* d) { _data = d; }
-    void setEngine (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setEngine (Camera* cam, ParticleManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -83,7 +83,7 @@ private:
 
     BBSharedData*     _data      = nullptr;
     Camera*           _camera    = nullptr;
-    AnimationManager* _particles = nullptr;
+    ParticleManager* _particles = nullptr;
 
     BBBrick   _bricks[ROWS][COLS];
     BBBall    _balls[MAX_BALLS];
@@ -146,7 +146,7 @@ private:
     BBSharedData      _data;
     SceneManager      _sm;
     Camera            _camera;
-    AnimationManager  _particles;
+    ParticleManager  _particles;
     
     BBTitleScene      _title;
     BBPlayScene       _play;
