@@ -139,6 +139,11 @@ void BBPlayScene::_resetBall(bool serve) {
     }
     _padW = 20.0f;
     _combo = 1;
+    
+    // Clear any falling powerups from the previous life/level
+    for (int i = 0; i < MAX_POWERUPS; ++i) {
+        _powerUps[i].active = false;
+    }
 }
 
 void BBPlayScene::_normalizeBallVelocity(BBBall& b, float speedTarget) {
@@ -401,9 +406,23 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     // Level Clear
     if (_bricksLeft <= 0 && !_levelClearPause) {
         _levelClearPause = true;
-        _clearTimer = 60;
+        _clearTimer = 90;
         snprintf(_msg, sizeof(_msg), "LEVEL CLEAR!");
-        _msgTimer = 60;
+        _msgTimer = 90;
+        
+        int bonus = 100 * _data->level;
+        _data->score += bonus;
+        
+        ctx.beep(600, 10);
+        ctx.beep(800, 10);
+        ctx.beep(1000, 20);
+
+        if (_particles) {
+            // Massive Fireworks explosion
+            for (int i = 0; i < 40; i++) {
+                _particles->spawnPixel(Console::W/2.0f, Console::H/2.0f, random(-40, 40)*0.1f, random(-40, 40)*0.1f, random(30, 60));
+            }
+        }
     }
 
     // Powerups
@@ -499,11 +518,22 @@ void BBPlayScene::draw(Console& ctx) {
     
     // Level/Action Message Pop-up
     if (_msgTimer > 0) {
+        int boxW = 60;
+        int boxH = _levelClearPause ? 24 : 15;
+        int boxX = Console::W/2 - boxW/2;
+        int boxY = Console::H/2 - boxH/2 + 5;
+        
         ctx.setDrawColor(Console::COLOR_BLACK);
-        ctx.drawBox(Console::W/2 - 25, 30, 50, 15);
+        ctx.drawBox(boxX, boxY, boxW, boxH);
         ctx.setDrawColor(Console::COLOR_WHITE);
-        ctx.drawFrame(Console::W/2 - 25, 30, 50, 15);
-        ctx.drawStrCentered(39, _msg);
+        ctx.drawFrame(boxX, boxY, boxW, boxH);
+        
+        ctx.drawStrCentered(boxY + 9, _msg);
+        
+        if (_levelClearPause) {
+            ctx.setFont(u8g2_font_4x6_tr);
+            ctx.drawPrintfCentered(boxY + 18, "+%d PTS", 100 * _data->level);
+        }
     }
     ctx.popDrawState();
     ctx.endScreenSpace();
