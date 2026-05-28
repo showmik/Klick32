@@ -2,11 +2,11 @@
 #include "GameRegistry.h"
 #include <cmath>
 #include <cstdint>
+#include <stdlib.h>
 
 #define MAP_WIDTH 12
 #define MAP_HEIGHT 12
 
-// 1-4: Walls, 5: Enemy Spawn, 6: Medkit Spawn, 9: Exit
 static const uint8_t initial_map[MAP_HEIGHT][MAP_WIDTH] = {
     {1,1,1,1,1,1,1,1,1,1,1,1},
     {1,0,0,0,0,0,6,0,0,0,0,1},
@@ -33,6 +33,17 @@ static const uint8_t tex_skull[8] = {
     0b00000000
 };
 
+static const uint8_t tex_skull_mask[8] = {
+    0b01111110,
+    0b11111111,
+    0b11111111,
+    0b11111111,
+    0b11111111,
+    0b01111110,
+    0b01111110,
+    0b00000000
+};
+
 static const uint8_t tex_medkit[8] = {
     0b00000000,
     0b00011000,
@@ -41,6 +52,17 @@ static const uint8_t tex_medkit[8] = {
     0b01111110,
     0b00011000,
     0b00011000,
+    0b00000000
+};
+
+static const uint8_t tex_medkit_mask[8] = {
+    0b00000000,
+    0b00111100,
+    0b00111100,
+    0b11111111,
+    0b11111111,
+    0b00111100,
+    0b00111100,
     0b00000000
 };
 
@@ -53,9 +75,9 @@ void DoomTitleScene::onEnter(Console& ctx) {}
 void DoomTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::A)) {
         ctx.sfxMenuEnter();
-        sm.emit(ctx, Event::CUSTOM_1); // Custom event to transition to play
+        sm.emit(ctx, Event::CUSTOM_1); // Play
     }
-    if (ctx.justPressed(Btn::B)) sm.emit(ctx, Event::QUIT); // Exit game
+    if (ctx.justPressed(Btn::B)) sm.emit(ctx, Event::QUIT);
 }
 
 void DoomTitleScene::draw(Console& ctx) {
@@ -76,7 +98,7 @@ void DoomWinScene::onEnter(Console& ctx) {
 }
 
 void DoomWinScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) sm.emit(ctx, Event::CUSTOM_2); // Go to title
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) sm.emit(ctx, Event::CUSTOM_2);
 }
 
 void DoomWinScene::draw(Console& ctx) {
@@ -146,7 +168,7 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (moved) {
         weapon_bob += 10.0f * dt;
         if (weapon_bob > 3.14159f * 2.0f) weapon_bob -= 3.14159f * 2.0f;
-    } else weapon_bob = 0.0f;
+    }
 
     if (fire_timer > 0) fire_timer--;
 
@@ -170,6 +192,13 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 sprites[i].active = false;
                 _data->score += 100;
                 ctx.beep(800, 50);
+                
+                // Spawn death particles
+                for (int p = 0; p < 10; p++) {
+                    float a = (rand() % 360) * 3.14159f / 180.0f;
+                    float s = (rand() % 100) / 50.0f;
+                    _particles->spawnPixel(Console::W/2, Console::H/2 - 10, std::cos(a)*s, std::sin(a)*s, 10 + rand()%10);
+                }
                 break;
             }
         }
@@ -196,8 +225,14 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void DoomPlayScene::draw(Console& ctx) {
-    ctx.setDrawColor(Console::COLOR_BLACK);
-    ctx.drawBox(0, 0, Console::W, Console::H); // Pure black floor and ceiling for clarity
+    // Room Illumination Flash on Fire
+    if (fire_timer > 8) {
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawDitherBox(0, 0, Console::W, Console::H, 2);
+    } else {
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawBox(0, 0, Console::W, Console::H);
+    }
     
     float dirX = std::cos(player_dir);
     float dirY = std::sin(player_dir);
@@ -207,6 +242,9 @@ void DoomPlayScene::draw(Console& ctx) {
     float zBuffer[128]; 
     int lastMapX = -1;
     int lastMapY = -1;
+    
+    // View bob offset (makes the whole 3D projection bounce slightly)
+    int viewBobY = static_cast<int>(std::cos(weapon_bob * 2.0f) * 2.0f);
     
     for (int x = 0; x < Console::W; x++) {
         float cameraX = 2.0f * x / (float)Console::W - 1.0f;
@@ -264,26 +302,27 @@ void DoomPlayScene::draw(Console& ctx) {
         zBuffer[x] = perpWallDist;
         
         int lineHeight = static_cast<int>(Console::H / (perpWallDist + 0.0001f));
-        int drawStart = -lineHeight / 2 + Console::H / 2;
+        int drawStart = -lineHeight / 2 + Console::H / 2 + viewBobY;
         if (drawStart < 0) drawStart = 0;
-        int drawEnd = lineHeight / 2 + Console::H / 2;
+        int drawEnd = lineHeight / 2 + Console::H / 2 + viewBobY;
         if (drawEnd >= Console::H) drawEnd = Console::H - 1;
         
         ctx.setDrawColor(Console::COLOR_WHITE);
         if (hit == 9) { // Exit
             if (x % 2 == 0) ctx.drawVLine(x, drawStart, drawEnd - drawStart + 1);
         } else {
-            // High contrast shading: Side 0 is solid white, Side 1 is dither pattern 2 (checkerboard)
             uint8_t shade = (side == 0) ? 4 : 2;
-            if (perpWallDist > 8.0f) shade = (side == 0) ? 2 : 1; // Fade out slightly at extreme distance
+            if (perpWallDist > 8.0f) shade = (side == 0) ? 2 : 1;
             
             ctx.drawDitherBox(x, drawStart, 1, drawEnd - drawStart + 1, shade);
             
-            // Draw a black vertical line at the boundary between wall blocks to make geometry pop!
+            // Draw a black outline separating geometric faces, and cap top/bottom
+            ctx.setDrawColor(Console::COLOR_BLACK);
             if (x > 0 && (mapX != lastMapX || mapY != lastMapY)) {
-                ctx.setDrawColor(Console::COLOR_BLACK);
                 ctx.drawVLine(x, drawStart, drawEnd - drawStart + 1);
             }
+            ctx.drawPixel(x, drawStart);
+            ctx.drawPixel(x, drawEnd);
         }
         
         lastMapX = mapX;
@@ -294,7 +333,6 @@ void DoomPlayScene::draw(Console& ctx) {
     for (int i = 0; i < num_sprites; i++) {
         sprites[i].distance = ((player_x - sprites[i].x) * (player_x - sprites[i].x) + (player_y - sprites[i].y) * (player_y - sprites[i].y));
     }
-    // Bubble sort sprites
     for (int i = 0; i < num_sprites - 1; i++) {
         for (int j = 0; j < num_sprites - i - 1; j++) {
             if (sprites[j].distance < sprites[j+1].distance) {
@@ -319,22 +357,29 @@ void DoomPlayScene::draw(Console& ctx) {
         
         int spriteScreenX = static_cast<int>((Console::W / 2) * (1 + transformX / transformY));
         int spriteHeight = std::abs(static_cast<int>(Console::H / transformY));
-        int drawStartY = -spriteHeight / 2 + Console::H / 2;
-        int drawEndY = spriteHeight / 2 + Console::H / 2;
+        int drawStartY = -spriteHeight / 2 + Console::H / 2 + viewBobY;
+        int drawEndY = spriteHeight / 2 + Console::H / 2 + viewBobY;
         
         int spriteWidth = std::abs(static_cast<int>(Console::H / transformY));
         int drawStartX = -spriteWidth / 2 + spriteScreenX;
         int drawEndX = spriteWidth / 2 + spriteScreenX;
         
         const uint8_t* tex = (sprites[i].type == 1) ? tex_skull : tex_medkit;
+        const uint8_t* tex_mask = (sprites[i].type == 1) ? tex_skull_mask : tex_medkit_mask;
         
         for (int stripe = drawStartX; stripe < drawEndX; stripe++) {
             int texX = static_cast<int>(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * 8 / spriteWidth) / 256;
             if (transformY > 0 && stripe >= 0 && stripe < Console::W && transformY < zBuffer[stripe]) {
                 for (int y = drawStartY; y < drawEndY; y++) {
-                    int d = y * 256 - Console::H * 128 + spriteHeight * 128;
+                    int d = y * 256 - Console::H * 128 - viewBobY * 256 + spriteHeight * 128;
                     int texY = ((d * 8) / spriteHeight) / 256;
                     if (texX >= 0 && texX < 8 && texY >= 0 && texY < 8) {
+                        // Draw black mask first to separate from background
+                        if (tex_mask[texY] & (1 << (7 - texX))) {
+                            ctx.setDrawColor(Console::COLOR_BLACK);
+                            ctx.drawPixel(stripe, y);
+                        }
+                        // Draw white fill
                         if (tex[texY] & (1 << (7 - texX))) {
                             ctx.setDrawColor(Console::COLOR_WHITE);
                             ctx.drawPixel(stripe, y);
@@ -345,23 +390,26 @@ void DoomPlayScene::draw(Console& ctx) {
         }
     }
     
-    // Draw Gun HUD (Clean bold vector style)
+    // Draw Particles
+    _particles->draw(ctx);
+    
+    // Draw Gun HUD 
     int bobY = static_cast<int>(std::sin(weapon_bob) * 3.0f);
     int gunX = Console::W / 2;
     int gunY = Console::H - 12 + bobY;
-    if (fire_timer > 5) gunY += 5;
+    if (fire_timer > 5) gunY += 5; // Recoil
     
-    // Draw shadow/outline for contrast
+    // Shadow/outline
     ctx.setDrawColor(Console::COLOR_BLACK);
     ctx.drawBox(gunX - 5, gunY - 1, 10, Console::H - gunY + 2); 
     ctx.drawBox(gunX - 3, gunY - 5, 6, 6);
     
-    // Draw main gun
+    // Fill
     ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.drawBox(gunX - 4, gunY, 8, Console::H - gunY); 
     ctx.drawBox(gunX - 2, gunY - 4, 4, 4); 
     
-    // Muzzle flash with outline
+    // Muzzle flash
     if (fire_timer > 7) {
         ctx.setDrawColor(Console::COLOR_BLACK);
         ctx.drawCircle(gunX, gunY - 6, 6);
@@ -370,9 +418,9 @@ void DoomPlayScene::draw(Console& ctx) {
     }
     
     ctx.setDrawColor(Console::COLOR_WHITE);
-    ctx.drawPixel(Console::W / 2, Console::H / 2);
+    ctx.drawPixel(Console::W / 2, Console::H / 2); // Crosshair
     
-    // Draw stats
+    // Stats
     ctx.setFont(u8g2_font_4x6_tf);
     ctx.drawPrintf(2, 6, "SC:%d HP:%d AMMO:%d", _data->score, _data->hp, _data->ammo);
 }
