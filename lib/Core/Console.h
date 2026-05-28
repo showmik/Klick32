@@ -25,6 +25,12 @@
 
 class OS;
 
+enum DrawColor : uint8_t {
+    COLOR_BLACK = 0,
+    COLOR_WHITE = 1,
+    COLOR_XOR   = 2
+};
+
 class Console {
 public:
 
@@ -175,6 +181,26 @@ public:
     static constexpr uint8_t COLOR_WHITE = 1; // set/solid
     static constexpr uint8_t COLOR_XOR   = 2; // invert
 
+    struct DrawState {
+        uint8_t color;
+    };
+    DrawState _drawStack[4];
+    uint8_t _drawStackCount = 0;
+
+    void pushDrawState() {
+        if (_drawStackCount < 4) {
+            _drawStack[_drawStackCount].color = _disp.getDrawColor();
+            _drawStackCount++;
+        }
+    }
+
+    void popDrawState() {
+        if (_drawStackCount > 0) {
+            _drawStackCount--;
+            setDrawColor(_drawStack[_drawStackCount].color);
+        }
+    }
+
     void setDrawColor(uint8_t color)  { _disp.setDrawColor(color); }
     void setFont(const uint8_t* font) { _disp.setFont(font);       }
 
@@ -222,7 +248,6 @@ public:
     void drawStr(int x, int y, const char* str) { _disp.drawStr(x + _camX(), y + _camY(), str); }
 
     // Horizontally centered text.
-    //   ctx.drawStrCentered(32, "GAME OVER");
     void drawStrCentered(int y, const char* str) {
         int w = (int)_disp.getStrWidth(str);
         _disp.drawStr((W - w) / 2 + _camX(), y + _camY(), str);
@@ -242,6 +267,7 @@ public:
         int w = (int)_disp.getStrWidth(str);
         _disp.drawStr(x - w + _camX(), y + _camY(), str);
     }
+
 
     // Printf-style formatted text.
     // Eliminates the char buf[32]; snprintf(buf,...); drawStr(x,y,buf) pattern.
@@ -274,6 +300,31 @@ public:
     static constexpr uint8_t FLIP_H    = 0x01;
     static constexpr uint8_t FLIP_V    = 0x02;
     static constexpr uint8_t FLIP_HV   = 0x03;
+
+    // Fluent builder for drawing bitmaps.
+    // Eliminates positional parameter confusion.
+    // Usage: ctx.blit(bmp, bytesPerRow, h).at(x, y).flipX().draw();
+    class BitmapBuilder {
+        Console& _ctx;
+        const uint8_t* _bmp;
+        int _bytesPerRow;
+        int _h;
+        int _x = 0;
+        int _y = 0;
+        uint8_t _flags = FLIP_NONE;
+    public:
+        BitmapBuilder(Console& ctx, const uint8_t* bmp, int bytesPerRow, int h)
+            : _ctx(ctx), _bmp(bmp), _bytesPerRow(bytesPerRow), _h(h) {}
+        
+        BitmapBuilder& at(int x, int y) { _x = x; _y = y; return *this; }
+        BitmapBuilder& flipX(bool flip = true) { if(flip) _flags |= FLIP_H; else _flags &= ~FLIP_H; return *this; }
+        BitmapBuilder& flipY(bool flip = true) { if(flip) _flags |= FLIP_V; else _flags &= ~FLIP_V; return *this; }
+        void draw() { _ctx.drawBitmapEx(_x, _y, _bytesPerRow, _h, _bmp, _flags); }
+    };
+
+    BitmapBuilder blit(const uint8_t* bmp, int bytesPerRow, int h) {
+        return BitmapBuilder(*this, bmp, bytesPerRow, h);
+    }
 
     // Standard drawBitmap (unmodified U8g2 passthrough)
     // bytesPerRow = ceil(spriteWidthPx / 8).

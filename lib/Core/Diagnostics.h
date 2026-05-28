@@ -63,6 +63,17 @@ public:
         ctx.setDrawColor(Console::COLOR_WHITE);
         ctx.drawFrame(0, 0, 128, 16);
 
+        // Draw debug shapes
+        ctx.endScreenSpace(); // shapes are usually world-space
+        ctx.pushDrawState();
+        for (int i = 0; i < _rectCount; i++) {
+            ctx.setDrawColor(_rects[i].color);
+            ctx.drawFrame(_rects[i].r.x, _rects[i].r.y, _rects[i].r.w, _rects[i].r.h);
+        }
+        _rectCount = 0;
+        ctx.popDrawState();
+        ctx.beginScreenSpace();
+
         ctx.setFont(u8g2_font_4x6_tr); // Tiny font
         
         // FPS and Logic Time
@@ -84,6 +95,14 @@ public:
         _visible = !_visible;
     }
 
+    // Draw a debug rectangle for one frame
+    static void drawRect(Rect r, uint8_t color = Console::COLOR_XOR) {
+        if (!_visible || _rectCount >= MAX_DEBUG_RECTS) return;
+        _rects[_rectCount].r = r;
+        _rects[_rectCount].color = color;
+        _rectCount++;
+    }
+
     static bool isVisible() {
         return _visible;
     }
@@ -96,4 +115,9 @@ private:
     
     static uint32_t _updateStart;
     static uint32_t _updateEnd;
+
+    struct DebugRect { Rect r; uint8_t color; };
+    static constexpr int MAX_DEBUG_RECTS = 16;
+    static DebugRect _rects[MAX_DEBUG_RECTS];
+    static int _rectCount;
 };
