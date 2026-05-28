@@ -68,7 +68,7 @@ public:
 private:
     // Layout
     static constexpr int COLS = 15;
-    static constexpr int ROWS = 8;
+    static constexpr int ROWS = 5;
     static constexpr int BRICK_W = 8;
     static constexpr int BRICK_H = 4;
     static constexpr int GRID_OX = 4;
