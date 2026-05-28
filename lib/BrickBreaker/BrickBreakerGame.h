@@ -67,10 +67,10 @@ public:
 
 private:
     // Layout
-    static constexpr int COLS = 10;
-    static constexpr int ROWS = 6;
-    static constexpr int BRICK_W = 12;
-    static constexpr int BRICK_H = 5;
+    static constexpr int COLS = 15;
+    static constexpr int ROWS = 8;
+    static constexpr int BRICK_W = 8;
+    static constexpr int BRICK_H = 4;
     static constexpr int GRID_OX = 4;
     static constexpr int GRID_OY = 12;
     
@@ -90,8 +90,8 @@ private:
     BBPowerUp _powerUps[MAX_POWERUPS];
 
     float _padX = 0;
-    float _padW = 24.0f;
-    float _padSpeed = 3.0f;
+    float _padW = 20.0f;
+    float _padSpeed = 2.5f;
     bool  _stickyPaddle = false;
 
     char _msg[32] = "";

@@ -100,7 +100,7 @@ void BBPlayScene::_resetBall(bool serve) {
         _balls[0].vx = (random(2) == 0 ? 1 : -1) * INIT_SPEED * 0.7f;
         _balls[0].vy = -INIT_SPEED;
     }
-    _padW = 24.0f;
+    _padW = 20.0f;
 }
 
 void BBPlayScene::_normalizeBallVelocity(BBBall& b, float speedTarget) {
@@ -129,10 +129,10 @@ void BBPlayScene::_applyPowerUp(PowerUpType type, Console& ctx) {
     ctx.sfxPoint(); // generic powerup sound
     switch (type) {
         case PowerUpType::EXPAND:
-            _padW = min(48.0f, _padW + 12.0f);
+            _padW = min(36.0f, _padW + 8.0f);
             break;
         case PowerUpType::SHRINK:
-            _padW = max(12.0f, _padW - 8.0f);
+            _padW = max(12.0f, _padW - 6.0f);
             break;
         case PowerUpType::CATCH:
             _stickyPaddle = true;
