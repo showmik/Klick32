@@ -7,19 +7,53 @@
 #define MAP_WIDTH 12
 #define MAP_HEIGHT 12
 
-static const uint8_t initial_map[MAP_HEIGHT][MAP_WIDTH] = {
-    {1,1,1,1,1,1,1,1,1,1,1,1},
-    {1,0,0,0,0,0,6,0,0,0,0,1},
-    {1,0,2,2,0,0,0,0,3,3,0,1},
-    {1,0,2,0,0,5,0,0,0,3,0,1},
-    {1,0,0,0,0,0,5,0,0,0,0,1},
-    {1,0,0,5,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,4,4,0,0,0,1},
-    {1,0,0,0,0,0,4,9,0,0,0,1},
-    {1,0,3,3,0,0,0,0,0,0,0,1},
-    {1,0,3,0,0,5,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,1},
-    {1,1,1,1,1,1,1,1,1,1,1,1}
+// 1-4 = Walls, 5 = Skull, 6 = Medkit, 7 = Imp, 9 = Exit
+static const uint8_t level_maps[3][MAP_HEIGHT][MAP_WIDTH] = {
+    // Level 1: The Basement (Tutorial)
+    {
+        {1,1,1,1,1,1,1,1,1,1,1,1},
+        {1,0,0,0,0,0,6,0,0,0,0,1},
+        {1,0,2,2,0,0,0,0,5,5,0,1},
+        {1,0,2,12,0,5,0,0,0,5,0,1},
+        {1,0,0,0,0,0,0,0,0,0,0,1},
+        {1,0,0,0,0,0,0,0,0,0,0,1},
+        {1,0,0,0,0,0,8,4,0,0,0,1},
+        {1,0,0,0,0,0,8,9,0,0,0,1},
+        {1,0,3,3,0,0,0,0,0,0,0,1},
+        {1,0,3,0,12,0,0,0,0,0,0,1},
+        {1,0,0,0,0,0,0,0,0,0,0,1},
+        {1,1,1,1,1,1,1,1,1,1,1,1}
+    },
+    // Level 2: The Labyrinth (Skulls + Imps)
+    {
+        {1,1,1,1,1,1,1,1,1,1,1,1},
+        {1,0,0,2,0,0,0,2,11,6,0,1},
+        {1,0,5,2,0,7,0,2,0,5,0,1},
+        {1,0,0,2,0,0,12,2,0,0,0,1},
+        {1,2,8,2,2,8,2,2,2,8,2,1},
+        {1,0,0,0,0,0,0,0,0,0,0,1},
+        {1,0,5,0,0,7,0,0,5,0,0,1},
+        {1,2,0,2,2,0,2,2,2,10,2,1},
+        {1,0,12,2,9,0,0,2,12,0,0,1},
+        {1,0,0,2,0,0,0,2,0,0,0,1},
+        {1,0,0,0,0,0,0,0,0,0,0,1},
+        {1,1,1,1,1,1,1,1,1,1,1,1}
+    },
+    // Level 3: The Pit (Arena)
+    {
+        {1,1,1,1,1,1,1,1,1,1,1,1},
+        {1,0,0,0,7,0,7,0,0,0,0,1},
+        {1,0,4,8,8,8,8,8,4,0,0,1},
+        {1,0,8,0,5,12,5,0,8,0,0,1},
+        {1,7,8,0,0,6,0,0,8,7,0,1},
+        {1,0,8,0,0,11,0,0,8,0,0,1},
+        {1,0,8,12,0,0,0,12,8,0,0,1},
+        {1,0,8,0,0,0,0,0,10,0,0,1},
+        {1,7,8,0,0,6,0,0,10,7,0,1},
+        {1,0,4,8,8,8,8,8,4,9,0,1},
+        {1,0,0,0,12,0,12,0,0,0,0,1},
+        {1,1,1,1,1,1,1,1,1,1,1,1}
+    }
 };
 
 static const uint8_t tex_skull[8] = {
@@ -63,6 +97,72 @@ static const uint8_t tex_medkit_mask[8] = {
     0b11111111,
     0b00111100,
     0b00111100,
+    0b00000000
+};
+
+static const uint8_t tex_imp[8] = {
+    0b00011000,
+    0b01011010,
+    0b11111111,
+    0b10111101,
+    0b00111100,
+    0b01011010,
+    0b00011000,
+    0b00000000
+};
+
+static const uint8_t tex_key[8] = {
+    0b00111100,
+    0b01000010,
+    0b01000010,
+    0b00111100,
+    0b00001000,
+    0b00011000,
+    0b00001000,
+    0b00011000
+};
+
+static const uint8_t tex_key_mask[8] = {
+    0b01111110,
+    0b11111111,
+    0b11111111,
+    0b01111110,
+    0b00011100,
+    0b00111100,
+    0b00011100,
+    0b00111100
+};
+
+static const uint8_t tex_imp_mask[8] = {
+    0b00111100,
+    0b11111111,
+    0b11111111,
+    0b11111111,
+    0b01111110,
+    0b11111111,
+    0b00111100,
+    0b00000000
+};
+
+static const uint8_t tex_ammo[8] = {
+    0b00000000,
+    0b00111100,
+    0b01100110,
+    0b01111110,
+    0b01111110,
+    0b01111110,
+    0b01111110,
+    0b00000000
+};
+
+static const uint8_t tex_ammo_mask[8] = {
+    0b00111100,
+    0b01111110,
+    0b11111111,
+    0b11111111,
+    0b11111111,
+    0b11111111,
+    0b11111111,
     0b00000000
 };
 
@@ -113,6 +213,9 @@ void DoomTitleScene::draw(Console& ctx) {
         ctx.setFont(u8g2_font_4x6_tf);
         ctx.drawStrCentered(Console::H - 15, "PRESS A");
     }
+    
+    ctx.setFont(u8g2_font_4x6_tf);
+    ctx.drawStrCentered(Console::H - 2, "B:MAP MENU2:WPN");
 }
 
 // =============================================================================
@@ -122,24 +225,27 @@ void DoomTitleScene::draw(Console& ctx) {
 void DoomWinScene::onEnter(Console& ctx) {
     if (_data->score > _data->hiScore) {
         _data->hiScore = _data->score;
-        ctx.saveHiScore(_data->hiScore);
     }
 }
 
 void DoomWinScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) sm.emit(ctx, Event::CUSTOM_2);
-    if (ctx.justPressed(Btn::MENU1)) sm.emit(ctx, Event::QUIT);
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
+        sm.emit(ctx, Event::QUIT); // Return to title
+    }
 }
 
 void DoomWinScene::draw(Console& ctx) {
     ctx.setFont(u8g2_font_6x10_tf);
     if (_data->hp <= 0) {
-        ctx.drawStrCentered(20, "YOU DIED!");
+        ctx.drawPrintfCentered(15, "DIED ON L%d", _data->level + 1);
     } else {
-        ctx.drawStrCentered(20, "YOU ESCAPED!");
+        ctx.drawStrCentered(15, "YOU ESCAPED!");
     }
-    ctx.drawPrintfCentered(35, "SCORE: %d", _data->score);
-    ctx.drawPrintfCentered(50, "HP: %d AMMO: %d", _data->hp, _data->ammo);
+    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.drawPrintfCentered(30, "SCORE: %d", _data->score);
+    ctx.setFont(u8g2_font_4x6_tf);
+    ctx.drawPrintfCentered(40, "HI-SCORE: %d", _data->hiScore);
+    ctx.drawStrCentered(55, "PRESS B TO CONTINUE");
 }
 
 // =============================================================================
@@ -147,6 +253,14 @@ void DoomWinScene::draw(Console& ctx) {
 // =============================================================================
 
 void DoomPlayScene::onEnter(Console& ctx) {
+    _data->score = 0;
+    _data->hp = 100;
+    _data->ammo = 20;
+    _data->level = 0;
+    loadLevel(ctx);
+}
+
+void DoomPlayScene::loadLevel(Console& ctx) {
     player_x = 1.5f;
     player_y = 1.5f;
     player_dir = 0.0f;
@@ -154,20 +268,28 @@ void DoomPlayScene::onEnter(Console& ctx) {
     fire_timer = 0;
     frame_counter = 0;
     damage_timer = 0;
+    level_transition_timer = 60;
     show_minimap = false;
-    _data->score = 0;
-    _data->hp = 100;
-    _data->ammo = 20;
+    has_key = false;
     
     num_sprites = 0;
     for (int y = 0; y < MAP_HEIGHT; y++) {
         for (int x = 0; x < MAP_WIDTH; x++) {
-            uint8_t val = initial_map[y][x];
-            if (val == 5) { // enemy
-                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 1, true, 0.0f };
+            uint8_t val = level_maps[_data->level][y][x];
+            if (val == 5) { // skull
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 1, true, 0.0f, 2, 0 };
                 map[y][x] = 0;
             } else if (val == 6) { // medkit
-                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 2, true, 0.0f };
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 2, true, 0.0f, 0, 0 };
+                map[y][x] = 0;
+            } else if (val == 7) { // imp
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 3, true, 0.0f, 3, 0 };
+                map[y][x] = 0;
+            } else if (val == 11) { // key
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 4, true, 0.0f, 0, 0 };
+                map[y][x] = 0;
+            } else if (val == 12) { // ammo
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 5, true, 0.0f, 0, 0 };
                 map[y][x] = 0;
             } else {
                 map[y][x] = val;
@@ -179,9 +301,23 @@ void DoomPlayScene::onEnter(Console& ctx) {
 void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::B)) { show_minimap = !show_minimap; }
+    if (ctx.justPressed(Btn::MENU2)) {
+        _data->weapon = (_data->weapon == 0) ? 1 : 0;
+        ctx.beep(300, 20); // swap sound
+    }
+    
+    if (level_transition_timer > 0) {
+        level_transition_timer--;
+        return;
+    }
     
     if (dt > 0.1f) dt = 0.1f;
     frame_counter++;
+    
+    // Ambient drone
+    if (frame_counter % 120 == 0) {
+        ctx.beep(80 + rand() % 20, 15);
+    }
     
     if (damage_timer > 0) damage_timer--;
     if (fire_timer > 0) fire_timer--;
@@ -193,18 +329,28 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.pressed(Btn::LEFT)) player_dir -= rot_speed;
     if (ctx.pressed(Btn::RIGHT)) player_dir += rot_speed;
 
+    auto tryMove = [&](float nx, float ny) {
+        int map_y = map[(int)ny][(int)player_x];
+        if (map_y == 0 || map_y == 9) player_y = ny;
+        else if (map_y == 8) { map[(int)ny][(int)player_x] = 0; ctx.beep(300, 60); }
+        else if (map_y == 10 && has_key) { map[(int)ny][(int)player_x] = 0; ctx.beep(500, 60); }
+
+        int map_x = map[(int)player_y][(int)nx];
+        if (map_x == 0 || map_x == 9) player_x = nx;
+        else if (map_x == 8) { map[(int)player_y][(int)nx] = 0; ctx.beep(300, 60); }
+        else if (map_x == 10 && has_key) { map[(int)player_y][(int)nx] = 0; ctx.beep(500, 60); }
+    };
+
     if (ctx.pressed(Btn::UP)) {
         float nx = player_x + std::cos(player_dir) * move_speed;
         float ny = player_y + std::sin(player_dir) * move_speed;
-        if (map[(int)ny][(int)player_x] == 0 || map[(int)ny][(int)player_x] == 9) player_y = ny;
-        if (map[(int)player_y][(int)nx] == 0 || map[(int)player_y][(int)nx] == 9) player_x = nx;
+        tryMove(nx, ny);
         moved = true;
     }
     if (ctx.pressed(Btn::DOWN)) {
         float nx = player_x - std::cos(player_dir) * move_speed;
         float ny = player_y - std::sin(player_dir) * move_speed;
-        if (map[(int)ny][(int)player_x] == 0 || map[(int)ny][(int)player_x] == 9) player_y = ny;
-        if (map[(int)player_y][(int)nx] == 0 || map[(int)player_y][(int)nx] == 9) player_x = nx;
+        tryMove(nx, ny);
         moved = true;
     }
 
@@ -214,58 +360,112 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     }
 
     // Player Shooting
-    if (ctx.justPressed(Btn::A) && fire_timer == 0 && _data->ammo > 0) {
-        fire_timer = 10;
-        _data->ammo--;
-        ctx.beep(400, 30);
-        
-        for (int i = 0; i < num_sprites; i++) {
-            if (!sprites[i].active || sprites[i].type != 1) continue;
+    if (ctx.justPressed(Btn::A) && fire_timer == 0) {
+        int cost = (_data->weapon == 1) ? 3 : 1;
+        if (_data->ammo >= cost) {
+            fire_timer = (_data->weapon == 1) ? 20 : 10;
+            _data->ammo -= cost;
+            if (_data->weapon == 1) ctx.beep(200, 80);
+            else ctx.beep(400, 30);
             
-            float dx = sprites[i].x - player_x;
-            float dy = sprites[i].y - player_y;
-            float dist = std::sqrt(dx*dx + dy*dy);
+            float hit_cone = (_data->weapon == 1) ? 0.5f : 0.2f;
+            int damage = (_data->weapon == 1) ? 2 : 1;
             
-            float angle = std::atan2(dy, dx) - player_dir;
-            while (angle < -3.14159f) angle += 2.0f * 3.14159f;
-            while (angle > 3.14159f) angle -= 2.0f * 3.14159f;
-            
-            if (std::abs(angle) < 0.2f && dist < 8.0f) {
-                sprites[i].active = false;
-                _data->score += 100;
-                ctx.beep(800, 50);
+            for (int i = 0; i < num_sprites; i++) {
+                if (!sprites[i].active || (sprites[i].type != 1 && sprites[i].type != 3)) continue;
                 
-                for (int p = 0; p < 10; p++) {
-                    float a = (rand() % 360) * 3.14159f / 180.0f;
-                    float s = (rand() % 100) / 50.0f;
-                    _particles->spawnPixel(Console::W/2, Console::H/2 - 10, std::cos(a)*s, std::sin(a)*s, 10 + rand()%10);
+                float dx = sprites[i].x - player_x;
+                float dy = sprites[i].y - player_y;
+                float dist = std::sqrt(dx*dx + dy*dy);
+                
+                float angle = std::atan2(dy, dx) - player_dir;
+                while (angle < -3.14159f) angle += 2.0f * 3.14159f;
+                while (angle > 3.14159f) angle -= 2.0f * 3.14159f;
+                
+                if (std::abs(angle) < hit_cone && dist < 8.0f) {
+                    sprites[i].hp -= damage;
+                    sprites[i].flash_timer = 3;
+                    
+                    if (sprites[i].hp <= 0) {
+                        sprites[i].active = false;
+                        _data->score += (sprites[i].type == 3) ? 200 : 100;
+                        ctx.beep(800, 50);
+                        
+                        for (int p = 0; p < 10; p++) {
+                            float a = (rand() % 360) * 3.14159f / 180.0f;
+                            float s = (rand() % 100) / 50.0f;
+                            _particles->spawnPixel(Console::W/2, Console::H/2 - 10, std::cos(a)*s, std::sin(a)*s, 10 + rand()%10);
+                        }
+                    } else {
+                        ctx.beep(600, 20); // Enemy Hit
+                    }
+                    if (_data->weapon == 0) break; // pistol hits 1 target
                 }
-                break;
             }
+        } else {
+            ctx.beep(100, 15); // empty click
         }
     }
     
-    // Enemy Attacks & Pickups
+    // Enemy AI & Pickups
     for (int i = 0; i < num_sprites; i++) {
         if (!sprites[i].active) continue;
-        float dx = sprites[i].x - player_x;
-        float dy = sprites[i].y - player_y;
+        
+        if (sprites[i].flash_timer > 0) sprites[i].flash_timer--;
+        
+        float dx = player_x - sprites[i].x;
+        float dy = player_y - sprites[i].y;
         float dist = std::sqrt(dx*dx + dy*dy);
         
-        if (sprites[i].type == 2 && dist < 0.5f) { // Medkit
-            _data->hp += 25;
-            if (_data->hp > 100) _data->hp = 100;
-            sprites[i].active = false;
-            ctx.sfxPoint();
-        }
-        else if (sprites[i].type == 1 && dist < 4.0f) { // Enemy attack range
-            if ((rand() % 100) < 2) { // 2% chance per frame to attack
-                _data->hp -= 10;
-                damage_timer = 5;
+        if (sprites[i].type == 2) { // Medkit
+            if (dist < 0.5f) {
+                _data->hp += 25;
+                if (_data->hp > 100) _data->hp = 100;
+                sprites[i].active = false;
+                ctx.sfxPoint();
+            }
+        } else if (sprites[i].type == 4) { // Key
+            if (dist < 0.5f) {
+                has_key = true;
+                sprites[i].active = false;
+                ctx.beep(1000, 40);
+            }
+        } else if (sprites[i].type == 5) { // Ammo
+            if (dist < 0.5f) {
+                _data->ammo += 15;
+                sprites[i].active = false;
+                ctx.beep(700, 30);
+            }
+        } else if (sprites[i].type == 1 || sprites[i].type == 3) { // Skull or Imp
+            // Chase AI
+            if (dist > 1.0f && dist < 6.0f) {
+                float speed = (sprites[i].type == 3) ? 1.0f * dt : 0.6f * dt; // Imps are faster
+                float nx = sprites[i].x + (dx / dist) * speed;
+                float ny = sprites[i].y + (dy / dist) * speed;
+                
+                // Simple Wall Collision for Enemies
+                if (map[(int)sprites[i].y][(int)nx] == 0 || map[(int)sprites[i].y][(int)nx] == 9) sprites[i].x = nx;
+                if (map[(int)ny][(int)sprites[i].x] == 0 || map[(int)ny][(int)sprites[i].x] == 9) sprites[i].y = ny;
+            }
+            
+            // Attack Player
+            if (dist < 0.8f && damage_timer == 0) {
+                _data->hp -= (sprites[i].type == 3) ? 15 : 10;
+                damage_timer = 30; // 30 frames invulnerability
+                
+                // Knockback player away from enemy
+                player_x -= (dx / dist) * 0.5f;
+                player_y -= (dy / dist) * 0.5f;
+                // Simple bounds check
+                if (map[(int)player_y][(int)player_x] != 0 && map[(int)player_y][(int)player_x] != 9) {
+                    player_x += (dx / dist) * 0.5f;
+                    player_y += (dy / dist) * 0.5f;
+                }
+                
                 ctx.beep(150, 100);
                 if (_data->hp <= 0) {
-                    _data->hp = 0;
-                    sm.emit(ctx, Event::CUSTOM_3); // Game Over (WinScene handles death text)
+                    sm.emit(ctx, Event::CUSTOM_4); // Lose
+                    ctx.beep(100, 200); // Death sound
                 }
             }
         }
@@ -273,7 +473,12 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     
     if (map[(int)player_y][(int)player_x] == 9) {
         ctx.sfxPoint();
-        sm.emit(ctx, Event::CUSTOM_3); // Win
+        if (_data->level < 2) {
+            _data->level++;
+            loadLevel(ctx);
+        } else {
+            sm.emit(ctx, Event::CUSTOM_3); // Win
+        }
     }
 }
 
@@ -371,6 +576,13 @@ void DoomPlayScene::draw(Console& ctx) {
         ctx.setDrawColor(Console::COLOR_WHITE);
         if (hit == 9) { 
             if (x % 2 == 0) ctx.drawVLine(drawX, drawStart, drawEnd - drawStart + 1);
+        } else if (hit == 8 || hit == 10) {
+            uint8_t shade = (hit == 10) ? 3 : 1;
+            ctx.drawDitherBox(drawX, drawStart, 1, drawEnd - drawStart + 1, shade);
+            ctx.setDrawColor(Console::COLOR_BLACK);
+            ctx.drawPixel(drawX, drawStart);
+            ctx.drawPixel(drawX, drawEnd);
+            if (x % 4 == 0) ctx.drawVLine(drawX, drawStart, drawEnd - drawStart + 1);
         } else {
             uint8_t shade = (side == 0) ? 4 : 2;
             if (perpWallDist > 8.0f) shade = (side == 0) ? 2 : 1;
@@ -424,11 +636,17 @@ void DoomPlayScene::draw(Console& ctx) {
         int drawStartX = -spriteWidth / 2 + spriteScreenX;
         int drawEndX = spriteWidth / 2 + spriteScreenX;
         
-        const uint8_t* tex = (sprites[i].type == 1) ? tex_skull : tex_medkit;
-        const uint8_t* tex_mask = (sprites[i].type == 1) ? tex_skull_mask : tex_medkit_mask;
+        const uint8_t* tex;
+        const uint8_t* tex_mask;
+        if (sprites[i].type == 3) { tex = tex_imp; tex_mask = tex_imp_mask; }
+        else if (sprites[i].type == 4) { tex = tex_key; tex_mask = tex_key_mask; }
+        else if (sprites[i].type == 5) { tex = tex_ammo; tex_mask = tex_ammo_mask; }
+        else if (sprites[i].type == 1) { tex = tex_skull; tex_mask = tex_skull_mask; }
+        else { tex = tex_medkit; tex_mask = tex_medkit_mask; }
+        bool flash = (sprites[i].flash_timer > 0);
         
         for (int stripe = drawStartX; stripe < drawEndX; stripe++) {
-            if (stripe < 0 || stripe >= Console::W) continue; // FIX out of bounds access to zBuffer
+            if (stripe < 0 || stripe >= Console::W) continue;
             
             int texX = static_cast<int>(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * 8 / spriteWidth) / 256;
             int drawX = stripe + shakeX;
@@ -439,11 +657,11 @@ void DoomPlayScene::draw(Console& ctx) {
                     int texY = ((d * 8) / spriteHeight) / 256;
                     if (texX >= 0 && texX < 8 && texY >= 0 && texY < 8) {
                         if (tex_mask[texY] & (1 << (7 - texX))) {
-                            ctx.setDrawColor(Console::COLOR_BLACK);
+                            ctx.setDrawColor(flash ? Console::COLOR_WHITE : Console::COLOR_BLACK);
                             ctx.drawPixel(drawX, y);
                         }
                         if (tex[texY] & (1 << (7 - texX))) {
-                            ctx.setDrawColor(Console::COLOR_WHITE);
+                            ctx.setDrawColor(flash ? Console::COLOR_BLACK : Console::COLOR_WHITE);
                             ctx.drawPixel(drawX, y);
                         }
                     }
@@ -461,17 +679,27 @@ void DoomPlayScene::draw(Console& ctx) {
     if (fire_timer > 5) gunY += 5; 
     
     ctx.setDrawColor(Console::COLOR_BLACK);
-    ctx.drawBox(gunX - 5, gunY - 1, 10, Console::H - gunY + 2); 
-    ctx.drawBox(gunX - 3, gunY - 5, 6, 6);
-    ctx.setDrawColor(Console::COLOR_WHITE);
-    ctx.drawBox(gunX - 4, gunY, 8, Console::H - gunY); 
-    ctx.drawBox(gunX - 2, gunY - 4, 4, 4); 
-    
-    if (fire_timer > 7) {
-        ctx.setDrawColor(Console::COLOR_BLACK);
-        ctx.drawCircle(gunX, gunY - 6, 6);
+    if (_data->weapon == 0) {
+        ctx.drawBox(gunX - 5, gunY - 1, 10, Console::H - gunY + 2); 
+        ctx.drawBox(gunX - 3, gunY - 5, 6, 6);
         ctx.setDrawColor(Console::COLOR_WHITE);
-        ctx.drawCircle(gunX, gunY - 6, 4);
+        ctx.drawBox(gunX - 4, gunY, 8, Console::H - gunY); 
+        ctx.drawBox(gunX - 2, gunY - 4, 4, 4); 
+    } else {
+        ctx.drawBox(gunX - 9, gunY - 1, 18, Console::H - gunY + 2); 
+        ctx.drawBox(gunX - 7, gunY - 5, 14, 6);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawBox(gunX - 8, gunY, 16, Console::H - gunY); 
+        ctx.drawBox(gunX - 6, gunY - 4, 12, 4); 
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawVLine(gunX, gunY - 4, Console::H - gunY + 4);
+    }
+    
+    if (fire_timer > ((_data->weapon == 1) ? 15 : 7)) {
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawCircle(gunX, gunY - 6, (_data->weapon == 1) ? 10 : 6);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawCircle(gunX, gunY - 6, (_data->weapon == 1) ? 7 : 4);
     }
     
     // Crosshair
@@ -484,13 +712,26 @@ void DoomPlayScene::draw(Console& ctx) {
         ctx.drawPixel(Console::W / 2,     Console::H / 2);
     }
     
+    if (level_transition_timer > 0) {
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawBox(0, 0, Console::W, Console::H);
+        ctx.setFont(u8g2_font_6x10_tf);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawPrintfCentered(Console::H / 2 - 5, "LEVEL %d", _data->level + 1);
+        ctx.setFont(u8g2_font_4x6_tf);
+        if (_data->level == 0) ctx.drawStrCentered(Console::H / 2 + 10, "THE BASEMENT");
+        if (_data->level == 1) ctx.drawStrCentered(Console::H / 2 + 10, "THE LABYRINTH");
+        if (_data->level == 2) ctx.drawStrCentered(Console::H / 2 + 10, "THE PIT");
+        return; // Don't draw the rest of the HUD
+    }
+    
     // HUD Stats Bar at Top
     ctx.setDrawColor(Console::COLOR_BLACK);
     ctx.drawBox(0, 0, Console::W, 9);
     ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.drawHLine(0, 8, Console::W);
     ctx.setFont(u8g2_font_4x6_tf);
-    ctx.drawPrintf(2, 6, "SC:%d HP:%d AMMO:%d", _data->score, _data->hp, _data->ammo);
+    ctx.drawPrintf(2, 6, "L%d SC:%d HP:%d AM:%d%s [%c]", _data->level + 1, _data->score, _data->hp, _data->ammo, has_key ? " [K]" : "", _data->weapon == 0 ? 'P' : 'S');
     
     // Minimap
     if (show_minimap) {

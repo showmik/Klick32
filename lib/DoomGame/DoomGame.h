@@ -6,14 +6,18 @@ struct DoomData {
     uint32_t score = 0;
     int hp = 100;
     int ammo = 50;
+    int level = 0;
+    int weapon = 0; // 0 = pistol, 1 = shotgun
 };
 
 struct DoomSprite {
     float x;
     float y;
-    int type; // 1 = enemy, 2 = medkit
+    int type; // 1 = skull, 2 = medkit, 3 = imp
     bool active;
     float distance; // used for sorting
+    int hp;
+    int flash_timer;
 };
 
 class DoomTitleScene : public Scene {
@@ -47,6 +51,8 @@ public:
     void draw(Console& ctx) override;
     
 private:
+    void loadLevel(Console& ctx);
+    
     DoomData* _data = nullptr;
     Camera* _camera = nullptr;
     ParticleManager* _particles = nullptr;
@@ -60,7 +66,9 @@ private:
     
     int frame_counter = 0;
     int damage_timer = 0;
+    int level_transition_timer = 0;
     bool show_minimap = false;
+    bool has_key = false;
     
     uint8_t map[12][12];
     DoomSprite sprites[20];
