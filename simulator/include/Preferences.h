@@ -5,6 +5,7 @@
 #include <map>
 #include <fstream>
 #include <iostream>
+#include <vector>
 
 class Preferences {
 public:
@@ -21,7 +22,7 @@ public:
     
     bool isKey(const char* key) { return _data.find(key) != _data.end(); }
     void remove(const char* key) { _data.erase(key); }
-    void clear() { _data.clear(); _strData.clear(); }
+    void clear() { _data.clear(); _strData.clear(); _blobData.clear(); }
     
     size_t putUInt(const char* key, uint32_t value) { _data[key] = value; return 4; }
     size_t putInt(const char* key, int32_t value) { _data[key] = *(uint32_t*)&value; return 4; }
@@ -29,7 +30,11 @@ public:
     size_t putBool(const char* key, bool value) { _data[key] = value; return 1; }
     size_t putByte(const char* key, uint8_t value) { _data[key] = value; return 1; }
     size_t putUChar(const char* key, uint8_t value) { return putByte(key, value); }
-    size_t putBytes(const char* key, const void* value, size_t len) { return len; } // Unsupported in basic mock
+    size_t putBytes(const char* key, const void* value, size_t len) {
+        std::vector<uint8_t> vec((const uint8_t*)value, (const uint8_t*)value + len);
+        _blobData[key] = vec;
+        return len;
+    }
     size_t putString(const char* key, const std::string& value) { _strData[key] = value; return value.length(); }
 
     uint32_t getUInt(const char* key, uint32_t defaultValue = 0) {
@@ -57,7 +62,13 @@ public:
     uint8_t getUChar(const char* key, uint8_t defaultValue = 0) {
         return getByte(key, defaultValue);
     }
-    size_t getBytes(const char* key, void* buf, size_t maxLen) { return 0; }
+    size_t getBytes(const char* key, void* buf, size_t maxLen) {
+        if (_blobData.find(key) == _blobData.end()) return 0;
+        const auto& vec = _blobData[key];
+        size_t copyLen = (vec.size() < maxLen) ? vec.size() : maxLen;
+        memcpy(buf, vec.data(), copyLen);
+        return copyLen;
+    }
     std::string getString(const char* key, const std::string& defaultValue = "") {
         if (_strData.find(key) == _strData.end()) return defaultValue;
         return _strData[key];
@@ -68,10 +79,12 @@ private:
     std::string _filename;
     std::map<std::string, uint32_t> _data;
     std::map<std::string, std::string> _strData;
+    std::map<std::string, std::vector<uint8_t>> _blobData;
     
     void _load() {
         _data.clear();
         _strData.clear();
+        _blobData.clear();
         std::ifstream file(_filename, std::ios::binary);
         if (file.is_open()) {
             size_t count;
@@ -106,6 +119,24 @@ private:
                 }
             }
         }
+        
+        std::ifstream blobFile(_filename + ".blob", std::ios::binary);
+        if (blobFile.is_open()) {
+            size_t count;
+            blobFile.read((char*)&count, sizeof(count));
+            for (size_t i = 0; i < count; i++) {
+                size_t keyLen;
+                blobFile.read((char*)&keyLen, sizeof(keyLen));
+                char keyBuf[64] = {0};
+                blobFile.read(keyBuf, keyLen);
+                
+                size_t valLen;
+                blobFile.read((char*)&valLen, sizeof(valLen));
+                std::vector<uint8_t> valBuf(valLen);
+                blobFile.read((char*)valBuf.data(), valLen);
+                _blobData[keyBuf] = valBuf;
+            }
+        }
     }
     
     void _save() {
@@ -133,6 +164,21 @@ private:
                 size_t valLen = pair.second.length();
                 strFile.write((char*)&valLen, sizeof(valLen));
                 strFile.write(pair.second.c_str(), valLen);
+            }
+        }
+        
+        std::ofstream blobFile(_filename + ".blob", std::ios::binary);
+        if (blobFile.is_open()) {
+            size_t count = _blobData.size();
+            blobFile.write((char*)&count, sizeof(count));
+            for (auto& pair : _blobData) {
+                size_t keyLen = pair.first.length();
+                blobFile.write((char*)&keyLen, sizeof(keyLen));
+                blobFile.write(pair.first.c_str(), keyLen);
+                
+                size_t valLen = pair.second.size();
+                blobFile.write((char*)&valLen, sizeof(valLen));
+                blobFile.write((const char*)pair.second.data(), valLen);
             }
         }
     }

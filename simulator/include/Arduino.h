@@ -105,12 +105,31 @@ extern ESPMock ESP;
 
 // ─── Serial Mocking ───────────────────────────────────────────────────────────
 #include <iostream>
+#include <fstream>
 struct SerialMock {
-    void begin(uint32_t baud) {}
-    void print(const char* s) { std::cout << s; }
-    void println(const char* s) { std::cout << s << std::endl; }
-    void print(int n) { std::cout << n; }
-    void println(int n) { std::cout << n << std::endl; }
+    std::ofstream logFile;
+    void begin(uint32_t baud) {
+        logFile.open("simulator_log.txt", std::ios::app);
+        if (logFile.is_open()) {
+            logFile << "--- Simulator Started ---" << std::endl;
+        }
+    }
+    void print(const char* s) { 
+        std::cout << s; 
+        if (logFile.is_open()) { logFile << s; logFile.flush(); }
+    }
+    void println(const char* s) { 
+        std::cout << s << std::endl; 
+        if (logFile.is_open()) { logFile << s << std::endl; logFile.flush(); }
+    }
+    void print(int n) { 
+        std::cout << n; 
+        if (logFile.is_open()) { logFile << n; logFile.flush(); }
+    }
+    void println(int n) { 
+        std::cout << n << std::endl; 
+        if (logFile.is_open()) { logFile << n << std::endl; logFile.flush(); }
+    }
 };
 extern SerialMock Serial;
 
