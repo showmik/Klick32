@@ -1,6 +1,7 @@
 #include "TinyRogueGame.h"
 #include "GameRegistry.h"
 #include "TinyRogueSprites.h"
+#include "CommonScreens.h"
 
 static int getWeaponAttack(ItemType t) {
     if (t == ItemType::DAGGER) return 1;
@@ -74,14 +75,7 @@ void RogueTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void RogueTitleScene::draw(Console& ctx) {
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStrCentered(24, "TINY ROGUE");
-    ctx.drawHLine(0, 30, Console::W);
-
-    if ((_frame / 15) % 2 == 0) {
-        ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStrCentered(54, "Press A to descend");
-    }
+    Screens::drawTitle(ctx, "TINY ROGUE");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2415,13 +2409,9 @@ void TinyRogueGame::onEnter(Console& ctx) {
     
     _shop.setData(&_data);
     _dead.setData(&_data);
-
-    // Event Registry Mapping
-    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
-    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
-    _sm.onEvent(Event::RESUME,    SceneManager::POP);
-    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_dead);
     _inventory.setData(&_data);
+
+    useDefaultEvents(&_pause, &_dead);
     _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
     _sm.onEvent(Event::CUSTOM_2,  SceneManager::PUSH, &_shop);    // Enter Shop
     _sm.onEvent(Event::CUSTOM_3,  SceneManager::PUSH, &_inventory); // Enter Inventory
@@ -2436,16 +2426,8 @@ void TinyRogueGame::onExit(Console& ctx) {
     } else {
         ctx.removeSave("gamestate");
     }
+    SceneGame<RogueSharedData>::onExit(ctx);
 }
-
-void TinyRogueGame::update(Console& ctx, float dt) { 
-    _camera.update();
-    _particles.update();
-    _sm.update(ctx, dt); 
-}
-void TinyRogueGame::draw(Console& ctx)   { _sm.draw(ctx); }
-
-bool        TinyRogueGame::isRunning() const { return !_sm.empty(); }
 const char* TinyRogueGame::getName()   const { return "Tiny Rogue"; }
 const uint8_t* TinyRogueGame::getCoverArt() const { return spr_tinyrogue_cover; }
 

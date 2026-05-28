@@ -5,6 +5,7 @@
 #include "Scene.h"
 #include "Camera.h"
 #include "ParticleManager.h"
+#include "SceneGame.h"
 
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
@@ -215,22 +216,15 @@ private:
 
 // ─── Main Game Class ─────────────────────────────────────────────────────────
 
-class TinyRogueGame : public GameBase {
+class TinyRogueGame : public SceneGame<RogueSharedData> {
 public:
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
-    void update (Console& ctx, float dt) override;
-    void draw   (Console& ctx) override;
     
-    bool           isRunning() const override;
     const char*    getName()   const override;
     const uint8_t* getCoverArt() const override;
 
 private:
-    RogueSharedData _data;
-    SceneManager    _sm;
-    Camera          _camera;
-    ParticleManager _particles;
     RogueTitleScene _title;
     RoguePlayScene  _play;
     RoguePauseScene _pause;
