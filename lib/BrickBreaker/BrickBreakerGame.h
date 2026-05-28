@@ -77,8 +77,8 @@ private:
     // Config
     static constexpr int MAX_BALLS = 3;
     static constexpr int MAX_POWERUPS = 5;
-    static constexpr float INIT_SPEED = 2.0f;
-    static constexpr float MAX_SPEED = 3.5f;
+    static constexpr float INIT_SPEED = 1.3f;
+    static constexpr float MAX_SPEED = 2.4f;
     static constexpr float PAD_Y = 60.0f;
 
     BBSharedData*     _data      = nullptr;
