@@ -185,14 +185,16 @@ void BBPlayScene::_applyPowerUp(PowerUpType type, Console& ctx) {
                 }
             }
             if (activeBalls > 0) {
+                int spawnDir = 1;
                 for (int i = 0; i < MAX_BALLS; ++i) {
                     if (!_balls[i].active) {
                         _balls[i] = _balls[sourceBallIdx];
                         _balls[i].sticky = false; // Prevent perfectly overlapping stuck balls
                         
-                        // Scatter dynamically upwards
-                        _balls[i].vx = (random(2) == 0 ? 1 : -1) * (INIT_SPEED + random(0, 10) * 0.1f);
+                        // Scatter dynamically upwards and alternate directions
+                        _balls[i].vx = spawnDir * (INIT_SPEED + random(0, 10) * 0.1f);
                         _balls[i].vy = -(INIT_SPEED + random(0, 10) * 0.1f);
+                        spawnDir = -spawnDir; // Force next spawned ball to go the other way
                         
                         _normalizeBallVelocity(_balls[i], INIT_SPEED);
                     }
