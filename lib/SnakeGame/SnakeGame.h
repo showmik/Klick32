@@ -6,6 +6,7 @@
 #include "Scene.h"
 #include "Camera.h"
 #include "ParticleManager.h"
+#include "SceneGame.h"
 
 // ─── SnakeGame ────────────────────────────────────────────────────────────────
 // Classic snake: eat apples, grow, avoid walls and yourself.
@@ -184,22 +185,13 @@ private:
 };
 
 // ─── SnakeGame ────────────────────────────────────────────────────────────────
-class SnakeGame : public GameBase {
+class SnakeGame : public SceneGame<SnakeSharedData> {
 public:
     void onEnter(Console& ctx) override;
-    void onExit (Console& ctx) override;
-    void update (Console& ctx, float dt) override;
-    void draw   (Console& ctx) override;
-    bool           isRunning()   const override;
-    bool           needsRedraw() const override;
     const char*    getName()     const override;
     const uint8_t* getCoverArt() const override;
 
 private:
-    SnakeSharedData      _data;
-    SceneManager         _sm;
-    Camera               _camera;
-    ParticleManager     _particles;
     SnakePlayScene       _play;
     SnakePauseScene      _pause;
     SnakeNameEntryScene  _nameEntry;

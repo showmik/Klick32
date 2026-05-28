@@ -1,6 +1,7 @@
 #include "SnakeGame.h"
 #include "GameRegistry.h"
 #include "SnakeSprites.h"
+#include "CommonScreens.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 // SnakePlayScene
@@ -374,13 +375,7 @@ void SnakePauseScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void SnakePauseScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
-
-    ctx.setDrawColor(0);
-    ctx.drawBox(34, 24, 60, 18);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(34, 24, 60, 18);
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(44, 38, "PAUSED");
+    Screens::drawPauseOverlay(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -481,16 +476,7 @@ void SnakeDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void SnakeDeadScene::draw(Console& ctx) {
-    if (_sm) _sm->drawUnder(ctx);
-
-    ctx.setDrawColor(0);
-    ctx.drawBox(20, 20, 88, 28);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(20, 20, 88, 28);
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(28, 36, "GAME OVER");
-    ctx.setFont(u8g2_font_5x7_tf);
-    ctx.drawStr(28, 45, "Press A to restart");
+    Screens::drawGameOver(ctx, _data->lastScore, _data->hiScore, false);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -511,33 +497,13 @@ void SnakeGame::onEnter(Console& ctx) {
     _dead.setData(&_data);
     _dead.setEngine(&_camera);
 
-    // Event Registry Mapping
-    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
-    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
-    _sm.onEvent(Event::RESUME,    SceneManager::POP);
-    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_dead);
+    useDefaultEvents(&_pause, &_dead);
     _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart
     _sm.onEvent(Event::CUSTOM_2,  SceneManager::REPLACE, &_nameEntry); // Name Entry
 
     _sm.replace(&_play, ctx);
 }
 
-void SnakeGame::onExit(Console& ctx) {
-    // Clean up if needed. sm.clear() handles exiting individual scenes.
-}
-
-void SnakeGame::update(Console& ctx, float dt) {
-    _camera.update();
-    _particles.update();
-    _sm.update(ctx, dt);
-}
-
-void SnakeGame::draw(Console& ctx) {
-    _sm.draw(ctx);
-}
-
-bool        SnakeGame::isRunning()   const { return !_sm.empty(); }
-bool        SnakeGame::needsRedraw() const { return _sm.needsRedraw(); }
 const char* SnakeGame::getName()     const { return "Snake"; }
 const uint8_t* SnakeGame::getCoverArt() const { return spr_snake_cover; }
 
