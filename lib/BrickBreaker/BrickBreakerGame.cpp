@@ -481,7 +481,28 @@ void BBGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void BBGameOverScene::draw(Console& ctx) {
     _sm->drawUnder(ctx); // Draw game behind
-    Screens::drawGameOver(ctx, _data->score, _data->hiScore, _data->score >= _data->hiScore);
+    
+    // Dim the background
+    ctx.pushDrawState();
+    ctx.drawDitherBox(0, 0, Console::W, Console::H, 2);
+    
+    // Draw a neat box
+    ctx.setDrawColor(Console::COLOR_BLACK);
+    ctx.drawBox(10, 10, Console::W - 20, Console::H - 20);
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    ctx.drawFrame(10, 10, Console::W - 20, Console::H - 20);
+    
+    ctx.setFont(u8g2_font_6x10_tf);
+    ctx.drawStrCentered(22, "GAME OVER");
+    
+    ctx.setFont(u8g2_font_4x6_tr);
+    ctx.drawPrintfCentered(32, "SCORE: %d", _data->score);
+    ctx.drawPrintfCentered(40, "LEVEL: %d", _data->level);
+    
+    if ((_frame / 30) % 2 == 0) {
+        ctx.drawStrCentered(52, "A:RETRY  B:MENU");
+    }
+    ctx.popDrawState();
 }
 
 // ─── BrickBreakerGame ───────────────────────────────────────────────────────
