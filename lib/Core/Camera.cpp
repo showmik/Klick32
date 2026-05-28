@@ -6,6 +6,7 @@ void Camera::snapTo(int newX, int newY) {
     y = _startY = _targetY = newY;
     _t = 0;
     _totalFrames = 0;
+    _applyBounds();
 }
 
 void Camera::panTo(int newX, int newY, int durationFrames) {
@@ -25,6 +26,36 @@ void Camera::panTo(int newX, int newY, int durationFrames) {
     }
 }
 
+void Camera::follow(int targetX, int targetY, float lerpFactor) {
+    // Disable any active pan
+    _totalFrames = 0;
+    _t = 0;
+    
+    x = (int)lerpf((float)x, (float)targetX, lerpFactor);
+    y = (int)lerpf((float)y, (float)targetY, lerpFactor);
+    _applyBounds();
+}
+
+void Camera::setBounds(int minX, int minY, int maxX, int maxY) {
+    _hasBounds = true;
+    _minX = minX;
+    _minY = minY;
+    _maxX = maxX;
+    _maxY = maxY;
+    _applyBounds();
+}
+
+void Camera::clearBounds() {
+    _hasBounds = false;
+}
+
+void Camera::_applyBounds() {
+    if (_hasBounds) {
+        x = gclamp(x, _minX, _maxX);
+        y = gclamp(y, _minY, _maxY);
+    }
+}
+
 void Camera::shake(uint8_t frames) {
     _shakeFrames = frames;
 }
@@ -34,6 +65,7 @@ void Camera::update() {
         _t++;
         x = lerpi(_startX, _targetX, _t, _totalFrames);
         y = lerpi(_startY, _targetY, _t, _totalFrames);
+        _applyBounds();
     }
     
     if (_shakeFrames > 0) {
