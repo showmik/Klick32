@@ -5,7 +5,7 @@
 #include "SceneManager.h"
 #include "Scene.h"
 #include "Camera.h"
-#include "AnimationManager.h"
+#include "ParticleManager.h"
 
 // ─── SnakeGame ────────────────────────────────────────────────────────────────
 // Classic snake: eat apples, grow, avoid walls and yourself.
@@ -65,7 +65,7 @@ class SnakePlayScene : public Scene {
 public:
     // Wire sibling pointers in SnakeGame::onEnter before first push.
     void setData       (SnakeSharedData*       d) { _data      = d; }
-    void setEngine     (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setEngine     (Camera* cam, ParticleManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -123,7 +123,7 @@ private:
     // ── Wired siblings ────────────────────────────────────────────────────────
     SnakeSharedData*     _data      = nullptr;
     Camera*              _camera    = nullptr;
-    AnimationManager*    _particles = nullptr;
+    ParticleManager*    _particles = nullptr;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     void _initRound();
@@ -199,7 +199,7 @@ private:
     SnakeSharedData      _data;
     SceneManager         _sm;
     Camera               _camera;
-    AnimationManager     _particles;
+    ParticleManager     _particles;
     SnakePlayScene       _play;
     SnakePauseScene      _pause;
     SnakeNameEntryScene  _nameEntry;

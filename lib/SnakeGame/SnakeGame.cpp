@@ -1,7 +1,6 @@
 #include "SnakeGame.h"
 #include "GameRegistry.h"
 #include "SnakeSprites.h"
-#include <Preferences.h>
 
 // ═════════════════════════════════════════════════════════════════════════════
 // SnakePlayScene
@@ -275,15 +274,13 @@ void SnakePlayScene::drawField(Console& ctx) const {
     ctx.drawHLine(0, TOP_OFFSET - 1, Console::W);
     ctx.setFont(u8g2_font_5x7_tf);
     
-    char buf[16];
-    snprintf(buf, sizeof(buf), "SCR:%04u", (unsigned)_score);
-    ctx.drawStr(2, 6, buf);
+    ctx.drawPrintf(2, 6, "SCR:%04u", (unsigned)_score);
     
     // Blink hi-score if a new record was just achieved
     if (!(_data->newHiScore && (millis() / 200) % 2 == 0)) {
+        char buf[16];
         snprintf(buf, sizeof(buf), "%s:%04u", _data->hiName, (unsigned)_data->hiScore);
-        int w = ctx.strWidth(buf);
-        ctx.drawStr(Console::W - w - 2, 6, buf);
+        ctx.drawStrRight(Console::W - 2, 6, buf);
     }
 
     ctx.setCamera(_camera); // Apply camera shake to the game world
@@ -400,11 +397,8 @@ void SnakeNameEntryScene::_saveToNVS(Console& ctx) {
     strncpy(_data->hiName, _currName, 4);
     _data->hiName[3] = '\0';
     
-    Preferences prefs;
-    prefs.begin("snake", false);
-    prefs.putUInt("hiscore", _data->hiScore);
-    prefs.putString("hiname", _data->hiName);
-    prefs.end();
+    ctx.saveUInt("hiscore", _data->hiScore);
+    ctx.saveStr("hiname", _data->hiName);
 }
 
 void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm, float dt) {
@@ -452,8 +446,7 @@ void SnakeNameEntryScene::draw(Console& ctx) {
     ctx.drawFrame(14, 12, 100, 42);
     
     ctx.setFont(u8g2_font_5x7_tf);
-    int w = ctx.strWidth("NEW HIGH SCORE!");
-    ctx.drawStr(64 - w/2, 22, "NEW HIGH SCORE!");
+    ctx.drawStrCentered(22, "NEW HIGH SCORE!");
     
     ctx.setFont(u8g2_font_7x13B_tf);
     for(int i = 0; i < 3; i++) {
@@ -467,8 +460,7 @@ void SnakeNameEntryScene::draw(Console& ctx) {
     }
     
     ctx.setFont(u8g2_font_5x7_tf);
-    w = ctx.strWidth("Press A to save");
-    ctx.drawStr(64 - w/2, 50, "Press A to save");
+    ctx.drawStrCentered(50, "Press A to save");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -506,14 +498,8 @@ void SnakeDeadScene::draw(Console& ctx) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void SnakeGame::onEnter(Console& ctx) {
-    // Keep raw Preferences here to ensure backward compatibility with saved strings
-    Preferences prefs;
-    prefs.begin("snake", true);
-    _data.hiScore = prefs.getUInt("hiscore", 0);
-    String name = prefs.getString("hiname", "AAA");
-    strncpy(_data.hiName, name.c_str(), 4);
-    _data.hiName[3] = '\0';
-    prefs.end();
+    _data.hiScore = ctx.loadUInt("hiscore", 0);
+    ctx.loadStr("hiname", _data.hiName, sizeof(_data.hiName), "AAA");
 
     // Wire sibling pointers
     _play.setData(&_data);

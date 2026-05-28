@@ -4,7 +4,7 @@
 #include "SceneManager.h"
 #include "Scene.h"
 #include "Camera.h"
-#include "AnimationManager.h"
+#include "ParticleManager.h"
 
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
@@ -147,7 +147,7 @@ private:
 class RoguePlayScene : public Scene {
 public:
     void setData      (RogueSharedData* d) { _data = d; }
-    void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setEngine    (Camera* cam, ParticleManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void resumeSavedGame() { _resumed = true; }
@@ -163,7 +163,7 @@ public:
 private:
     RogueSharedData* _data   = nullptr;
     Camera*          _camera = nullptr;
-    AnimationManager* _particles = nullptr;
+    ParticleManager* _particles = nullptr;
     char _hudMessage[32] = "";
     uint8_t _hudMessageTimer = 0;
     bool _resumed = false;
@@ -230,7 +230,7 @@ private:
     RogueSharedData _data;
     SceneManager    _sm;
     Camera          _camera;
-    AnimationManager _particles;
+    ParticleManager _particles;
     RogueTitleScene _title;
     RoguePlayScene  _play;
     RoguePauseScene _pause;

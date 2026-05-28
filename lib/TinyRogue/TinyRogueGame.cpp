@@ -75,13 +75,12 @@ void RogueTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void RogueTitleScene::draw(Console& ctx) {
     ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(32, 24, "TINY ROGUE");
+    ctx.drawStrCentered(24, "TINY ROGUE");
     ctx.drawHLine(0, 30, Console::W);
 
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
-        int w = ctx.strWidth("Press A to descend");
-        ctx.drawStr((Console::W - w) / 2, 54, "Press A to descend");
+        ctx.drawStrCentered(54, "Press A to descend");
     }
 }
 
@@ -1657,8 +1656,7 @@ void RogueShopScene::draw(Console& ctx) {
 
     char gBuf[16]; 
     snprintf(gBuf, sizeof(gBuf), "%u gold", _data->gold);
-    int gw = ctx.strWidth(gBuf);
-    ctx.drawStr(bx + bw - gw - 4, by + 9, gBuf);
+    ctx.drawStrRight(bx + bw - 4, by + 9, gBuf);
 
     ctx.setDrawColor(1);
     
@@ -1694,7 +1692,7 @@ void RoguePlayScene::draw(Console& ctx) {
             ctx.setDrawColor(0);
             ctx.drawBox((Console::W - w) / 2 - 2, floatY, w + 4, 9);
             ctx.setDrawColor(1);
-            ctx.drawStr((Console::W - w) / 2, floatY + 7, _hudMessage);
+            ctx.drawStrCentered(floatY + 7, _hudMessage);
         }
     } else {
         char topBuf[32];
@@ -2017,7 +2015,7 @@ void RogueDeadScene::draw(Console& ctx) {
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
         tw = ctx.strWidth("A to restart");
-        ctx.drawStr(bx + (bw - tw) / 2, by + 24, "A to restart");
+        ctx.drawStrCentered(by + 24, "A to restart");
     }
 }
 

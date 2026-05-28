@@ -1,11 +1,7 @@
 #pragma once
-#include "GameBase.h"
+#include "SceneGame.h"
 #include "GameUtils.h"
-#include "SceneManager.h"
-#include "Scene.h"
 #include "Sprite.h"
-#include "Camera.h"
-#include "AnimationManager.h"
 
 // Forward declarations
 class SIPlayScene;
@@ -32,7 +28,7 @@ private:
 class SIPlayScene : public Scene {
 public:
     void setData      (SISharedData* d)    { _data = d; }
-    void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setEngine    (Camera* cam, ParticleManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -49,7 +45,7 @@ private:
 
     SISharedData*    _data     = nullptr;
     Camera*          _camera   = nullptr;
-    AnimationManager* _particles = nullptr;
+    ParticleManager* _particles = nullptr;
 
     Star _stars[MAX_STARS];
 
@@ -86,7 +82,7 @@ class SIGameOverScene : public Scene {
 public:
     void setData     (SISharedData* d) { _data = d; }
     void setPlayScene(SIPlayScene* p)  { _play = p; }
-    void setEngine   (AnimationManager* anim) { _particles = anim; }
+    void setEngine   (ParticleManager* anim) { _particles = anim; }
     
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -94,26 +90,18 @@ public:
 private:
     SISharedData* _data = nullptr;
     SIPlayScene*  _play = nullptr;
-    AnimationManager* _particles = nullptr;
+    ParticleManager* _particles = nullptr;
     uint8_t       _frame = 0;
 };
 
 // ─── SpaceInvadersGame ─────────────────────────────────────────────────────
-class SpaceInvadersGame : public GameBase {
+class SpaceInvadersGame : public SceneGame<SISharedData> {
 public:
     void onEnter(Console& ctx) override;
-    void onExit (Console& ctx) override;
-    void update (Console& ctx, float dt) override;
-    void draw   (Console& ctx) override;
-    bool           isRunning() const override;
     const char*    getName()   const override;
     const uint8_t* getCoverArt() const override;
 
 private:
-    SISharedData     _data;
-    SceneManager     _sm;
-    Camera           _camera;
-    AnimationManager _particles;
     SITitleScene     _title;
     SIPlayScene      _play;
     SIPauseScene     _pause;

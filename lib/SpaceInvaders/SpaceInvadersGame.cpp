@@ -25,7 +25,7 @@ void SITitleScene::draw(Console& ctx) {
 
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStr(28, 58, "Press A to play");
+        ctx.drawStrCentered(58, "Press A to play");
     }
 }
 
@@ -281,9 +281,7 @@ void SIPlayScene::drawField(Console& ctx) const {
 
     // UI
     ctx.setFont(u8g2_font_5x7_tf);
-    char buf[24];
-    snprintf(buf, sizeof(buf), "SC:%u  HI:%u", (unsigned)_data->score, (unsigned)_data->hiScore);
-    ctx.drawStr(2, 7, buf);
+    ctx.drawPrintf(2, 7, "SC:%u  HI:%u", (unsigned)_data->score, (unsigned)_data->hiScore);
     
     // Draw Lives (Top Right)
     for (int i = 0; i < _data->lives; i++) {
@@ -370,7 +368,7 @@ void SIGameOverScene::draw(Console& ctx) {
     
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStr(26, 45, "A to restart");
+        ctx.drawStrCentered(45, "A to restart");
     }
 }
 
@@ -387,28 +385,15 @@ void SpaceInvadersGame::onEnter(Console& ctx) {
     _gameover.setPlayScene(&_play);
     _gameover.setEngine(&_particles);
 
-    // Event Registry Mapping
-    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
-    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
-    _sm.onEvent(Event::RESUME,    SceneManager::POP);
-    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_gameover);
-    _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
+    // Wire standard PAUSE and GAME_OVER events
+    useDefaultEvents(&_pause, &_gameover);
+    
+    // Custom events
+    _sm.onEvent(Event::CUSTOM_1, SceneManager::REPLACE, &_play); // Start/Restart Game
 
     _sm.replace(&_title, ctx);
 }
 
-void SpaceInvadersGame::onExit(Console& ctx) {
-    ctx.saveHiScore(_data.hiScore);
-}
-
-void SpaceInvadersGame::update(Console& ctx, float dt) { 
-    _camera.update();
-    _particles.update();
-    _sm.update(ctx, dt); 
-}
-void SpaceInvadersGame::draw(Console& ctx)   { _sm.draw(ctx); }
-
-bool        SpaceInvadersGame::isRunning() const { return !_sm.empty(); }
 const char* SpaceInvadersGame::getName()   const { return "Invaders"; }
 const uint8_t* SpaceInvadersGame::getCoverArt() const { return spr_si_cover; }
 

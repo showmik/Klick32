@@ -5,7 +5,7 @@
 #include "SceneManager.h"
 #include "Scene.h"
 #include "Camera.h"
-#include "AnimationManager.h"
+#include "ParticleManager.h"
 
 // ─── PongGame ─────────────────────────────────────────────────────────────────
 // Classic two-paddle Pong: player (left) vs AI (right).
@@ -83,7 +83,7 @@ private:
 
 class PongPlayScene : public Scene {
 public:
-    void setEngine       (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setEngine       (Camera* cam, ParticleManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -98,7 +98,7 @@ public:
 private:
     PongState          _st;
     Camera*            _camera    = nullptr;
-    AnimationManager*  _particles = nullptr;
+    ParticleManager*  _particles = nullptr;
     bool               _playerWon = false;
     uint8_t            _serveTimer = 0;
 
@@ -151,7 +151,7 @@ public:
 private:
     SceneManager       _sm;
     Camera             _camera;
-    AnimationManager   _particles;
+    ParticleManager   _particles;
     PongTitleScene     _title;
     PongPlayScene      _play;
     PongPauseScene     _pause;

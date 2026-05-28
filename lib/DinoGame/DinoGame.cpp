@@ -46,8 +46,7 @@ void DinoTitleScene::draw(Console& ctx) {
 
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
-        int w = ctx.strWidth("Press A to play");
-        ctx.drawStr((Console::W - w) / 2, 54, "Press A to play");
+        ctx.drawStrCentered(54, "Press A to play");
     }
 }
 
@@ -432,16 +431,14 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead) const {
     // ── Plain Text Score ──────────────────────────────────────────────────────
     ctx.setCamera(nullptr); // Unset camera for UI
 
-    char buf[32];
     ctx.setFont(u8g2_font_6x10_tf);
 
     bool drawScore = true;
     if (_flashTimer > 0) drawScore = ((_flashTimer / 10) % 2 == 0);
 
     if (drawScore) {
-        snprintf(buf, sizeof(buf), "HI:%05u  %05u", (unsigned)_data->hiScore, (unsigned)_data->score);
         ctx.setDrawColor(isNight ? 0 : 1);
-        ctx.drawStr(34, 10, buf);
+        ctx.drawPrintf(34, 10, "HI:%05u  %05u", (unsigned)_data->hiScore, (unsigned)_data->score);
     }
 
     ctx.setDrawColor(1); // Force reset for standard UI elements

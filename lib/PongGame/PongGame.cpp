@@ -38,7 +38,7 @@ void PongTitleScene::draw(Console& ctx) {
     // Blinking prompt
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStr(28, 58, "Press A to play");
+        ctx.drawStrCentered(58, "Press A to play");
     }
 }
 
@@ -143,12 +143,8 @@ void PongPlayScene::drawField(Console& ctx) const {
     // If the serve timer is high (just scored), jump the numbers up by 3 pixels
     int scoreOffsetY = (_serveTimer > 70) ? -3 : 0; 
 
-    char buf[4];
-    snprintf(buf, sizeof(buf), "%u", s.scoreL);
-    ctx.drawStr(55, 8 + scoreOffsetY, buf);
-    
-    snprintf(buf, sizeof(buf), "%u", s.scoreR);
-    ctx.drawStr(70, 8 + scoreOffsetY, buf);
+    ctx.drawPrintf(55, 8 + scoreOffsetY, "%u", s.scoreL);
+    ctx.drawPrintf(70, 8 + scoreOffsetY, "%u", s.scoreR);
 
     ctx.setCamera(_camera);
 
@@ -276,7 +272,7 @@ void PongPlayScene::draw(Console& ctx) {
         ctx.setDrawColor(0);
         ctx.drawBox((Console::W - w) / 2 - 2, 20, w + 4, 16);
         ctx.setDrawColor(1);
-        ctx.drawStr((Console::W - w) / 2, 32, buf);
+        ctx.drawStrCentered(32, buf);
     }
 
     ctx.setDrawColor(1);
@@ -334,10 +330,7 @@ void PongGameOverScene::draw(Console& ctx) {
     
     // Final scoreboard
     ctx.setFont(u8g2_font_7x13B_tf);
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%u  %u", _st->scoreL, _st->scoreR);
-    int w = ctx.strWidth(buf);
-    ctx.drawStr((Console::W - w) / 2, 16, buf);
+    ctx.drawPrintfCentered(16, "%u  %u", _st->scoreL, _st->scoreR);
 
     ctx.drawHLine(0, PongState::FIELD_TOP - 1, Console::W);
 

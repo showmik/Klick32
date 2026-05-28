@@ -5,7 +5,7 @@
 #include "Scene.h"
 #include "Sprite.h"
 #include "Camera.h"
-#include "AnimationManager.h"
+#include "ParticleManager.h"
 
 class DinoPlayScene;
 class DinoPauseScene;
@@ -33,7 +33,7 @@ private:
 class DinoPlayScene : public Scene {
 public:
     void setData      (DinoSharedData* d) { _data = d; }
-    void setEngine    (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setEngine    (Camera* cam, ParticleManager* anim) { _camera = cam; _particles = anim; }
 
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
@@ -45,7 +45,7 @@ public:
 
 private:
     Camera*           _camera    = nullptr;
-    AnimationManager* _particles = nullptr;
+    ParticleManager* _particles = nullptr;
     enum class ObstacleKind : uint8_t { CACTUS_SMALL, CACTUS_LARGE, PTERO_LOW, PTERO_HIGH };
 
     struct Obstacle {
@@ -136,7 +136,7 @@ public:
 class DinoDeadScene : public Scene {
 public:
     void setData     (DinoSharedData* d) { _data = d; }
-    void setEngine   (Camera* cam, AnimationManager* anim) { _camera = cam; _particles = anim; }
+    void setEngine   (Camera* cam, ParticleManager* anim) { _camera = cam; _particles = anim; }
     void setPlayScene(DinoPlayScene* p) { _play = p; }
 
     void onEnter(Console& ctx) override;
@@ -146,7 +146,7 @@ public:
 private:
     DinoSharedData*   _data      = nullptr;
     Camera*           _camera    = nullptr;
-    AnimationManager* _particles = nullptr;
+    ParticleManager* _particles = nullptr;
     DinoPlayScene*    _play      = nullptr;
     uint8_t           _frame     = 0;
 };
@@ -168,7 +168,7 @@ private:
     DinoSharedData _data;
     SceneManager   _sm;
     Camera         _camera;
-    AnimationManager _particles;
+    ParticleManager _particles;
     DinoTitleScene _title;
     DinoPlayScene  _play;
     DinoPauseScene _pause;
