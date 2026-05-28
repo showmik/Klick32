@@ -501,7 +501,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     for (int i = 0; i < MAX_POWERUPS; ++i) {
         if (_powerUps[i].active) {
             _powerUps[i].y += 1.0f;
-            if (rectIntersect(_powerUps[i].x - 4, _powerUps[i].y - 4, 8, 8, _padX, PAD_Y, _padW, 4)) {
+            if (rectIntersect(_powerUps[i].x - 4, _powerUps[i].y - 4, 8, 8, _padX, PAD_Y, _padW, 3)) {
                 _applyPowerUp(_powerUps[i].type, ctx);
                 _powerUps[i].active = false;
             } else if (_powerUps[i].y > Console::H) {
@@ -514,15 +514,15 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 void BBPlayScene::draw(Console& ctx) {
     drawField(ctx);
     
-    // Draw Paddle (Rounded pill shape)
-    ctx.drawBox((int)_padX + 1, (int)PAD_Y, (int)_padW - 2, 4);
-    ctx.drawBox((int)_padX, (int)PAD_Y + 1, 1, 2);
-    ctx.drawBox((int)_padX + (int)_padW - 1, (int)PAD_Y + 1, 1, 2);
+    // Draw Paddle (Rounded pill shape, 3 pixels high)
+    ctx.drawBox((int)_padX + 1, (int)PAD_Y, (int)_padW - 2, 3);
+    ctx.drawBox((int)_padX, (int)PAD_Y + 1, 1, 1);
+    ctx.drawBox((int)_padX + (int)_padW - 1, (int)PAD_Y + 1, 1, 1);
     
     if (_laserActive) {
         // Draw twin laser cannons on the paddle
-        ctx.drawBox((int)_padX, (int)PAD_Y - 3, 2, 3);
-        ctx.drawBox((int)_padX + (int)_padW - 2, (int)PAD_Y - 3, 2, 3);
+        ctx.drawBox((int)_padX, (int)PAD_Y - 2, 2, 2);
+        ctx.drawBox((int)_padX + (int)_padW - 2, (int)PAD_Y - 2, 2, 2);
     }
     
     // Draw Lasers
