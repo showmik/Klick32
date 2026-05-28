@@ -73,8 +73,24 @@ int SynthEngine::playTone(uint16_t freqHz, uint32_t durationMs, Waveform wave) {
     // Default envelope based on waveform
     v.attackMs = (wave == Waveform::NOISE) ? 1 : 10;
     v.releaseMs = (wave == Waveform::NOISE) ? durationMs / 2 : 50;
+    v.sequence = nullptr;
 
     return bestVoice;
+}
+
+int SynthEngine::playSequence(const ToneStep* sequence) {
+    if (_muted || !sequence) return -1;
+    if (sequence[0].durationMs == 0) return -1;
+
+    // Use playTone to allocate voice and play first note
+    int voiceIdx = playTone(sequence[0].freqHz, sequence[0].durationMs, sequence[0].wave);
+    
+    // Attach the sequence
+    Voice& v = _voices[voiceIdx];
+    v.sequence = sequence;
+    v.seqIndex = 0;
+    
+    return voiceIdx;
 }
 
 void SynthEngine::stopAll() {
@@ -113,11 +129,31 @@ void SynthEngine::_audioTask(void* userdata, uint8_t* stream, int len) {
             if (!v.active) continue;
 
             if (nowMs - v.startTimeMs > v.durationMs) {
-                v.active = false;
-                continue;
+                if (v.sequence) {
+                    v.seqIndex++;
+                    const ToneStep& next = v.sequence[v.seqIndex];
+                    if (next.durationMs > 0) {
+                        v.freqHz = next.freqHz;
+                        v.durationMs = next.durationMs;
+                        v.wave = next.wave;
+                        v.startTimeMs = nowMs;
+                        v.phaseInc = (float)v.freqHz / (float)SAMPLE_RATE;
+                        v.attackMs = (v.wave == Waveform::NOISE) ? 1 : 10;
+                        v.releaseMs = (v.wave == Waveform::NOISE) ? v.durationMs / 2 : 50;
+                        activeCount++;
+                        // Don't continue, process new note immediately
+                    } else {
+                        v.active = false;
+                        v.sequence = nullptr;
+                        continue;
+                    }
+                } else {
+                    v.active = false;
+                    continue;
+                }
+            } else {
+                activeCount++;
             }
-
-            activeCount++;
             v.phase += v.phaseInc;
             if (v.phase >= 1.0f) v.phase -= 1.0f;
 
@@ -174,11 +210,31 @@ void SynthEngine::_audioTask(void* pvParameters) {
             if (!v.active) continue;
 
             if (nowMs - v.startTimeMs > v.durationMs) {
-                v.active = false;
-                continue;
+                if (v.sequence) {
+                    v.seqIndex++;
+                    const ToneStep& next = v.sequence[v.seqIndex];
+                    if (next.durationMs > 0) {
+                        v.freqHz = next.freqHz;
+                        v.durationMs = next.durationMs;
+                        v.wave = next.wave;
+                        v.startTimeMs = nowMs;
+                        v.phaseInc = (float)v.freqHz / (float)SAMPLE_RATE;
+                        v.attackMs = (v.wave == Waveform::NOISE) ? 1 : 10;
+                        v.releaseMs = (v.wave == Waveform::NOISE) ? v.durationMs / 2 : 50;
+                        activeCount++;
+                        // Don't continue, process new note immediately
+                    } else {
+                        v.active = false;
+                        v.sequence = nullptr;
+                        continue;
+                    }
+                } else {
+                    v.active = false;
+                    continue;
+                }
+            } else {
+                activeCount++;
             }
-
-            activeCount++;
             v.phase += v.phaseInc;
             if (v.phase >= 1.0f) v.phase -= 1.0f;
 

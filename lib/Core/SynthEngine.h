@@ -8,6 +8,13 @@
 
 enum class Waveform : uint8_t { SQUARE, TRIANGLE, NOISE };
 
+// A single step in a musical or sound-effect sequence. End sequences with a 0 duration step.
+struct ToneStep { 
+    uint16_t freqHz; 
+    uint16_t durationMs; 
+    Waveform wave; 
+};
+
 struct Voice {
     bool active = false;
     Waveform wave = Waveform::SQUARE;
@@ -20,6 +27,10 @@ struct Voice {
     // Envelope (Attack/Release in ms)
     uint16_t attackMs = 5;
     uint16_t releaseMs = 50;
+
+    // Sequence playback
+    const ToneStep* sequence = nullptr;
+    uint16_t seqIndex = 0;
 };
 
 class SynthEngine {
@@ -28,6 +39,9 @@ public:
     
     // Automatically selects a free voice (or steals the oldest). Returns the voice index.
     static int playTone(uint16_t freqHz, uint32_t durationMs, Waveform wave = Waveform::SQUARE);
+    
+    // Play an array of ToneSteps automatically.
+    static int playSequence(const ToneStep* sequence);
     
     static void stopAll();
     static void setMuted(bool m);
