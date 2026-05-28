@@ -3,6 +3,7 @@
 #pragma once
 
 #include "BrickBreakerGame.h"
+#include "ChessGame.h"
 #include "DinoGame.h"
 #include "PongGame.h"
 #include "SnakeGame.h"
