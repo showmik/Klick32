@@ -97,6 +97,7 @@ private:
     char _msg[32] = "";
     uint8_t _msgTimer = 0;
     int _bricksLeft = 0;
+    int _combo = 1;
     bool _levelClearPause = false;
     uint8_t _clearTimer = 0;
 

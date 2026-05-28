@@ -101,6 +101,7 @@ void BBPlayScene::_resetBall(bool serve) {
         _balls[0].vy = -INIT_SPEED;
     }
     _padW = 20.0f;
+    _combo = 1;
 }
 
 void BBPlayScene::_normalizeBallVelocity(BBBall& b, float speedTarget) {
@@ -194,14 +195,27 @@ bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, 
         if (brick.type != BrickType::SOLID) {
             if (ball.fireball) {
                 brick.hp = 0;
+                if (_camera) _camera->shake(2);
             } else {
                 brick.hp--;
+                if (brick.type == BrickType::HARD && brick.hp > 0) {
+                    if (_camera) _camera->shake(1);
+                }
+            }
+
+            // Speed up the ball slightly upon hitting a brick
+            float speedSq = ball.vx*ball.vx + ball.vy*ball.vy;
+            if (speedSq > 0.001f && speedSq < MAX_SPEED * MAX_SPEED) {
+                float speed = sqrt(speedSq);
+                _normalizeBallVelocity(ball, min((float)MAX_SPEED, speed + 0.05f));
             }
 
             if (brick.hp <= 0) {
                 brick.active = false;
                 _bricksLeft--;
-                _data->score += (brick.type == BrickType::HARD) ? 20 : 10;
+                int baseScore = (brick.type == BrickType::HARD) ? 20 : 10;
+                _data->score += baseScore * _combo;
+                _combo = min(10, _combo + 1); // Cap combo at 10x
                 ctx.updateHiScore(_data->score);
                 _spawnPowerUp(brX + BRICK_W / 2.0f, brY + BRICK_H / 2.0f);
                 if (_particles) {
@@ -284,6 +298,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         if (_balls[i].vy > 0 && _balls[i].y >= PAD_Y - 2 && _balls[i].y <= PAD_Y + 2) {
             if (_balls[i].x >= _padX - 2 && _balls[i].x <= _padX + _padW + 2) {
                 _balls[i].y = PAD_Y - 2;
+                _combo = 1; // Reset combo
                 
                 if (_stickyPaddle) {
                     _balls[i].sticky = true;
@@ -305,9 +320,12 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             }
         }
 
-        // Death
+        // Check if ball fell out
         if (_balls[i].y > Console::H) {
             _balls[i].active = false;
+            _combo = 1;
+            if (_camera) _camera->shake(6);
+            ctx.beep(200, 15);
         }
     }
 
