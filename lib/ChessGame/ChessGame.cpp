@@ -179,21 +179,16 @@ void ChessPlayScene::drawPiece(Console& ctx, const Piece& p, int x, int y) {
         default: return;
     }
     
-    if (p.color == PieceColor::White) {
-        // Draw normal
-        ctx.setDrawColor(Console::COLOR_WHITE);
-        ctx.drawBitmap(x, y, 1, 8, sprite);
-    } else {
-        // Draw inverted? The background might be dark or light.
-        // Actually, just drawing it with XOR or making a 8x8 filled box first
-        ctx.setDrawColor(Console::COLOR_BLACK);
-        ctx.drawBitmap(x, y, 1, 8, sprite);
-        // We will need to make sure black pieces can be seen on dark squares.
-        // Let's rely on XOR trick or just draw a white background for black pieces.
-        // Wait, drawing it black on a black square won't be seen.
-        // What if we draw a 1-pixel white outline? Our sprites don't have that.
-        // Instead, let's use the DitherBox or just invert the sprite drawing.
-    }
+    // Draw outline
+    ctx.setDrawColor(p.color == PieceColor::White ? Console::COLOR_BLACK : Console::COLOR_WHITE);
+    ctx.drawBitmap(x - 1, y, 1, 8, sprite);
+    ctx.drawBitmap(x + 1, y, 1, 8, sprite);
+    ctx.drawBitmap(x, y - 1, 1, 8, sprite);
+    ctx.drawBitmap(x, y + 1, 1, 8, sprite);
+    
+    // Draw piece interior
+    ctx.setDrawColor(p.color == PieceColor::White ? Console::COLOR_WHITE : Console::COLOR_BLACK);
+    ctx.drawBitmap(x, y, 1, 8, sprite);
 }
 
 void ChessPlayScene::draw(Console& ctx) {
@@ -209,43 +204,13 @@ void ChessPlayScene::draw(Console& ctx) {
             
             bool isDark = (x + y) % 2 != 0;
             if (isDark) {
-                ctx.setDrawColor(Console::COLOR_WHITE); // or use DitherBox
-                ctx.drawBox(px, py, tileSize, tileSize); // wait, if dark square is white, then piece drawing must account for it
-                ctx.drawDitherBox(px, py, tileSize, tileSize, 1); // 25% grey for dark squares
+                ctx.setDrawColor(Console::COLOR_WHITE);
+                ctx.drawDitherBox(px, py, tileSize, tileSize, 2); // 50% grey for dark squares
             }
             
             if (!_board[y][x].isEmpty()) {
-                Piece p = _board[y][x];
-                
-                // Draw piece background so it's always visible
-                if (p.color == PieceColor::Black) {
-                    ctx.setDrawColor(Console::COLOR_WHITE);
-                    // ctx.drawBox(px+1, py+1, 6, 6);
-                } else {
-                    ctx.setDrawColor(Console::COLOR_BLACK);
-                    // ctx.drawBox(px+1, py+1, 6, 6);
-                }
-                
                 ctx.pushDrawState();
-                if (p.color == PieceColor::White) {
-                    ctx.setDrawColor(Console::COLOR_WHITE);
-                    ctx.drawBitmap(px, py, 1, 8, (p.type == PieceType::Pawn) ? ChessSprites::pawn :
-                                                 (p.type == PieceType::Knight) ? ChessSprites::knight :
-                                                 (p.type == PieceType::Bishop) ? ChessSprites::bishop :
-                                                 (p.type == PieceType::Rook) ? ChessSprites::rook :
-                                                 (p.type == PieceType::Queen) ? ChessSprites::queen : ChessSprites::king);
-                } else {
-                    // Draw black piece by XORing a solid white square and drawing the piece?
-                    // Actually U8g2 drawBitmap draws '1' bits in the current draw color.
-                    // If we want black piece, we set color to XOR, draw a solid box, then draw the bitmap?
-                    // Let's just draw white bits using COLOR_XOR, which might invert the background.
-                    ctx.setDrawColor(Console::COLOR_XOR);
-                    ctx.drawBitmap(px, py, 1, 8, (p.type == PieceType::Pawn) ? ChessSprites::pawn :
-                                                 (p.type == PieceType::Knight) ? ChessSprites::knight :
-                                                 (p.type == PieceType::Bishop) ? ChessSprites::bishop :
-                                                 (p.type == PieceType::Rook) ? ChessSprites::rook :
-                                                 (p.type == PieceType::Queen) ? ChessSprites::queen : ChessSprites::king);
-                }
+                drawPiece(ctx, _board[y][x], px, py);
                 ctx.popDrawState();
             }
         }
@@ -253,13 +218,15 @@ void ChessPlayScene::draw(Console& ctx) {
     
     // Draw selected highlights
     if (_sx != -1) {
-        ctx.setDrawColor(Console::COLOR_XOR);
+        ctx.setDrawColor(Console::COLOR_WHITE);
         ctx.drawFrame(boardX + _sx * tileSize, boardY + _sy * tileSize, tileSize, tileSize);
     }
     
     // Draw cursor
-    ctx.setDrawColor(Console::COLOR_XOR);
+    // White outer box, black inner box for high contrast
+    ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.drawFrame(boardX + _cx * tileSize, boardY + _cy * tileSize, tileSize, tileSize);
+    ctx.setDrawColor(Console::COLOR_BLACK);
     ctx.drawFrame(boardX + _cx * tileSize + 1, boardY + _cy * tileSize + 1, tileSize - 2, tileSize - 2);
 
     // Sidebar
@@ -267,6 +234,10 @@ void ChessPlayScene::draw(Console& ctx) {
     ctx.setFont(u8g2_font_4x6_tf);
     ctx.drawStr(66, 10, "Turn:");
     ctx.drawStr(66, 20, _turn == PieceColor::White ? "White" : "Black");
+    
+    ctx.drawStr(66, 35, "A: Select");
+    ctx.drawStr(66, 45, "   Move");
+    ctx.drawStr(66, 55, "B: Cancel");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
