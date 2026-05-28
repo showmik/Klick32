@@ -90,6 +90,10 @@ void OS::run() {
             activeGame->draw(_console);
             Diagnostics::draw(_console);
             _disp.sendBuffer();
+#ifdef SIMULATOR
+            extern void sim_commit_buffer();
+            sim_commit_buffer();
+#endif
         }
 
         // 3. STATE TRANSITIONS

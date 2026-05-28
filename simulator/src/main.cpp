@@ -3,6 +3,7 @@
 #include <iostream>
 #include <windows.h>
 #include <stdio.h>
+#include <mutex>
 #include "OS.h"
 #include "Config.h"
 #include "Arduino.h"
@@ -47,18 +48,29 @@ SDL_Texture* texture = nullptr;
 
 bool g_quit = false;
 
-// We need to implement a hook into the U8G2 buffer rendering
-// The U8G2_SIMULATOR class maintains _buf[1024].
-void RenderDisplay(uint8_t* buf) {
-    if (!buf) return;
-    
+extern uint8_t* g_simDisplayBuffer;
+uint8_t g_simFrontBuffer[1024];
+std::mutex g_displayMutex;
+
+void sim_commit_buffer() {
+    std::lock_guard<std::mutex> lock(g_displayMutex);
+    if (g_simDisplayBuffer) {
+        memcpy(g_simFrontBuffer, g_simDisplayBuffer, 1024);
+    }
+}
+
+void RenderDisplay() {
     uint32_t pixels[128 * 64];
-    for (int y = 0; y < 64; y++) {
-        for (int x = 0; x < 128; x++) {
-            int byteIdx = (y / 8) * 128 + x;
-            int bitIdx = y % 8;
-            bool isOn = (buf[byteIdx] & (1 << bitIdx)) != 0;
-            pixels[y * 128 + x] = isOn ? 0xFFFFFFFF : 0xFF000000;
+    
+    {
+        std::lock_guard<std::mutex> lock(g_displayMutex);
+        for (int y = 0; y < 64; y++) {
+            for (int x = 0; x < 128; x++) {
+                int byteIdx = (y / 8) * 128 + x;
+                int bitIdx = y % 8;
+                bool isOn = (g_simFrontBuffer[byteIdx] & (1 << bitIdx)) != 0;
+                pixels[y * 128 + x] = isOn ? 0xFFFFFFFF : 0xFF000000;
+            }
         }
     }
     
@@ -114,7 +126,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
             
-        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         if (!renderer) {
             return 1;
         }
@@ -125,22 +137,23 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        // Initialize front buffer to black
+        memset(g_simFrontBuffer, 0, sizeof(g_simFrontBuffer));
+
         OS os;
         g_os = &os;
         os.begin();
 
-    std::thread osThread([&]() {
-        os.run();
-    });
+        std::thread osThread([&]() {
+            os.run();
+        });
 
-    extern uint8_t* g_simDisplayBuffer;
-
-    while (!g_quit) {
-        PumpEvents();
-        RenderDisplay(g_simDisplayBuffer);
-        SDL_Delay(16);
-    }
-    
+        while (!g_quit) {
+            PumpEvents();
+            RenderDisplay();
+            SDL_Delay(16);
+        }
+        
         osThread.detach();
 
         SDL_DestroyTexture(texture);
