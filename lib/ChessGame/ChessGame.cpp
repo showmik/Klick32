@@ -313,7 +313,8 @@ void ChessPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             _sy = -1;
             ctx.sfxMenuBack();
         } else {
-            sm.emit(ctx, Event::QUIT);
+            ctx.sfxMenuBack();
+            sm.emit(ctx, Event::CUSTOM_2); // Return to title scene instead of quitting
         }
     }
     
@@ -516,6 +517,7 @@ void ChessGame::onEnter(Console& ctx) {
 
     useDefaultEvents(nullptr, nullptr); 
     _sm.onEvent(Event::CUSTOM_1, SceneManager::REPLACE, &_play);
+    _sm.onEvent(Event::CUSTOM_2, SceneManager::REPLACE, &_title);
 
     _sm.replace(&_title, ctx);
 }
