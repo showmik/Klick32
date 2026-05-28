@@ -1,6 +1,7 @@
 #include "DinoGame.h"
 #include "GameRegistry.h"
 #include "DinoSprites.h"
+#include "CommonScreens.h"
 
 // ─── DinoGame ────────────────────────────────────────────────────────────────
 // Chrome-style endless runner.
@@ -38,16 +39,7 @@ void DinoTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void DinoTitleScene::draw(Console& ctx) {
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(36, 24, "DINO RUN");
-    ctx.drawHLine(0, 30, Console::W);
-
-    ctx.drawBitmap(10, 52 - 16, 2, 16, spr_run1); 
-
-    if ((_frame / 15) % 2 == 0) {
-        ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStrCentered(54, "Press A to play");
-    }
+    Screens::drawTitle(ctx, "DINO RUN", spr_run1, 16, 16);
 }
 
 
@@ -388,26 +380,6 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead) const {
         if (s.life > 0) ctx.drawPixel(s.pos.ix(), s.pos.iy());
     }
 
-    int dx = DINO_X;
-    int dy = (int)_dinoY;
-
-    if (isDead) {
-        ctx.drawBitmap(dx, dy, 2, DINO_H, spr_dead);
-    } else if (_isDucking) {
-        ctx.drawBitmap(dx, GROUND_Y - DUCK_H, 2, DUCK_H, (_animFrame == 0) ? spr_duck1 : spr_duck2);
-    } else if (!_onGround) {
-        ctx.drawBitmap(dx, dy, 2, DINO_H, spr_run1);
-    } else {
-        ctx.drawBitmap(dx, dy, 2, DINO_H, (_animFrame == 0) ? spr_run1 : spr_run2);
-    }
-
-    // ── Blinking Hack (Draw over the eye pixel) ───────────────────────────────
-    if (!isDead && !_isDucking && _blinkTimer < 4) {
-        ctx.setDrawColor(isNight ? 1 : 0); 
-        ctx.drawPixel(dx + 11, dy + 2);
-        ctx.setDrawColor(isNight ? 0 : 1); 
-    }
-
     for (const auto& o : _obs) {
         if (!o.active) continue;
         
@@ -426,6 +398,26 @@ void DinoPlayScene::drawField(Console& ctx, bool isDead) const {
                 ctx.drawBitmap(obx, oby, 2, PTERO_H, (o.animFrame == 0) ? spr_ptero1 : spr_ptero2);
                 break;
         }
+    }
+
+    int dx = DINO_X;
+    int dy = (int)_dinoY;
+
+    if (isDead) {
+        ctx.drawBitmap(dx, dy, 2, DINO_H, spr_dead);
+    } else if (_isDucking) {
+        ctx.drawBitmap(dx, GROUND_Y - DUCK_H, 2, DUCK_H, (_animFrame == 0) ? spr_duck1 : spr_duck2);
+    } else if (!_onGround) {
+        ctx.drawBitmap(dx, dy, 2, DINO_H, spr_run1);
+    } else {
+        ctx.drawBitmap(dx, dy, 2, DINO_H, (_animFrame == 0) ? spr_run1 : spr_run2);
+    }
+
+    // ── Blinking Hack (Draw over the eye pixel) ───────────────────────────────
+    if (!isDead && !_isDucking && _blinkTimer < 4) {
+        ctx.setDrawColor(isNight ? 1 : 0); 
+        ctx.drawPixel(dx + 11, dy + 2);
+        ctx.setDrawColor(isNight ? 0 : 1); 
     }
 
     // ── Plain Text Score ──────────────────────────────────────────────────────
@@ -465,13 +457,7 @@ void DinoPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void DinoPauseScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
-
-    ctx.setDrawColor(0);
-    ctx.drawBox(34, 22, 60, 22);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(34, 22, 60, 22);
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(42, 37, "PAUSED");
+    Screens::drawPauseOverlay(ctx);
 }
 
 
@@ -521,18 +507,8 @@ void DinoDeadScene::draw(Console& ctx) {
     ctx.setCamera(nullptr);
 
     // Only draw the game over menu once the shake settles to give it impact
-    if (_camera->getOffsetX() == 0 && _camera->getOffsetY() == 0) {
-        ctx.setDrawColor(0);
-        ctx.drawBox(18, 20, 92, 28);
-        ctx.setDrawColor(1);
-        ctx.drawFrame(18, 20, 92, 28);
-        ctx.setFont(u8g2_font_7x13B_tf);
-        ctx.drawStr(22, 36, "GAME  OVER");
-
-        if ((_frame / 15) % 2 == 0) {
-            ctx.setFont(u8g2_font_6x10_tf);
-            ctx.drawStr(26, 46, "A to restart");
-        }
+    if (_frame > 20) {
+        Screens::drawGameOver(ctx, _data->score, _data->hiScore, _data->score >= _data->hiScore && _data->score > 0);
     }
 }
 
@@ -551,31 +527,16 @@ void DinoGame::onEnter(Console& ctx) {
     _dead.setEngine(&_camera, &_particles);
     _dead.setPlayScene(&_play);
 
-    // Event Registry Mapping
-    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
-    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
-    _sm.onEvent(Event::RESUME,    SceneManager::POP);
-    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_dead);
-    _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
+    useDefaultEvents(&_pause, &_dead);
+    _sm.onEvent(Event::CUSTOM_1, SceneManager::REPLACE, &_play);
 
     _sm.replace(&_title, ctx); 
 }
 
 void DinoGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
+    SceneGame::onExit(ctx);
 }
-
-void DinoGame::update(Console& ctx, float dt) { 
-    _camera.update();
-    _particles.update();
-    _sm.update(ctx, dt); 
-}
-
-void DinoGame::draw(Console& ctx) { 
-    _sm.draw(ctx); 
-}
-
-bool           DinoGame::isRunning() const { return !_sm.empty(); }
 const char*    DinoGame::getName()   const { return "Dino Run"; }
 const uint8_t* DinoGame::getIcon()   const { return dinogame_icon; }
 const uint8_t* DinoGame::getCoverArt() const { return spr_dino_cover; }

@@ -7,6 +7,8 @@
 #include "Camera.h"
 #include "ParticleManager.h"
 
+#include "SceneGame.h"
+
 class DinoPlayScene;
 class DinoPauseScene;
 class DinoDeadScene;
@@ -152,23 +154,16 @@ private:
 };
 
 // ─── DinoGame ────────────────────────────────────────────────────────────────
-class DinoGame : public GameBase {
+class DinoGame : public SceneGame<DinoSharedData> {
 public:
     void onEnter(Console& ctx) override;
-    void onExit (Console& ctx) override;
-    void update (Console& ctx, float dt) override;
-    void draw   (Console& ctx) override;
+    void onExit(Console& ctx) override;
     
-    bool           isRunning() const override;
     const char*    getName()   const override;
     const uint8_t* getIcon()   const override;
     const uint8_t* getCoverArt() const override;
 
 private:
-    DinoSharedData _data;
-    SceneManager   _sm;
-    Camera         _camera;
-    ParticleManager _particles;
     DinoTitleScene _title;
     DinoPlayScene  _play;
     DinoPauseScene _pause;

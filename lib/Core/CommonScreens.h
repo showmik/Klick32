@@ -13,7 +13,7 @@ namespace Screens {
         ctx.drawStrCentered(ty, title);
 
         if (icon) {
-            ctx.drawBitmapEx(Console::W / 2 - iconW / 2, ty + 5, iconW, iconH, icon, 0, false, false, 1);
+            ctx.blit(icon, (iconW + 7) / 8, iconH).at(Console::W / 2 - (iconW / 2), ty + 5).draw();
         }
 
         ctx.setFont(u8g2_font_4x6_tr);
@@ -26,9 +26,9 @@ namespace Screens {
     inline void drawGameOver(Console& ctx, uint32_t score, uint32_t highScore, bool isNewHigh = false) {
         ctx.pushDrawState();
         ctx.setDrawColor(Console::COLOR_BLACK);
-        ctx.drawBox(10, 10, Console::W - 20, Console::H - 20);
+        ctx.drawBox(6, 6, Console::W - 12, Console::H - 12);
         ctx.setDrawColor(Console::COLOR_WHITE);
-        ctx.drawFrame(10, 10, Console::W - 20, Console::H - 20);
+        ctx.drawFrame(6, 6, Console::W - 12, Console::H - 12);
         
         ctx.setFont(u8g2_font_6x10_tf);
         ctx.drawStrCentered(22, "GAME OVER");
