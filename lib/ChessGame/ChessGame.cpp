@@ -16,12 +16,16 @@ void ChessTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Custom event to transition to play
     }
+    if (ctx.justPressed(Btn::MENU1)) {
+        sm.emit(ctx, Event::QUIT); // Exit game
+    }
     if (ctx.justPressed(Btn::B)) {
         sm.emit(ctx, Event::QUIT); // Exit game
     }
 }
 
 void ChessTitleScene::draw(Console& ctx) {
+    ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.setFont(u8g2_font_6x10_tf);
     ctx.drawStrCentered(20, "CHESS");
     ctx.drawStrCentered(40, "Press A to Start");
@@ -282,6 +286,11 @@ void ChessPlayScene::doAIMove(Console& ctx) {
 }
 
 void ChessPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
+    if (ctx.justPressed(Btn::MENU1)) {
+        sm.emit(ctx, Event::QUIT);
+        return;
+    }
+
     if (_gameOver) {
         if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) {
             initBoard();
@@ -520,6 +529,11 @@ void ChessGame::onEnter(Console& ctx) {
     _sm.onEvent(Event::CUSTOM_2, SceneManager::REPLACE, &_title);
 
     _sm.replace(&_title, ctx);
+}
+
+void ChessGame::onExit(Console& ctx) {
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    SceneGame::onExit(ctx);
 }
 
 const char* ChessGame::getName() const {

@@ -63,6 +63,7 @@ private:
 class ChessGame : public SceneGame<ChessData> {
 public:
     void onEnter(Console& ctx) override;
+    void onExit(Console& ctx) override;
     const char* getName() const override;
 
 private:
