@@ -50,7 +50,6 @@ void BBPlayScene::onEnter(Console& ctx) {
 
 void BBPlayScene::_generateLevel() {
     _bricksLeft = 0;
-    _padX = (Console::W - _padW) / 2.0f;
     _stickyPaddle = false;
 
     int pattern = (_data->level - 1) % 5;
@@ -122,7 +121,8 @@ void BBPlayScene::_generateLevel() {
 void BBPlayScene::_resetBall(bool serve) {
     for (int i = 1; i < MAX_BALLS; ++i) _balls[i].active = false;
     
-    _padW = 20.0f; // Reset paddle size before computing center
+    _padW = 20.0f; // Reset paddle size
+    _padX = (Console::W - _padW) / 2.0f; // Center the paddle perfectly
     _combo = 1;
     
     _balls[0].active = true;
@@ -484,6 +484,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         
         int bonus = 100 * _data->level;
         _data->score += bonus;
+        ctx.updateHiScore(_data->score);
         
         ctx.beep(600, 10);
         ctx.beep(800, 10);
