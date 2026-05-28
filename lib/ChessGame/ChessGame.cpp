@@ -366,14 +366,54 @@ void ChessPlayScene::draw(Console& ctx) {
     ctx.drawFrame(boardX + _cx * tileSize + 1, boardY + _cy * tileSize + 1, tileSize - 2, tileSize - 2);
 
     // Sidebar
+    int wMat = 0;
+    int bMat = 0;
+    for (int ty = 0; ty < 8; ++ty) {
+        for (int tx = 0; tx < 8; ++tx) {
+            Piece p = _board[ty][tx];
+            if (p.isEmpty()) continue;
+            int val = 0;
+            switch(p.type) {
+                case PieceType::Pawn: val=1; break;
+                case PieceType::Knight: val=3; break;
+                case PieceType::Bishop: val=3; break;
+                case PieceType::Rook: val=5; break;
+                case PieceType::Queen: val=9; break;
+                default: break;
+            }
+            if (p.color == PieceColor::White) wMat += val;
+            else bMat += val;
+        }
+    }
+
     ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.setFont(u8g2_font_4x6_tf);
-    ctx.drawStr(66, 10, "Turn:");
-    ctx.drawStr(66, 20, _turn == PieceColor::White ? "White" : "Black");
+    ctx.drawStr(68, 8, "TURN");
+    ctx.drawStr(68, 16, _turn == PieceColor::White ? "White" : "Black");
     
-    ctx.drawStr(66, 35, "A: Select");
-    ctx.drawStr(66, 45, "   Move");
-    ctx.drawStr(66, 55, "B: Cancel");
+    // Draw Material Advantage
+    if (wMat > bMat) {
+        ctx.drawPrintf(68, 30, "W +%d", wMat - bMat);
+    } else if (bMat > wMat) {
+        ctx.drawPrintf(68, 30, "B +%d", bMat - wMat);
+    } else {
+        ctx.drawStr(68, 30, "Even");
+    }
+    
+    // Controls at bottom right
+    ctx.drawStr(68, 52, "A:Sel/Mov");
+    ctx.drawStr(68, 60, "B:Cancel");
+    
+    // Evaluation Bar (far right, 6 pixels wide)
+    int eval = evaluateBoard();
+    if (eval > 150) eval = 150;
+    if (eval < -150) eval = -150;
+    int splitY = 32 + (eval * 30 / 150);
+    
+    ctx.drawFrame(121, 1, 6, 62);
+    ctx.drawBox(121, splitY, 6, 63 - splitY);
+    ctx.setDrawColor(Console::COLOR_BLACK);
+    ctx.drawHLine(121, 32, 6);
 
     if (_gameOver) {
         ctx.setDrawColor(Console::COLOR_BLACK);
