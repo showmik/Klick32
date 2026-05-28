@@ -188,8 +188,12 @@ void BBPlayScene::_applyPowerUp(PowerUpType type, Console& ctx) {
                 for (int i = 0; i < MAX_BALLS; ++i) {
                     if (!_balls[i].active) {
                         _balls[i] = _balls[sourceBallIdx];
-                        _balls[i].vx = -_balls[sourceBallIdx].vx + (random(-10, 10) * 0.05f);
-                        _balls[i].vy = _balls[sourceBallIdx].vy + (random(-10, 10) * 0.05f);
+                        _balls[i].sticky = false; // Prevent perfectly overlapping stuck balls
+                        
+                        // Scatter dynamically upwards
+                        _balls[i].vx = (random(2) == 0 ? 1 : -1) * (INIT_SPEED + random(0, 10) * 0.1f);
+                        _balls[i].vy = -(INIT_SPEED + random(0, 10) * 0.1f);
+                        
                         _normalizeBallVelocity(_balls[i], INIT_SPEED);
                     }
                 }
@@ -202,7 +206,7 @@ void BBPlayScene::_applyPowerUp(PowerUpType type, Console& ctx) {
             }
             break;
         case PowerUpType::LIFE:
-            _data->lives++;
+            if (_data->lives < 5) _data->lives++;
             break;
     }
 }
