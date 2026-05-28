@@ -122,6 +122,9 @@ void BBPlayScene::_generateLevel() {
 void BBPlayScene::_resetBall(bool serve) {
     for (int i = 1; i < MAX_BALLS; ++i) _balls[i].active = false;
     
+    _padW = 20.0f; // Reset paddle size before computing center
+    _combo = 1;
+    
     _balls[0].active = true;
     _balls[0].fireball = false;
     
@@ -137,8 +140,6 @@ void BBPlayScene::_resetBall(bool serve) {
         _balls[0].vx = (random(2) == 0 ? 1 : -1) * INIT_SPEED * 0.7f;
         _balls[0].vy = -INIT_SPEED;
     }
-    _padW = 20.0f;
-    _combo = 1;
     
     _laserActive = false;
     _laserTimer = 0;
@@ -361,8 +362,12 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             continue;
         }
         
-        int c = (int)(_lasers[i].x - GRID_OX) / BRICK_W;
-        int r = (int)(_lasers[i].y - GRID_OY) / BRICK_H;
+        int cx = (int)_lasers[i].x - GRID_OX;
+        int cy = (int)_lasers[i].y - GRID_OY;
+        
+        // Prevent negative truncation mapping to index 0
+        int c = (cx >= 0) ? (cx / BRICK_W) : -1;
+        int r = (cy >= 0) ? (cy / BRICK_H) : -1;
         
         if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
             if (_bricks[r][c].active && _bricks[r][c].type != BrickType::SOLID) {
@@ -669,8 +674,11 @@ void BBGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
     }
     if (_frame > 30) {
         if (ctx.justPressed(Btn::A)) {
-            sm.emit(ctx, Event::CUSTOM_1); // Restart
+            // Cleanly restart without stacking another play scene
+            if (_play) _play->onEnter(ctx);
+            sm.pop(ctx);
         } else if (ctx.justPressed(Btn::B)) {
+            sm.clear(ctx);
             sm.emit(ctx, Event::CUSTOM_2); // Title
         }
     }
