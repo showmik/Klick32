@@ -31,7 +31,7 @@
 
 // ─── Firmware Identity ────────────────────────────────────────────────────────
 // Change FW_NAME to whatever you end up calling your console.
-#define FW_NAME      "GADGETBOY"
+#define FW_NAME      "Klick32"
 #define FW_VERSION   "v0.1"
 
 // ─── Timing ──────────────────────────────────────────────────────────────────
