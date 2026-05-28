@@ -289,6 +289,13 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         _balls[i].x += _balls[i].vx;
         _balls[i].y += _balls[i].vy;
 
+        // Fireball trail
+        if (_balls[i].fireball && _particles) {
+            if (random(100) < 60) { // 60% chance per frame to leave a spark
+                _particles->spawnPixel(_balls[i].x + 1, _balls[i].y + 1, random(-10, 10)*0.02f, random(-10, 10)*0.02f, random(10, 20));
+            }
+        }
+
         // Wall collisions
         if (_balls[i].x <= 0) { _balls[i].x = 0; _balls[i].vx = -_balls[i].vx; ctx.beep(300, 10); }
         if (_balls[i].x >= Console::W - 1) { _balls[i].x = Console::W - 1; _balls[i].vx = -_balls[i].vx; ctx.beep(300, 10); }
@@ -372,13 +379,15 @@ void BBPlayScene::draw(Console& ctx) {
     // Draw Balls
     for (int i = 0; i < MAX_BALLS; ++i) {
         if (_balls[i].active) {
-            if (_balls[i].fireball && (ctx.holdFrames(Btn::A) % 4 < 2)) {
-                ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y - 1, 3, 3);
+            if (_balls[i].fireball) {
+                if ((millis() / 40) % 2 == 0) {
+                    ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y - 1, 4, 4);
+                } else {
+                    ctx.drawBox((int)_balls[i].x, (int)_balls[i].y - 1, 2, 4);
+                    ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y, 4, 2);
+                }
             } else {
-                ctx.drawPixel((int)_balls[i].x, (int)_balls[i].y);
-                ctx.drawPixel((int)_balls[i].x+1, (int)_balls[i].y);
-                ctx.drawPixel((int)_balls[i].x, (int)_balls[i].y+1);
-                ctx.drawPixel((int)_balls[i].x+1, (int)_balls[i].y+1);
+                ctx.drawBox((int)_balls[i].x, (int)_balls[i].y, 2, 2);
             }
         }
     }
