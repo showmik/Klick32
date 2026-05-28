@@ -387,22 +387,35 @@ void ChessPlayScene::draw(Console& ctx) {
     }
 
     ctx.setDrawColor(Console::COLOR_WHITE);
-    ctx.setFont(u8g2_font_4x6_tf);
-    ctx.drawStr(68, 8, "TURN");
-    ctx.drawStr(68, 16, _turn == PieceColor::White ? "White" : "Black");
+    // Vertical separator
+    ctx.drawVLine(65, 0, 64);
+    
+    ctx.setFont(u8g2_font_5x8_tf);
+    ctx.drawStr(69, 9, "TURN:");
+    
+    // Inverted box for active turn
+    if (_turn == PieceColor::White) {
+        ctx.drawBox(69, 12, 48, 11);
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawStr(74, 21, "WHITE");
+    } else {
+        ctx.drawFrame(69, 12, 48, 11);
+        ctx.drawStr(74, 21, "BLACK");
+    }
     
     // Draw Material Advantage
+    ctx.setDrawColor(Console::COLOR_WHITE);
     if (wMat > bMat) {
-        ctx.drawPrintf(68, 30, "W +%d", wMat - bMat);
+        ctx.drawPrintf(69, 36, "W +%d", wMat - bMat);
     } else if (bMat > wMat) {
-        ctx.drawPrintf(68, 30, "B +%d", bMat - wMat);
+        ctx.drawPrintf(69, 36, "B +%d", bMat - wMat);
     } else {
-        ctx.drawStr(68, 30, "Even");
+        ctx.drawStr(69, 36, "Even");
     }
     
     // Controls at bottom right
-    ctx.drawStr(68, 52, "A:Sel/Mov");
-    ctx.drawStr(68, 60, "B:Cancel");
+    ctx.drawStr(69, 52, "[A] Move");
+    ctx.drawStr(69, 61, "[B] Back");
     
     // Evaluation Bar (far right, 6 pixels wide)
     int eval = evaluateBoard();
