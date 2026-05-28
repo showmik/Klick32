@@ -86,3 +86,26 @@ public:
 private:
     T _pool[MAX_ENTITIES];
 };
+
+// ─── Collision Helpers ────────────────────────────────────────────────────────
+// Eliminates O(N*M) nested loop boilerplate in games.
+// Usage: 
+//   checkCollisions(bullets, enemies, [](Bullet& b, Enemy& e) {
+//       if (b.rect().overlaps(e.rect())) {
+//           b.destroy(); e.destroy();
+//       }
+//   });
+// ─────────────────────────────────────────────────────────────────────────────
+template<typename T, uint16_t N, typename U, uint16_t M, typename Func>
+inline void checkCollisions(EntityManager<T, N>& poolA, EntityManager<U, M>& poolB, Func onHit) {
+    for (uint16_t i = 0; i < N; i++) {
+        T* a = poolA.get(i);
+        if (!a->active) continue;
+        for (uint16_t j = 0; j < M; j++) {
+            U* b = poolB.get(j);
+            if (!b->active) continue;
+            onHit(*a, *b);
+            if (!a->active) break; // If 'a' was destroyed, skip remaining 'b's
+        }
+    }
+}
