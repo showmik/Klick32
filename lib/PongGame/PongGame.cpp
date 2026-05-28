@@ -2,6 +2,7 @@
 #include "PongGame.h"
 #include "GameRegistry.h"
 #include "PongSprites.h"
+#include "CommonScreens.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 // PongTitleScene
@@ -23,23 +24,7 @@ void PongTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void PongTitleScene::draw(Console& ctx) {
-    // Title
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(48, 22, "PONG");
-
-    // Divider
-    ctx.drawHLine(0, 28, Console::W);
-
-    // Mini court preview — two paddles and a centre line
-    ctx.drawVLine(64, 32, 24);        // centre dashes (approximate)
-    ctx.drawBox(8,  38, PongState::PAD_W, PongState::PAD_H);
-    ctx.drawBox(Console::W - 8 - PongState::PAD_W, 38, PongState::PAD_W, PongState::PAD_H);
-
-    // Blinking prompt
-    if ((_frame / 15) % 2 == 0) {
-        ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStrCentered(58, "Press A to play");
-    }
+    Screens::drawTitle(ctx, "PONG");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -295,15 +280,7 @@ void PongPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void PongPauseScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
-
-    // Overlay: filled box to obscure + border
-    ctx.setDrawColor(0);
-    ctx.drawBox(34, 22, 60, 22);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(34, 22, 60, 22);
-
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(42, 37, "PAUSED");
+    Screens::drawPauseOverlay(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -326,27 +303,41 @@ void PongGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void PongGameOverScene::draw(Console& ctx) {
-    if (_sm) _sm->drawUnder(ctx);
+    ctx.setCamera(nullptr);
+    
+    // Clear background
+    ctx.setDrawColor(0);
+    ctx.drawBox(0, 0, Console::W, Console::H);
+    
+    ctx.setDrawColor(1);
+    
+    // Draw court line
+    for (int y = 0; y < Console::H; y += 7) {
+        ctx.drawVLine(64, y, 4);
+    }
     
     // Final scoreboard
     ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawPrintfCentered(16, "%u  %u", _st->scoreL, _st->scoreR);
-
-    ctx.drawHLine(0, PongState::FIELD_TOP - 1, Console::W);
+    ctx.drawPrintf(32, 20, "%u", _st->scoreL);
+    ctx.drawPrintf(88, 20, "%u", _st->scoreR);
 
     // Winner banner
     ctx.setDrawColor(0);
-    ctx.drawBox(14, 20, 100, 26);
+    ctx.drawBox(14, 26, 100, 20);
     ctx.setDrawColor(1);
-    ctx.drawFrame(14, 20, 100, 26);
+    ctx.drawFrame(14, 26, 100, 20);
+    
     ctx.setFont(u8g2_font_7x13B_tf);
-    if (*_playerWon) ctx.drawStr(20, 36, "YOU  WIN!");
-    else             ctx.drawStr(22, 36, "AI  WINS!");
+    if (*_playerWon) {
+        ctx.drawStrCentered(40, "YOU WIN!");
+    } else {
+        ctx.drawStrCentered(40, "AI WINS!");
+    }
 
     // Blinking restart prompt
     if ((_frame / 15) % 2 == 0) {
         ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStr(26, 56, "A: rematch  M1: menu");
+        ctx.drawStrCentered(58, "A: rematch  M1: menu");
     }
 }
 
@@ -359,31 +350,12 @@ void PongGame::onEnter(Console& ctx) {
     
     _gameover.setState(_play.getStatePtr(), _play.getPlayerWonPtr());
 
-    // Event Registry Mapping
-    _sm.onEvent(Event::QUIT,      SceneManager::CLEAR);
-    _sm.onEvent(Event::PAUSE,     SceneManager::PUSH, &_pause);
-    _sm.onEvent(Event::RESUME,    SceneManager::POP);
-    _sm.onEvent(Event::GAME_OVER, SceneManager::REPLACE, &_gameover);
+    useDefaultEvents(&_pause, &_gameover);
     _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart
 
     _sm.replace(&_title, ctx);
 }
 
-void PongGame::onExit(Console& ctx) {
-    // sm.clear() has already been called; nothing to flush.
-}
-
-void PongGame::update(Console& ctx, float dt) {
-    _camera.update();
-    _particles.update();
-    _sm.update(ctx, dt);
-}
-
-void PongGame::draw(Console& ctx) {
-    _sm.draw(ctx);
-}
-
-bool        PongGame::isRunning()   const { return !_sm.empty(); }
 bool        PongGame::needsRedraw() const { return _sm.needsRedraw(); }
 const char* PongGame::getName()     const { return "Pong"; }
 const uint8_t* PongGame::getCoverArt() const { return spr_pong_cover; }

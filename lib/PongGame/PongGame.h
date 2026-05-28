@@ -6,6 +6,7 @@
 #include "Scene.h"
 #include "Camera.h"
 #include "ParticleManager.h"
+#include "SceneGame.h"
 
 // ─── PongGame ─────────────────────────────────────────────────────────────────
 // Classic two-paddle Pong: player (left) vs AI (right).
@@ -136,22 +137,14 @@ private:
 
 // ─── PongGame ─────────────────────────────────────────────────────────────────
 
-class PongGame : public GameBase {
+class PongGame : public SceneGame<PongState> {
 public:
     void onEnter(Console& ctx) override;
-    void onExit (Console& ctx) override;
-    void update (Console& ctx, float dt) override;
-    void draw   (Console& ctx) override;
-    bool           isRunning()   const override;
     bool           needsRedraw() const override;
     const char*    getName()     const override;
     const uint8_t* getCoverArt() const override;
     
-
 private:
-    SceneManager       _sm;
-    Camera             _camera;
-    ParticleManager   _particles;
     PongTitleScene     _title;
     PongPlayScene      _play;
     PongPauseScene     _pause;
