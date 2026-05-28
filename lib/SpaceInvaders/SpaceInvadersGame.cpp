@@ -1,6 +1,7 @@
 #include "SpaceInvadersGame.h"
 #include "GameRegistry.h"
 #include "SpaceInvadersSprites.h"
+#include "CommonScreens.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 // SITitleScene
@@ -17,16 +18,7 @@ void SITitleScene::update(Console& ctx, SceneManager& sm, float dt) {
 }
 
 void SITitleScene::draw(Console& ctx) {
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(12, 24, "SPACE INVADERS");
-    ctx.drawHLine(0, 30, Console::W);
-    
-    ctx.drawBitmap(60, 36, 1, 8, spr_si_alien1);
-
-    if ((_frame / 15) % 2 == 0) {
-        ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStrCentered(58, "Press A to play");
-    }
+    Screens::drawTitle(ctx, "INVADERS", spr_si_alien1, 8, 8);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -331,12 +323,7 @@ void SIPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void SIPauseScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
-    ctx.setDrawColor(0);
-    ctx.drawBox(34, 22, 60, 22);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(34, 22, 60, 22);
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(42, 37, "PAUSED");
+    Screens::drawPauseOverlay(ctx);
 }
 
 void SIGameOverScene::onEnter(Console& ctx) { _frame = 0; }
@@ -359,17 +346,8 @@ void SIGameOverScene::draw(Console& ctx) {
     } else if (_sm) {
         _sm->drawUnder(ctx);
     }
-    ctx.setDrawColor(0);
-    ctx.drawBox(20, 20, 88, 28);
-    ctx.setDrawColor(1);
-    ctx.drawFrame(20, 20, 88, 28);
-    ctx.setFont(u8g2_font_7x13B_tf);
-    ctx.drawStr(28, 36, "GAME OVER");
     
-    if ((_frame / 15) % 2 == 0) {
-        ctx.setFont(u8g2_font_5x7_tf);
-        ctx.drawStrCentered(45, "A to restart");
-    }
+    Screens::drawGameOver(ctx, _data->score, _data->hiScore, _data->score >= _data->hiScore && _data->score > 0);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
