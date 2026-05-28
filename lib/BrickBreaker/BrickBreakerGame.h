@@ -16,7 +16,7 @@ struct BBSharedData {
 
 // ─── Enums & Structs ────────────────────────────────────────────────────────
 enum class BrickType : uint8_t { NONE = 0, NORMAL = 1, HARD = 2, SOLID = 3 };
-enum class PowerUpType : uint8_t { EXPAND, SHRINK, CATCH, MULTIBALL, FIREBALL, LIFE };
+enum class PowerUpType : uint8_t { EXPAND, SHRINK, CATCH, MULTIBALL, FIREBALL, LIFE, LASER };
 
 struct BBBrick {
     BrickType type = BrickType::NONE;
@@ -36,6 +36,11 @@ struct BBBall {
 struct BBPowerUp {
     float x = 0, y = 0;
     PowerUpType type;
+    bool active = false;
+};
+
+struct BBLaser {
+    float x = 0, y = 0;
     bool active = false;
 };
 
@@ -77,8 +82,9 @@ private:
     // Config
     static constexpr int MAX_BALLS = 3;
     static constexpr int MAX_POWERUPS = 5;
-    static constexpr float INIT_SPEED = 1.5f;
-    static constexpr float MAX_SPEED = 3.0f;
+    static constexpr int MAX_LASERS = 10;
+    static constexpr float INIT_SPEED = 1.3f;
+    static constexpr float MAX_SPEED = 2.4f;
     static constexpr float PAD_Y = 60.0f;
 
     BBSharedData*     _data      = nullptr;
@@ -88,6 +94,7 @@ private:
     BBBrick   _bricks[ROWS][COLS];
     BBBall    _balls[MAX_BALLS];
     BBPowerUp _powerUps[MAX_POWERUPS];
+    BBLaser   _lasers[MAX_LASERS];
 
     float _padX = 0;
     float _padW = 20.0f;
@@ -100,6 +107,9 @@ private:
     int _combo = 1;
     bool _levelClearPause = false;
     uint8_t _clearTimer = 0;
+    
+    bool _laserActive = false;
+    int _laserTimer = 0;
 
     void _generateLevel();
     void _spawnPowerUp(float x, float y);

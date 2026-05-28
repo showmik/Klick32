@@ -140,6 +140,10 @@ void BBPlayScene::_resetBall(bool serve) {
     _padW = 20.0f;
     _combo = 1;
     
+    _laserActive = false;
+    _laserTimer = 0;
+    for (int i = 0; i < MAX_LASERS; ++i) _lasers[i].active = false;
+    
     // Clear any falling powerups from the previous life/level
     for (int i = 0; i < MAX_POWERUPS; ++i) {
         _powerUps[i].active = false;
@@ -155,14 +159,14 @@ void BBPlayScene::_normalizeBallVelocity(BBBall& b, float speedTarget) {
 }
 
 void BBPlayScene::_spawnPowerUp(float x, float y) {
-    if (random(100) > 20) return; // 20% chance
+    if (random(100) > 15) return; // 15% chance for slightly better balance
 
     for (int i = 0; i < MAX_POWERUPS; ++i) {
         if (!_powerUps[i].active) {
             _powerUps[i].active = true;
             _powerUps[i].x = x;
             _powerUps[i].y = y;
-            _powerUps[i].type = static_cast<PowerUpType>(random(6));
+            _powerUps[i].type = static_cast<PowerUpType>(random(7));
             break;
         }
     }
@@ -214,6 +218,10 @@ void BBPlayScene::_applyPowerUp(PowerUpType type, Console& ctx) {
             break;
         case PowerUpType::LIFE:
             if (_data->lives < 5) _data->lives++;
+            break;
+        case PowerUpType::LASER:
+            _laserActive = true;
+            _laserTimer = 400; // ~13 seconds
             break;
     }
 }
@@ -310,7 +318,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_padX < 0) _padX = 0;
     if (_padX + _padW > Console::W) _padX = Console::W - _padW;
 
-    // Launch Ball
+    // Launch Ball & Fire Lasers
     if (ctx.justPressed(Btn::A)) {
         for (int i = 0; i < MAX_BALLS; ++i) {
             if (_balls[i].active && _balls[i].sticky) {
@@ -319,6 +327,60 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 _balls[i].vy = -INIT_SPEED;
                 _balls[i].vx = ((_balls[i].x - (_padX + _padW/2.0f)) / (_padW/2.0f)) * INIT_SPEED;
                 _normalizeBallVelocity(_balls[i], INIT_SPEED);
+            }
+        }
+        
+        // Fire Lasers
+        if (_laserActive) {
+            int spawned = 0;
+            for (int i = 0; i < MAX_LASERS && spawned < 2; ++i) {
+                if (!_lasers[i].active) {
+                    _lasers[i].active = true;
+                    _lasers[i].x = _padX + (spawned == 0 ? 0 : _padW - 1);
+                    _lasers[i].y = PAD_Y - 4;
+                    spawned++;
+                }
+            }
+            if (spawned > 0) ctx.beep(1200, 5);
+        }
+    }
+    
+    // Update Lasers
+    if (_laserActive) {
+        if (_laserTimer > 0) _laserTimer--;
+        else _laserActive = false;
+    }
+    
+    for (int i = 0; i < MAX_LASERS; ++i) {
+        if (!_lasers[i].active) continue;
+        _lasers[i].y -= 4.0f; // Fast upward movement
+        
+        if (_lasers[i].y < 8) {
+            _lasers[i].active = false;
+            if (_particles) _particles->spawnPixel(_lasers[i].x, 8, 0, 1.0f, 10);
+            continue;
+        }
+        
+        int c = (int)(_lasers[i].x - GRID_OX) / BRICK_W;
+        int r = (int)(_lasers[i].y - GRID_OY) / BRICK_H;
+        
+        if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+            if (_bricks[r][c].active && _bricks[r][c].type != BrickType::SOLID) {
+                _lasers[i].active = false;
+                _bricks[r][c].hp--;
+                
+                if (_particles) {
+                    _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+                }
+                
+                if (_bricks[r][c].hp <= 0) {
+                    _bricks[r][c].active = false;
+                    _bricksLeft--;
+                    _data->score += (_bricks[r][c].type == BrickType::HARD) ? 20 : 10;
+                    ctx.updateHiScore(_data->score);
+                    _spawnPowerUp(GRID_OX + c*BRICK_W + BRICK_W/2.0f, GRID_OY + r*BRICK_H + BRICK_H/2.0f);
+                }
+                ctx.beep(400, 10);
             }
         }
     }
@@ -368,6 +430,11 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 } else {
                     float hitDist = _balls[i].x - (_padX + _padW / 2.0f);
                     _balls[i].vx = (hitDist / (_padW / 2.0f)) * MAX_SPEED * 0.8f;
+                    
+                    // Impart "English" spin if moving the paddle while hitting
+                    if (ctx.pressed(Btn::LEFT)) _balls[i].vx -= 0.6f;
+                    if (ctx.pressed(Btn::RIGHT)) _balls[i].vx += 0.6f;
+                    
                     _balls[i].vy = -INIT_SPEED;
                     _normalizeBallVelocity(_balls[i], INIT_SPEED + (_data->level * 0.2f)); 
                 }
@@ -442,8 +509,23 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 void BBPlayScene::draw(Console& ctx) {
     drawField(ctx);
     
-    // Draw Paddle
-    ctx.drawBox((int)_padX, (int)PAD_Y, (int)_padW, 4);
+    // Draw Paddle (Rounded pill shape)
+    ctx.drawBox((int)_padX + 1, (int)PAD_Y, (int)_padW - 2, 4);
+    ctx.drawBox((int)_padX, (int)PAD_Y + 1, 1, 2);
+    ctx.drawBox((int)_padX + (int)_padW - 1, (int)PAD_Y + 1, 1, 2);
+    
+    if (_laserActive) {
+        // Draw twin laser cannons on the paddle
+        ctx.drawBox((int)_padX, (int)PAD_Y - 3, 2, 3);
+        ctx.drawBox((int)_padX + (int)_padW - 2, (int)PAD_Y - 3, 2, 3);
+    }
+    
+    // Draw Lasers
+    for (int i = 0; i < MAX_LASERS; ++i) {
+        if (_lasers[i].active) {
+            ctx.drawLine((int)_lasers[i].x, (int)_lasers[i].y, (int)_lasers[i].x, (int)_lasers[i].y + 2);
+        }
+    }
 
     // Draw Balls
     for (int i = 0; i < MAX_BALLS; ++i) {
@@ -472,6 +554,7 @@ void BBPlayScene::draw(Console& ctx) {
                 case PowerUpType::MULTIBALL: spr = spr_pw_multi; break;
                 case PowerUpType::FIREBALL: spr = spr_pw_fire; break;
                 case PowerUpType::LIFE: spr = spr_pw_life; break;
+                case PowerUpType::LASER: spr = spr_pw_laser; break;
             }
             if (spr) {
                 ctx.drawBitmapEx((int)_powerUps[i].x - 4, (int)_powerUps[i].y - 4, 1, 8, spr);
