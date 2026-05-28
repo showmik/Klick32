@@ -35,12 +35,12 @@ static const uint8_t tex_skull[8] = {
 
 static const uint8_t tex_medkit[8] = {
     0b00000000,
+    0b00011000,
+    0b00011000,
     0b01111110,
-    0b01011010,
     0b01111110,
-    0b01111110,
-    0b01111110,
-    0b00000000,
+    0b00011000,
+    0b00011000,
     0b00000000
 };
 
@@ -48,25 +48,20 @@ static const uint8_t tex_medkit[8] = {
 // DoomTitleScene
 // =============================================================================
 
-void DoomTitleScene::onEnter(Console& ctx) {
-}
+void DoomTitleScene::onEnter(Console& ctx) {}
 
 void DoomTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::A)) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Custom event to transition to play
     }
-    if (ctx.justPressed(Btn::B)) {
-        sm.emit(ctx, Event::QUIT); // Exit game
-    }
+    if (ctx.justPressed(Btn::B)) sm.emit(ctx, Event::QUIT); // Exit game
 }
 
 void DoomTitleScene::draw(Console& ctx) {
     ctx.setFont(u8g2_font_6x10_tf);
     ctx.drawStrCenteredBoth("DOOM");
-    if (_data->hiScore > 0) {
-        ctx.drawPrintfCentered(50, "HI: %d", _data->hiScore);
-    }
+    if (_data->hiScore > 0) ctx.drawPrintfCentered(50, "HI: %d", _data->hiScore);
 }
 
 // =============================================================================
@@ -81,9 +76,7 @@ void DoomWinScene::onEnter(Console& ctx) {
 }
 
 void DoomWinScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) {
-        sm.emit(ctx, Event::CUSTOM_2); // Go to title
-    }
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) sm.emit(ctx, Event::CUSTOM_2); // Go to title
 }
 
 void DoomWinScene::draw(Console& ctx) {
@@ -125,11 +118,7 @@ void DoomPlayScene::onEnter(Console& ctx) {
 }
 
 void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::B)) {
-        sm.emit(ctx, Event::QUIT);
-        return;
-    }
-
+    if (ctx.justPressed(Btn::B)) { sm.emit(ctx, Event::QUIT); return; }
     if (dt > 0.1f) dt = 0.1f;
     
     float move_speed = 3.0f * dt;
@@ -157,9 +146,7 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (moved) {
         weapon_bob += 10.0f * dt;
         if (weapon_bob > 3.14159f * 2.0f) weapon_bob -= 3.14159f * 2.0f;
-    } else {
-        weapon_bob = 0.0f;
-    }
+    } else weapon_bob = 0.0f;
 
     if (fire_timer > 0) fire_timer--;
 
@@ -179,7 +166,6 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             while (angle < -3.14159f) angle += 2.0f * 3.14159f;
             while (angle > 3.14159f) angle -= 2.0f * 3.14159f;
             
-            // Simple hit check (enemy needs to be roughly in front of player)
             if (std::abs(angle) < 0.2f && dist < 8.0f) {
                 sprites[i].active = false;
                 _data->score += 100;
@@ -189,7 +175,6 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         }
     }
     
-    // Pickups
     for (int i = 0; i < num_sprites; i++) {
         if (!sprites[i].active) continue;
         float dx = sprites[i].x - player_x;
@@ -204,7 +189,6 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         }
     }
     
-    // Check exit
     if (map[(int)player_y][(int)player_x] == 9) {
         ctx.sfxPoint();
         sm.emit(ctx, Event::CUSTOM_3); // Win
@@ -213,14 +197,16 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void DoomPlayScene::draw(Console& ctx) {
     ctx.setDrawColor(Console::COLOR_BLACK);
-    ctx.drawBox(0, 0, Console::W, Console::H);
+    ctx.drawBox(0, 0, Console::W, Console::H); // Pure black floor and ceiling for clarity
     
     float dirX = std::cos(player_dir);
     float dirY = std::sin(player_dir);
     float planeX = -dirY * 0.66f;
     float planeY = dirX * 0.66f;
     
-    float zBuffer[128]; // Store wall distances for sprite clipping
+    float zBuffer[128]; 
+    int lastMapX = -1;
+    int lastMapY = -1;
     
     for (int x = 0; x < Console::W; x++) {
         float cameraX = 2.0f * x / (float)Console::W - 1.0f;
@@ -287,21 +273,28 @@ void DoomPlayScene::draw(Console& ctx) {
         if (hit == 9) { // Exit
             if (x % 2 == 0) ctx.drawVLine(x, drawStart, drawEnd - drawStart + 1);
         } else {
-            uint8_t shade = 4; // white
-            if (side == 1) shade = 3;
-            if (perpWallDist > 6.0f) shade = 1;
-            else if (perpWallDist > 4.0f && shade > 1) shade -= 2;
-            else if (perpWallDist > 2.0f && shade > 1) shade -= 1;
-            if (shade == 0) shade = 1;
+            // High contrast shading: Side 0 is solid white, Side 1 is dither pattern 2 (checkerboard)
+            uint8_t shade = (side == 0) ? 4 : 2;
+            if (perpWallDist > 8.0f) shade = (side == 0) ? 2 : 1; // Fade out slightly at extreme distance
+            
             ctx.drawDitherBox(x, drawStart, 1, drawEnd - drawStart + 1, shade);
+            
+            // Draw a black vertical line at the boundary between wall blocks to make geometry pop!
+            if (x > 0 && (mapX != lastMapX || mapY != lastMapY)) {
+                ctx.setDrawColor(Console::COLOR_BLACK);
+                ctx.drawVLine(x, drawStart, drawEnd - drawStart + 1);
+            }
         }
+        
+        lastMapX = mapX;
+        lastMapY = mapY;
     }
     
     // SPRITE RENDERING
     for (int i = 0; i < num_sprites; i++) {
         sprites[i].distance = ((player_x - sprites[i].x) * (player_x - sprites[i].x) + (player_y - sprites[i].y) * (player_y - sprites[i].y));
     }
-    // Bubble sort sprites (furthest to closest)
+    // Bubble sort sprites
     for (int i = 0; i < num_sprites - 1; i++) {
         for (int j = 0; j < num_sprites - i - 1; j++) {
             if (sprites[j].distance < sprites[j+1].distance) {
@@ -322,7 +315,7 @@ void DoomPlayScene::draw(Console& ctx) {
         float transformX = invDet * (dirY * spriteX - dirX * spriteY);
         float transformY = invDet * (-planeY * spriteX + planeX * spriteY);
         
-        if (transformY <= 0) continue; // Behind player
+        if (transformY <= 0) continue; 
         
         int spriteScreenX = static_cast<int>((Console::W / 2) * (1 + transformX / transformY));
         int spriteHeight = std::abs(static_cast<int>(Console::H / transformY));
@@ -352,15 +345,31 @@ void DoomPlayScene::draw(Console& ctx) {
         }
     }
     
-    // Draw Gun HUD
+    // Draw Gun HUD (Clean bold vector style)
     int bobY = static_cast<int>(std::sin(weapon_bob) * 3.0f);
     int gunX = Console::W / 2;
-    int gunY = Console::H - 10 + bobY;
+    int gunY = Console::H - 12 + bobY;
     if (fire_timer > 5) gunY += 5;
+    
+    // Draw shadow/outline for contrast
+    ctx.setDrawColor(Console::COLOR_BLACK);
+    ctx.drawBox(gunX - 5, gunY - 1, 10, Console::H - gunY + 2); 
+    ctx.drawBox(gunX - 3, gunY - 5, 6, 6);
+    
+    // Draw main gun
     ctx.setDrawColor(Console::COLOR_WHITE);
-    ctx.drawBox(gunX - 4, gunY, 8, Console::H - gunY);
-    ctx.drawBox(gunX - 2, gunY - 4, 4, 4);
-    if (fire_timer > 7) ctx.drawCircle(gunX, gunY - 6, 4);
+    ctx.drawBox(gunX - 4, gunY, 8, Console::H - gunY); 
+    ctx.drawBox(gunX - 2, gunY - 4, 4, 4); 
+    
+    // Muzzle flash with outline
+    if (fire_timer > 7) {
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawCircle(gunX, gunY - 6, 6);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawCircle(gunX, gunY - 6, 4);
+    }
+    
+    ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.drawPixel(Console::W / 2, Console::H / 2);
     
     // Draw stats
