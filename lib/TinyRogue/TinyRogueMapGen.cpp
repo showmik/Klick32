@@ -418,6 +418,7 @@ void generateCaveMap(RogueSharedData* _data) {
     // ---------------------------------------------------------------
 
     int numChests = random(1, 4);
+    if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numChests += random(2, 4);
     for (int i = 0; i < numChests; i++) {
         Vec2 c = getOpenTile();
         if (c.ix() != _data->player.x || c.iy() != _data->player.y) {
@@ -512,8 +513,14 @@ void generateMazeMap(RogueSharedData* _data) {
         }
     }
     
-    // Last position becomes the stairs
-    _data->map[curY][curX] = TileType::STAIRS_DOWN;
+    // Last position becomes the stairs? NO, use a distance check!
+    int sx, sy, attempts = 0;
+    do {
+        sx = random(1, RogueSharedData::MAP_W - 1);
+        sy = random(1, RogueSharedData::MAP_H - 1);
+        attempts++;
+    } while ((_data->map[sy][sx] != TileType::FLOOR || (abs(sx - _data->player.x) + abs(sy - _data->player.y) < 15)) && attempts < 500);
+    _data->map[sy][sx] = TileType::STAIRS_DOWN;
 
     // Spawn 1 Merchant
     int mx, my;
@@ -525,6 +532,7 @@ void generateMazeMap(RogueSharedData* _data) {
 
     // Scatter Chests
     int numChests = random(1, 4);
+    if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numChests += random(2, 4);
     for (int i = 0; i < numChests; i++) {
         int cx, cy;
         do {
@@ -532,6 +540,39 @@ void generateMazeMap(RogueSharedData* _data) {
             cy = random(1, RogueSharedData::MAP_H - 1);
         } while (_data->map[cy][cx] != TileType::FLOOR || (cx == _data->player.x && cy == _data->player.y));
         _data->map[cy][cx] = TileType::CHEST;
+    }
+
+    // Spawn Altar (30% chance per floor)
+    if (random(100) < 30) {
+        int ax, ay;
+        do {
+            ax = random(1, RogueSharedData::MAP_W - 1);
+            ay = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
+        _data->map[ay][ax] = TileType::ALTAR;
+    }
+
+    // Spawn Spikes
+    int numSpikes = random(2, 7);
+    if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numSpikes *= 2;
+    for (int i = 0; i < numSpikes; i++) {
+        int spx, spy;
+        do {
+            spx = random(1, RogueSharedData::MAP_W - 1);
+            spy = random(1, RogueSharedData::MAP_H - 1);
+        } while (_data->map[spy][spx] != TileType::FLOOR || (spx == _data->player.x && spy == _data->player.y));
+        _data->map[spy][spx] = TileType::SPIKE;
+    }
+
+    // Spawn Tall Grass, Rubble and Webs
+    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
+        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
+            if (_data->map[y][x] == TileType::FLOOR) {
+                if (random(100) < 15) _data->map[y][x] = TileType::TALL_GRASS;
+                else if (random(100) < 4) _data->map[y][x] = TileType::RUBBLE;
+                else if (random(100) < 3) _data->map[y][x] = TileType::WEB;
+            }
+        }
     }
 }
 

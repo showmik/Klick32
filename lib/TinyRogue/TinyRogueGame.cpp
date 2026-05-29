@@ -254,6 +254,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     }
                     if (dartDamage < 3) dartDamage = 3;
                     m->hp -= dartDamage;
+                    m->alert = true;
                     TinyRogueCombat::spawnHitEffect(_particles, aimX, aimY);
                     ctx.beep(1200, 30);
                     

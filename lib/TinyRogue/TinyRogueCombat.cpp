@@ -98,6 +98,9 @@ void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm,
         // Tall grass hides the player, severely reducing monster sight radius
         if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
             aggro = 2; 
+            if (abs(_data->player.x - m.x) > aggro || abs(_data->player.y - m.y) > aggro) {
+                m.alert = false;
+            }
         }
 
         if (m.type == MonsterType::SKELETON && (_data->turnCount % 2 != 0)) {
@@ -113,7 +116,7 @@ void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm,
             int dx = _data->player.x - m.x;
             int dy = _data->player.y - m.y;
 
-            if (abs(dx) <= aggro && abs(dy) <= aggro) {
+            if (m.alert || (abs(dx) <= aggro && abs(dy) <= aggro)) {
                 m.alert = true; // Monster woke up or spotted player
                 int stepX = 0, stepY = 0;
 
@@ -121,7 +124,7 @@ void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm,
                     if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
                     else                stepY = (random(2) == 0) ? 1 : -1;
                 } 
-                else if (m.type == MonsterType::RAT && abs(dx) > 3 && abs(dy) > 3) {
+                else if (m.type == MonsterType::RAT && (abs(dx) > 3 || abs(dy) > 3)) {
                     if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
                     else                stepY = (random(2) == 0) ? 1 : -1;
                 }
@@ -165,7 +168,7 @@ void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm,
                     }
                     break; 
                 }
-                else if (_data->map[ny][nx] != TileType::WALL && !getMonsterAt(_data, nx, ny)) {
+                else if (_data->map[ny][nx] != TileType::WALL && _data->map[ny][nx] != TileType::LOCKED_DOOR && !getMonsterAt(_data, nx, ny)) {
                     if (_data->map[ny][nx] == TileType::RUBBLE) continue;
                     
                     if (_data->map[ny][nx] == TileType::WEB) {
