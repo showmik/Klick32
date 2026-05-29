@@ -53,7 +53,7 @@ void SystemMenu::update(Console& ctx, float dt) {
     
     // ── About Page Logic ──
     if (_inAboutPage) {
-        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
+        if (ctx.justPressed(Btn::B)) {
             _inAboutPage = false;
             ctx.sfxMenuBack();
             _dirty = true;
@@ -91,7 +91,7 @@ void SystemMenu::update(Console& ctx, float dt) {
     }
 
     // ── Mute Toggle ──
-    if (ctx.justPressed(Btn::MENU2)) {
+    if (ctx.justPressed(Btn::MENU2) && !ctx.pressed(Btn::MENU1)) {
         ctx.toggleMute();
         if (!ctx.isMuted()) ctx.beep(800, 40); 
         ctx.saveBool("mute", ctx.isMuted()); // Persist setting
@@ -105,7 +105,7 @@ void SystemMenu::update(Console& ctx, float dt) {
     }
 
     // ── Launch Game ──
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
+    if (ctx.justPressed(Btn::A)) {
         ctx.sfxMenuEnter();
         _launchedGame = &_games[_selected];
         _running = false; 
