@@ -540,6 +540,23 @@ void BBPlayScene::draw(Console& ctx) {
     // Draw Balls
     for (int i = 0; i < MAX_BALLS; ++i) {
         if (_balls[i].active) {
+            ctx.pushDrawState();
+            ctx.setDrawColor(Console::COLOR_BLACK);
+            
+            // Draw black outline
+            if (_balls[i].fireball) {
+                if ((millis() / 40) % 2 == 0) {
+                    ctx.drawBox((int)_balls[i].x - 2, (int)_balls[i].y - 2, 6, 6);
+                } else {
+                    ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y - 2, 4, 6);
+                    ctx.drawBox((int)_balls[i].x - 2, (int)_balls[i].y - 1, 6, 4);
+                }
+            } else {
+                ctx.drawBox((int)_balls[i].x - 2, (int)_balls[i].y - 2, 4, 4);
+            }
+            
+            // Draw white interior
+            ctx.setDrawColor(Console::COLOR_WHITE);
             if (_balls[i].fireball) {
                 if ((millis() / 40) % 2 == 0) {
                     ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y - 1, 4, 4);
@@ -550,6 +567,8 @@ void BBPlayScene::draw(Console& ctx) {
             } else {
                 ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y - 1, 2, 2);
             }
+            
+            ctx.popDrawState();
         }
     }
 
