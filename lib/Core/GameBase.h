@@ -42,6 +42,10 @@ class GameBase {
 public:
     virtual ~GameBase() = default;
 
+    // Called by the OS immediately before onEnter to reset all static state.
+    // Overriding this mitigates the "Static Singleton Hazard".
+    virtual void reset() {}
+
     // Called once when the game is launched from the menu.
     // NVS namespace is already open — safe to call ctx.load*() here.
     virtual void onEnter(Console& ctx) = 0;

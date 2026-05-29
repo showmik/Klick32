@@ -139,6 +139,7 @@ private:
 
 class PongGame : public SceneGame<PongState> {
 public:
+    void reset() override { *this = PongGame(); }
     void onEnter(Console& ctx) override;
     bool           needsRedraw() const override;
     const char*    getName()     const override;

@@ -218,6 +218,7 @@ private:
 
 class TinyRogueGame : public SceneGame<RogueSharedData> {
 public:
+    void reset() override { *this = TinyRogueGame(); }
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
     

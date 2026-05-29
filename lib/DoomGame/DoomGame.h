@@ -78,6 +78,7 @@ private:
 
 class DoomGame : public SceneGame<DoomData> {
 public:
+    void reset() override { *this = DoomGame(); }
     void onEnter(Console& ctx) override;
     const char* getName() const override;
 

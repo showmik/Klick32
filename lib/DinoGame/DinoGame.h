@@ -159,6 +159,7 @@ private:
 // ─── DinoGame ────────────────────────────────────────────────────────────────
 class DinoGame : public SceneGame<DinoSharedData> {
 public:
+    void reset() override { *this = DinoGame(); }
     void onEnter(Console& ctx) override;
     void onExit(Console& ctx) override;
     

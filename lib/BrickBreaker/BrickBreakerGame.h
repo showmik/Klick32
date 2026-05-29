@@ -179,6 +179,7 @@ private:
 // ─── BrickBreakerGame ───────────────────────────────────────────────────────
 class BrickBreakerGame : public SceneGame<BBSharedData> {
 public:
+    void reset() override { *this = BrickBreakerGame(); }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, float dt) override;
     const char*    getName()   const override;

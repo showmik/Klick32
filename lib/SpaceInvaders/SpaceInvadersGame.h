@@ -97,6 +97,7 @@ private:
 // ─── SpaceInvadersGame ─────────────────────────────────────────────────────
 class SpaceInvadersGame : public SceneGame<SISharedData> {
 public:
+    void reset() override { *this = SpaceInvadersGame(); }
     void onEnter(Console& ctx) override;
     const char*    getName()   const override;
     const uint8_t* getCoverArt() const override;

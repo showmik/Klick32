@@ -148,6 +148,7 @@ void OS::run() {
     
     // The OS starts by running the menu (with __os namespace open)
     GameBase* activeGame = &_sysMenu;
+    activeGame->reset();
     activeGame->onEnter(_console);
     uint32_t lastTime = millis();
     uint32_t lastGlobalInputTime = millis();
@@ -306,6 +307,7 @@ void OS::run() {
 #endif
                     activeGame = &_sysMenu;
                     _save.begin("__os");
+                    activeGame->reset();
                     activeGame->onEnter(_console);
                     SFX::menuBack(_sound);
                     continue; // Skip the rest of this frame
@@ -409,6 +411,7 @@ void OS::run() {
                     _save.end(); // Close __os
                     activeGame = rec->factory();
                     _save.begin(rec->name);  // Open game namespace
+                    activeGame->reset();
                     activeGame->onEnter(_console);
 #ifndef SIMULATOR
                     setCpuFrequencyMhz(osCpuSpeed); // Apply configured CPU Speed
@@ -424,6 +427,7 @@ void OS::run() {
                 // Do NOT delete activeGame; it is a static instance
                 activeGame = &_sysMenu;
                 _save.begin("__os");                 // Reopen OS namespace
+                activeGame->reset();
                 activeGame->onEnter(_console);
                 SFX::menuBack(_sound);
             }

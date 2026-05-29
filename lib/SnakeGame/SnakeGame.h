@@ -190,6 +190,7 @@ private:
 // ─── SnakeGame ────────────────────────────────────────────────────────────────
 class SnakeGame : public SceneGame<SnakeSharedData> {
 public:
+    void reset() override { *this = SnakeGame(); }
     void onEnter(Console& ctx) override;
     const char*    getName()     const override;
     const uint8_t* getCoverArt() const override;
