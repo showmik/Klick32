@@ -20,6 +20,11 @@ public:
     void noise(uint32_t durationMs = 50) {
         SynthEngine::playTone(440, durationMs, Waveform::NOISE);
     }
+    
+    // Play a background music track (array of ToneSteps) asynchronously on Core 0!
+    void playTrack(const ToneStep* sequence) {
+        SynthEngine::playSequence(sequence);
+    }
 
     void stop() { SynthEngine::stopAll(); }
 

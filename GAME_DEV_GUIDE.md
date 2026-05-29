@@ -165,17 +165,37 @@ ctx.drawBitmapEx(x, y, width, height, bytesPerRow, spriteData, Console::BMP_FLIP
 ```
 
 ### 5.4 Audio
-Use pre-defined SFX to ensure consistent audio across the OS. This prevents every game from having wildly different volume levels or abrasive tones.
+The Klick32 uses a polyphonic software synthesizer running asynchronously on **Core 0**. This means audio mixing happens completely independently from your game logic (which runs on Core 1).
+
+### Sound Effects
+Use the built-in system effects for consistency:
 ```cpp
-if (ctx.justPressed(Btn::A)) {
-    playerVelocity = -10.0f; // Jump!
-    ctx.sfxJump();           // Play OS-level jump sound
-}
-if (playerHitEnemy) {
-    ctx.sfxDeath();
+ctx.sfxJump();
+ctx.sfxDeath();
+ctx.sfxPoint();
+```
+Or trigger a custom beep:
+```cpp
+ctx.beep(440, 100); // 440Hz for 100ms
+```
+
+### Background Music (Multi-Threaded Tracker)
+You can compose multi-track chiptune music by creating arrays of `ToneStep`. The synthesizer will play them in the background without dropping your game's framerate!
+
+```cpp
+// 1. Define your track (End with 0 duration to stop)
+const ToneStep level1_BGM[] = {
+    { 261, 200, Waveform::SQUARE },   // C4
+    { 329, 200, Waveform::SQUARE },   // E4
+    { 392, 400, Waveform::TRIANGLE }, // G4
+    { 0, 0, Waveform::SQUARE }        // End of sequence
+};
+
+// 2. Play it in your onEnter hook
+void MyGame::onEnter(Console& ctx) {
+    ctx.playTrack(level1_BGM);
 }
 ```
-Or create custom tones: `ctx.beep(440, 100); // 440 Hz for 100ms`.
 
 ### 5.5 Persistence (Saving Data)
 Klick32 automatically sandboxes your game's save data into a secure NVS (Non-Volatile Storage) namespace. You can safely save keys like `"score"` without overwriting another game's `"score"`.

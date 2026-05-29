@@ -103,12 +103,15 @@ public:
 
     // ── Predefined sound effects ───────────────────────────────────────────────
     // Prefer these over raw beep() so effects stay consistent across games.
-    void sfxJump()      { SFX::jump(_sound);      }
-    void sfxDeath()     { SFX::death(_sound);     }
-    void sfxPoint()     { SFX::point(_sound);     }
-    void sfxMenuNav()   { SFX::menuNav(_sound);   }
+    void sfxMenuNav()   { SFX::menuNav(_sound); }
     void sfxMenuEnter() { SFX::menuEnter(_sound); }
-    void sfxMenuBack()  { SFX::menuBack(_sound);  }
+    void sfxMenuBack()  { SFX::menuBack(_sound); }
+    void sfxJump()      { SFX::jump(_sound); }
+    void sfxDeath()     { SFX::death(_sound); }
+    void sfxPoint()     { SFX::point(_sound); }
+    
+    // Play a background music track (array of ToneSteps) asynchronously on Core 0!
+    void playTrack(const ToneStep* sequence) { _sound.playTrack(sequence); }
 
     // ══════════════════════════════════════════════════════════════════════════
     // SAVE / LOAD   (NVS — persists across power cycles)
