@@ -220,7 +220,7 @@ void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm,
     }
 
     if (playerHit) {
-        ctx.sfxDeath(); 
+        ctx.beep(150, 40); 
         _camera->shake(6);
         
         if (_data->player.hp <= 0) {
@@ -334,8 +334,14 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
                 m.active = false;
                 if (m.type == MonsterType::BOSS) {
                     xpGained += 50 + _data->currentDepth * 5;
+                    _data->gold += 50 + random(50);
                 } else {
                     xpGained += 10 + _data->currentDepth * 2;
+                    if (random(100) < 40) {
+                        int goldDrop = random(2, 6) + _data->currentDepth;
+                        if (_data->equippedAccessory.type == ItemType::RING_WEALTH) goldDrop += goldDrop / 2;
+                        _data->gold += goldDrop;
+                    }
                 }
 
                 // Bloodlust heal
@@ -424,10 +430,11 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
         int roll = random(100);
         ItemType itemToGive = ItemType::NONE;
         
-        if (roll < 20) { itemToGive = ItemType::POTION; }
-        else if (roll < 30) { itemToGive = ItemType::ELIXIR; }
-        else if (roll < 45) { itemToGive = ItemType::SCROLL_UPGRADE; }
-        else if (roll < 65) { 
+        if (roll < 35) { itemToGive = ItemType::NONE; } // 35% chance for Gold
+        else if (roll < 50) { itemToGive = ItemType::POTION; }
+        else if (roll < 55) { itemToGive = ItemType::ELIXIR; }
+        else if (roll < 65) { itemToGive = ItemType::SCROLL_UPGRADE; }
+        else if (roll < 75) { 
             if (_data->currentDepth < 3) itemToGive = (random(2)==0) ? ItemType::DAGGER : ItemType::SWORD;
             else if (_data->currentDepth < 6) itemToGive = (random(2)==0) ? ItemType::SWORD : ItemType::AXE;
             else itemToGive = ItemType::AXE;
@@ -527,13 +534,12 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
                 if (_data->currentMutator == LevelMutator::TREASURE_TROVE) spikeDmg *= 2;
                 _data->player.hp -= spikeDmg;
                 _camera->shake(4);
-                ctx.sfxDeath();
+                ctx.beep(100, 50);
                 snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Stepped on Spikes!");
                 _data->hudMessageTimer = 60;
                 
                 if (_data->player.hp <= 0) {
-                    if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
-                    sm.emit(ctx, Event::GAME_OVER);
+                    ctx.sfxDeath();
                     return TurnAction::GAME_OVER;
                 }
             }

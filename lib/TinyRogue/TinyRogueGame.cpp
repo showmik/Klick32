@@ -261,8 +261,14 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                         m->active = false;
                         if (m->type == MonsterType::BOSS) {
                             _data->player.xp += 50 + _data->currentDepth * 5;
+                            _data->gold += 50 + random(50);
                         } else {
                             _data->player.xp += 10 + _data->currentDepth * 2;
+                            if (random(100) < 40) {
+                                int goldDrop = random(2, 6) + _data->currentDepth;
+                                if (_data->equippedAccessory.type == ItemType::RING_WEALTH) goldDrop += goldDrop / 2;
+                                _data->gold += goldDrop;
+                            }
                         }
                         
                         // Bloodlust heal
