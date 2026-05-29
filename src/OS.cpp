@@ -62,7 +62,40 @@ void OS::registerGame(GameBase* game) {
 }
 
 void OS::run() {
-    // The OS starts by running the menu
+    // ── Boot Settings & Splash ──
+    _save.begin("__os");
+    bool isMuted = _save.getBool("mute", false);
+    _sound.setMuted(isMuted);
+
+    // Minimalist Boot Splash
+    uint32_t splashStart = millis();
+    while (millis() - splashStart < 1500) {
+        _disp.clearBuffer();
+        
+        // Animated expanding circle
+        int radius = (millis() - splashStart) / 30;
+        if (radius > 120) radius = 120;
+        _disp.setDrawColor(Console::COLOR_WHITE);
+        _disp.drawDisc(64, 32, radius);
+        
+        // Inverted text
+        _disp.setDrawColor(Console::COLOR_BLACK);
+        _disp.setFont(u8g2_font_ncenB14_tr);
+        _disp.drawStr(32, 40, "Klick32");
+        
+        _disp.sendBuffer();
+#ifdef SIMULATOR
+        extern void sim_commit_buffer();
+        sim_commit_buffer();
+#endif
+        delay(16);
+    }
+    
+    // Restore default draw state after splash
+    _disp.setDrawColor(Console::COLOR_WHITE);
+    _disp.setFont(u8g2_font_5x7_tf);
+    
+    // The OS starts by running the menu (with __os namespace open)
     GameBase* activeGame = &_sysMenu;
     activeGame->onEnter(_console);
     uint32_t lastTime = millis();
@@ -107,16 +140,18 @@ void OS::run() {
                 // Menu wants to exit -> This means a game was selected!
                 GameRecord* rec = _sysMenu.getLaunchedGameRecord();
                 if (rec && rec->factory) {
+                    _save.end(); // Close __os
                     activeGame = rec->factory();
-                    _save.begin(rec->name);  // Open NVS namespace
+                    _save.begin(rec->name);  // Open game namespace
                     activeGame->onEnter(_console);
                 }
             } else {
                 // Game wants to exit -> Return to the menu!
                 activeGame->onExit(_console);
-                _save.end();                         // Close NVS namespace
+                _save.end();                         // Close game namespace
                 // Do NOT delete activeGame; it is a static instance
                 activeGame = &_sysMenu;
+                _save.begin("__os");                 // Reopen OS namespace
                 activeGame->onEnter(_console);
                 SFX::menuBack(_sound);
             }

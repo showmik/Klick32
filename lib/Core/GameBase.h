@@ -28,6 +28,13 @@
 //   onExit  → ctx.saveHiScore(_hi) / ctx.saveUInt("level", _lvl) / etc.
 //   On death (mid-session) → ctx.saveHiScore(_hi) guards against power loss.
 //
+// ⚠ STATIC SINGLETON WARNING:
+//   REGISTER_GAME() creates a `static` local instance.  Your game object
+//   SURVIVES between launches — member variables are NOT re-initialized.
+//   onEnter() MUST explicitly reset ALL game state (scores, entities,
+//   timers, flags).  Any member left untouched retains its value from the
+//   previous play session.
+//
 // To exit back to the menu: set your internal _running flag to false.
 // The OS detects it via isRunning(), calls onExit(ctx), then returns to menu.
 // ─────────────────────────────────────────────────────────────────────────────

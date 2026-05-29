@@ -32,6 +32,7 @@ public:
     // Registers standard system events to common scene transitions.
     // Pass nullptr if your game doesn't use a specific scene.
     void useDefaultEvents(Scene* pauseScene, Scene* gameOverScene) {
+        _sm.clearTransitions();
         _sm.onEvent(Event::QUIT, SceneManager::CLEAR);
         
         if (pauseScene) {
@@ -52,8 +53,8 @@ public:
     }
 
     void update(Console& ctx, float dt) override {
-        _camera.update();
-        _particles.update();
+        _camera.update(dt);
+        _particles.update(dt);
         _sm.update(ctx, dt);
     }
 

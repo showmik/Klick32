@@ -39,6 +39,9 @@ private:
 
     static constexpr uint32_t IDLE_SLEEP_MS = 60000;
     uint32_t       _lastInputTime = 0;
+    uint8_t        _animTick = 0;
+    uint8_t        _arrowTick = 0;
+    bool           _inAboutPage = false;
 
     // These should only appear ONCE in the class
     void _enterDeepSleep(Console& ctx);
@@ -46,6 +49,7 @@ private:
     void _drawGameCard(Console& ctx, uint8_t idx, int offsetX); // Now takes an offset
     void _drawPagination(Console& ctx, uint8_t idx);            // Extracted static UI
     void _drawFooter(Console& ctx);
+    void _drawAboutPage(Console& ctx);
 
     struct Layout {
         // Header

@@ -25,8 +25,10 @@ public:
     // Spawn a basic pixel particle with velocity and lifespan
     void spawnPixel(float x, float y, float vx, float vy, uint8_t life);
 
-    // Update particle positions and lifespans (call once per frame)
-    void update();
+    // Update particle positions and lifespans (call once per frame).
+    // dt is the frame delta in seconds (currently unused but accepted for
+    // future delta-time-based particle physics).
+    void update(float dt = 0.0f);
 
     // Draw all active particles
     void draw(Console& ctx) const;

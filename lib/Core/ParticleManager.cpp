@@ -15,7 +15,7 @@ void ParticleManager::spawnPixel(float x, float y, float vx, float vy, uint8_t l
     }
 }
 
-void ParticleManager::update() {
+void ParticleManager::update(float dt) {
     for (int i = 0; i < MAX_PARTICLES; i++) {
         if (_particles[i].active) {
             _particles[i].x += _particles[i].vx;

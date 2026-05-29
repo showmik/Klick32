@@ -22,7 +22,11 @@ GameRecord* SystemMenu::getLaunchedGameRecord() const { return _launchedGame; }
 void SystemMenu::update(Console& ctx, float dt) {
     if (*_gameCount == 0) return;
 
-    _dirty = true; // Force redraw every frame for animations
+    // ── Animation Tick ──
+    uint8_t newAnimTick = (millis() / 200) % 4;
+    uint8_t newArrowTick = (millis() / 250) % 2;
+    if (newAnimTick != _animTick) { _animTick = newAnimTick; _dirty = true; }
+    if (newArrowTick != _arrowTick) { _arrowTick = newArrowTick; _dirty = true; }
 
     // ── Check Input & Auto-Sleep ──
     bool anyInput = false;
@@ -30,16 +34,31 @@ void SystemMenu::update(Console& ctx, float dt) {
         if (ctx.pressed((Btn)i)) { anyInput = true; break; }
     }
     
-    if (anyInput) _lastInputTime = millis();
-    else if (millis() - _lastInputTime >= IDLE_SLEEP_MS) _enterDeepSleep(ctx);
+    if (anyInput) {
+        _lastInputTime = millis();
+        _dirty = true;
+    } else if (millis() - _lastInputTime >= IDLE_SLEEP_MS) {
+        _enterDeepSleep(ctx);
+    }
 
     // ── Battery Polling ──
     if (millis() - _battTimer >= 15000UL) {
         uint8_t newPct = _batt->readPercent();
         if (newPct != _battPct) {
             _battPct = newPct;
+            _dirty = true;
         }
         _battTimer = millis();
+    }
+    
+    // ── About Page Logic ──
+    if (_inAboutPage) {
+        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
+            _inAboutPage = false;
+            ctx.sfxMenuBack();
+            _dirty = true;
+        }
+        return; // Skip normal menu logic
     }
 
     // ── Navigation (UPDATED FOR SLIDING) ──
@@ -58,6 +77,7 @@ void SystemMenu::update(Console& ctx, float dt) {
 
     // ── Animation Physics ──
     if (_slideOffset != 0) {
+        _dirty = true;
         int step = abs(_slideOffset) / 3; // Move 33% of remaining distance
         if (step < 4) step = 4;           // Minimum speed to snap to 0 cleanly
         
@@ -74,6 +94,14 @@ void SystemMenu::update(Console& ctx, float dt) {
     if (ctx.justPressed(Btn::MENU2)) {
         ctx.toggleMute();
         if (!ctx.isMuted()) ctx.beep(800, 40); 
+        ctx.saveBool("mute", ctx.isMuted()); // Persist setting
+    }
+    
+    // ── Open About Page ──
+    if (ctx.justPressed(Btn::B)) {
+        _inAboutPage = true;
+        ctx.sfxMenuEnter();
+        _dirty = true;
     }
 
     // ── Launch Game ──
@@ -92,6 +120,12 @@ void SystemMenu::draw(Console& ctx) {
     }
     
     _drawHeader(ctx);
+    
+    if (_inAboutPage) {
+        _drawAboutPage(ctx);
+        _dirty = false;
+        return;
+    }
 
     // If sliding, draw the outgoing card
     if (_slideOffset != 0) {
@@ -191,13 +225,36 @@ void SystemMenu::_drawFooter(Console& ctx) {
     ctx.setFont(u8g2_font_5x7_tf);
     
     // Left Text
-    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[A]Launch");
+    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B]About [A]Play");
 
-    // Right Text (Game Count) - Uses the class member _selected
+    // Right Text (Game Count)
     char countBuf[10];
     snprintf(countBuf, sizeof(countBuf), "%u/%u", _selected + 1, *_gameCount);
     int w = ctx.strWidth(countBuf);
     ctx.drawStr(Console::W - w - Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, countBuf);
+}
+
+void SystemMenu::_drawAboutPage(Console& ctx) {
+    ctx.setFont(u8g2_font_ncenB08_tr);
+    ctx.drawStrCentered(22, "Klick32 OS");
+    
+    ctx.setFont(u8g2_font_4x6_tf);
+    ctx.drawStrCentered(32, "Version 1.0.0");
+    ctx.drawStrCentered(40, "Built for ESP32-S3");
+    
+#ifdef SIMULATOR
+    ctx.drawStrCentered(48, "Environment: Simulator");
+#else
+    uint32_t freeHeap = ESP.getFreeHeap() / 1024;
+    char ramStr[32];
+    sprintf(ramStr, "Free RAM: %lu KB", freeHeap);
+    ctx.drawStrCentered(48, ramStr);
+#endif
+
+    // Footer override for About Page
+    ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
+    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B/M1] Back");
 }
 
 void SystemMenu::_enterDeepSleep(Console& ctx) {
@@ -208,11 +265,11 @@ void SystemMenu::_enterDeepSleep(Console& ctx) {
     uint8_t w = ctx.strWidth("Sleeping...");
     ctx.drawStr((Console::W - w) / 2, 34, "Sleeping...");
     
-    // We use the escape hatch here to force the buffer to send immediately before power cut
-    ctx.gfx().sendBuffer(); 
+    // Force the buffer to send immediately before power cut
+    ctx.flush();
     delay(1000);
 
     ctx.stopSound();
-    ctx.gfx().setPowerSave(1); 
+    ctx.setPowerSave(1); 
     esp_deep_sleep_start();
 }
