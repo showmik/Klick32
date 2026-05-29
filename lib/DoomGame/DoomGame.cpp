@@ -4,167 +4,7 @@
 #include <cstdint>
 #include <stdlib.h>
 
-#define MAP_WIDTH 12
-#define MAP_HEIGHT 12
-
-// 1-4 = Walls, 5 = Skull, 6 = Medkit, 7 = Imp, 9 = Exit
-static const uint8_t level_maps[3][MAP_HEIGHT][MAP_WIDTH] = {
-    // Level 1: The Basement (Tutorial)
-    {
-        {1,1,1,1,1,1,1,1,1,1,1,1},
-        {1,0,0,0,0,0,6,0,0,0,0,1},
-        {1,0,2,2,0,0,0,0,5,5,0,1},
-        {1,0,2,12,0,5,0,0,0,5,0,1},
-        {1,0,0,0,0,0,0,0,0,0,0,1},
-        {1,0,0,0,0,0,0,0,0,0,0,1},
-        {1,0,0,0,0,0,8,4,0,0,0,1},
-        {1,0,0,0,0,0,8,9,0,0,0,1},
-        {1,0,3,3,0,0,0,0,0,0,0,1},
-        {1,0,3,0,12,0,0,0,0,0,0,1},
-        {1,0,0,0,0,0,0,0,0,0,0,1},
-        {1,1,1,1,1,1,1,1,1,1,1,1}
-    },
-    // Level 2: The Labyrinth (Skulls + Imps)
-    {
-        {1,1,1,1,1,1,1,1,1,1,1,1},
-        {1,0,0,2,0,0,0,2,11,6,0,1},
-        {1,0,5,2,0,7,0,2,0,5,0,1},
-        {1,0,0,2,0,0,12,2,0,0,0,1},
-        {1,2,8,2,2,8,2,2,2,8,2,1},
-        {1,0,0,0,0,0,0,0,0,0,0,1},
-        {1,0,5,0,0,7,0,0,5,0,0,1},
-        {1,2,0,2,2,0,2,2,2,10,2,1},
-        {1,0,12,2,9,0,0,2,12,0,0,1},
-        {1,0,0,2,0,0,0,2,0,0,0,1},
-        {1,0,0,0,0,0,0,0,0,0,0,1},
-        {1,1,1,1,1,1,1,1,1,1,1,1}
-    },
-    // Level 3: The Pit (Arena)
-    {
-        {1,1,1,1,1,1,1,1,1,1,1,1},
-        {1,0,0,0,7,0,7,0,0,0,0,1},
-        {1,0,4,8,8,8,8,8,4,0,0,1},
-        {1,0,8,0,5,12,5,0,8,0,0,1},
-        {1,7,8,0,0,6,0,0,8,7,0,1},
-        {1,0,8,0,0,11,0,0,8,0,0,1},
-        {1,0,8,12,0,0,0,12,8,0,0,1},
-        {1,0,8,0,0,0,0,0,10,0,0,1},
-        {1,7,8,0,0,6,0,0,10,7,0,1},
-        {1,0,4,8,8,8,8,8,4,9,0,1},
-        {1,0,0,0,12,0,12,0,0,0,0,1},
-        {1,1,1,1,1,1,1,1,1,1,1,1}
-    }
-};
-
-static const uint8_t tex_skull[8] = {
-    0b00111100,
-    0b01111110,
-    0b11011011,
-    0b11111111,
-    0b01111110,
-    0b00100100,
-    0b00111100,
-    0b00000000
-};
-
-static const uint8_t tex_skull_mask[8] = {
-    0b01111110,
-    0b11111111,
-    0b11111111,
-    0b11111111,
-    0b11111111,
-    0b01111110,
-    0b01111110,
-    0b00000000
-};
-
-static const uint8_t tex_medkit[8] = {
-    0b00000000,
-    0b00011000,
-    0b00011000,
-    0b01111110,
-    0b01111110,
-    0b00011000,
-    0b00011000,
-    0b00000000
-};
-
-static const uint8_t tex_medkit_mask[8] = {
-    0b00000000,
-    0b00111100,
-    0b00111100,
-    0b11111111,
-    0b11111111,
-    0b00111100,
-    0b00111100,
-    0b00000000
-};
-
-static const uint8_t tex_imp[8] = {
-    0b00011000,
-    0b01011010,
-    0b11111111,
-    0b10111101,
-    0b00111100,
-    0b01011010,
-    0b00011000,
-    0b00000000
-};
-
-static const uint8_t tex_key[8] = {
-    0b00111100,
-    0b01000010,
-    0b01000010,
-    0b00111100,
-    0b00001000,
-    0b00011000,
-    0b00001000,
-    0b00011000
-};
-
-static const uint8_t tex_key_mask[8] = {
-    0b01111110,
-    0b11111111,
-    0b11111111,
-    0b01111110,
-    0b00011100,
-    0b00111100,
-    0b00011100,
-    0b00111100
-};
-
-static const uint8_t tex_imp_mask[8] = {
-    0b00111100,
-    0b11111111,
-    0b11111111,
-    0b11111111,
-    0b01111110,
-    0b11111111,
-    0b00111100,
-    0b00000000
-};
-
-static const uint8_t tex_ammo[8] = {
-    0b00000000,
-    0b00111100,
-    0b01100110,
-    0b01111110,
-    0b01111110,
-    0b01111110,
-    0b01111110,
-    0b00000000
-};
-
-static const uint8_t tex_ammo_mask[8] = {
-    0b00111100,
-    0b01111110,
-    0b11111111,
-    0b11111111,
-    0b11111111,
-    0b11111111,
-    0b11111111,
-    0b00000000
-};
+#include "DoomAssets.h"
 
 // =============================================================================
 // DoomTitleScene
@@ -277,19 +117,19 @@ void DoomPlayScene::loadLevel(Console& ctx) {
         for (int x = 0; x < MAP_WIDTH; x++) {
             uint8_t val = level_maps[_data->level][y][x];
             if (val == 5) { // skull
-                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 1, true, 0.0f, 2, 0 };
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 1, true, 0.0f, 2, 0, 0 };
                 map[y][x] = 0;
             } else if (val == 6) { // medkit
-                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 2, true, 0.0f, 0, 0 };
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 2, true, 0.0f, 0, 0, 0 };
                 map[y][x] = 0;
             } else if (val == 7) { // imp
-                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 3, true, 0.0f, 3, 0 };
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 3, true, 0.0f, 3, 0, 0 };
                 map[y][x] = 0;
             } else if (val == 11) { // key
-                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 4, true, 0.0f, 0, 0 };
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 4, true, 0.0f, 0, 0, 0 };
                 map[y][x] = 0;
             } else if (val == 12) { // ammo
-                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 5, true, 0.0f, 0, 0 };
+                sprites[num_sprites++] = { (float)x + 0.5f, (float)y + 0.5f, 5, true, 0.0f, 0, 0, 0 };
                 map[y][x] = 0;
             } else {
                 map[y][x] = val;
@@ -371,6 +211,13 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             float hit_cone = (_data->weapon == 1) ? 0.5f : 0.2f;
             int damage = (_data->weapon == 1) ? 2 : 1;
             
+            for (int e = 0; e < num_sprites; e++) {
+                if (sprites[e].active && (sprites[e].type == 1 || sprites[e].type == 3)) {
+                    float edist = std::sqrt(std::pow(sprites[e].x - player_x, 2) + std::pow(sprites[e].y - player_y, 2));
+                    if (edist < 10.0f) sprites[e].state = 1;
+                }
+            }
+            
             for (int i = 0; i < num_sprites; i++) {
                 if (!sprites[i].active || (sprites[i].type != 1 && sprites[i].type != 3)) continue;
                 
@@ -382,7 +229,22 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 while (angle < -3.14159f) angle += 2.0f * 3.14159f;
                 while (angle > 3.14159f) angle -= 2.0f * 3.14159f;
                 
-                if (std::abs(angle) < hit_cone && dist < 8.0f) {
+                // LOS check
+                bool hitWall = false;
+                float ray_x = player_x;
+                float ray_y = player_y;
+                float step = 0.5f;
+                for (float r = 0; r < dist; r += step) {
+                    ray_x += (dx / dist) * step;
+                    ray_y += (dy / dist) * step;
+                    int m = map[(int)ray_y][(int)ray_x];
+                    if (m > 0 && m != 9 && m != 11 && m != 12) {
+                        hitWall = true;
+                        break;
+                    }
+                }
+                
+                if (!hitWall && std::abs(angle) < hit_cone && dist < 8.0f) {
                     sprites[i].hp -= damage;
                     sprites[i].flash_timer = 3;
                     
@@ -390,6 +252,11 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                         sprites[i].active = false;
                         _data->score += (sprites[i].type == 3) ? 200 : 100;
                         ctx.beep(800, 50);
+                        
+                        // Drop loot
+                        if (num_sprites < 30 && (rand() % 100) < 25) {
+                            sprites[num_sprites++] = { sprites[i].x, sprites[i].y, (rand() % 2 == 0) ? 2 : 5, true, 0.0f, 0, 0, 0 };
+                        }
                         
                         for (int p = 0; p < 10; p++) {
                             float a = (rand() % 360) * 3.14159f / 180.0f;
@@ -437,15 +304,31 @@ void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 ctx.beep(700, 30);
             }
         } else if (sprites[i].type == 1 || sprites[i].type == 3) { // Skull or Imp
+            // Line of Sight
+            bool hasLOS = true;
+            float ray_x = sprites[i].x;
+            float ray_y = sprites[i].y;
+            float step = 0.5f;
+            for (float r = 0; r < dist; r += step) {
+                ray_x += (dx / dist) * step;
+                ray_y += (dy / dist) * step;
+                int m = map[(int)ray_y][(int)ray_x];
+                if (m > 0 && m != 9 && m != 11 && m != 12) {
+                    hasLOS = false;
+                    break;
+                }
+            }
+            if (hasLOS && dist < 8.0f) sprites[i].state = 1; // Alerted
+            
             // Chase AI
-            if (dist > 1.0f && dist < 6.0f) {
+            if (sprites[i].state == 1 && dist > 1.0f && dist < 12.0f) {
                 float speed = (sprites[i].type == 3) ? 1.0f * dt : 0.6f * dt; // Imps are faster
                 float nx = sprites[i].x + (dx / dist) * speed;
                 float ny = sprites[i].y + (dy / dist) * speed;
                 
                 // Simple Wall Collision for Enemies
-                if (map[(int)sprites[i].y][(int)nx] == 0 || map[(int)sprites[i].y][(int)nx] == 9) sprites[i].x = nx;
-                if (map[(int)ny][(int)sprites[i].x] == 0 || map[(int)ny][(int)sprites[i].x] == 9) sprites[i].y = ny;
+                if (map[(int)sprites[i].y][(int)nx] <= 0 || map[(int)sprites[i].y][(int)nx] >= 9) sprites[i].x = nx;
+                if (map[(int)ny][(int)sprites[i].x] <= 0 || map[(int)ny][(int)sprites[i].x] >= 9) sprites[i].y = ny;
             }
             
             // Attack Player
@@ -704,12 +587,18 @@ void DoomPlayScene::draw(Console& ctx) {
     
     // Crosshair
     if (fire_timer == 0) {
-        ctx.setDrawColor(Console::COLOR_XOR);
-        ctx.drawPixel(Console::W / 2 - 2, Console::H / 2);
-        ctx.drawPixel(Console::W / 2 + 2, Console::H / 2);
-        ctx.drawPixel(Console::W / 2, Console::H / 2 - 2);
-        ctx.drawPixel(Console::W / 2, Console::H / 2 + 2);
-        ctx.drawPixel(Console::W / 2,     Console::H / 2);
+        int cx = Console::W / 2;
+        int cy = Console::H / 2;
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawBox(cx - 2, cy - 1, 5, 3);
+        ctx.drawBox(cx - 1, cy - 2, 3, 5);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawPixel(cx - 1, cy);
+        ctx.drawPixel(cx + 1, cy);
+        ctx.drawPixel(cx, cy - 1);
+        ctx.drawPixel(cx, cy + 1);
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawPixel(cx, cy);
     }
     
     if (level_transition_timer > 0) {
@@ -731,7 +620,14 @@ void DoomPlayScene::draw(Console& ctx) {
     ctx.setDrawColor(Console::COLOR_WHITE);
     ctx.drawHLine(0, 8, Console::W);
     ctx.setFont(u8g2_font_4x6_tf);
-    ctx.drawPrintf(2, 6, "L%d SC:%d HP:%d AM:%d%s [%c]", _data->level + 1, _data->score, _data->hp, _data->ammo, has_key ? " [K]" : "", _data->weapon == 0 ? 'P' : 'S');
+    ctx.drawPrintf(2, 6, "L%d %c SC:%d HP:%d AM:%d", _data->level + 1, _data->weapon == 0 ? 'P' : 'S', _data->score, _data->hp, _data->ammo);
+    
+    if (has_key) {
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawBox(Console::W - 12, 1, 10, 7);
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawStr(Console::W - 10, 6, "K");
+    }
     
     // Minimap
     if (show_minimap) {

@@ -13,11 +13,12 @@ struct DoomData {
 struct DoomSprite {
     float x;
     float y;
-    int type; // 1 = skull, 2 = medkit, 3 = imp
+    int type; // 1=skull, 2=medkit, 3=imp, 4=key, 5=ammo
     bool active;
-    float distance; // used for sorting
+    float distance;
     int hp;
     int flash_timer;
+    int state;
 };
 
 class DoomTitleScene : public Scene {
@@ -71,7 +72,7 @@ private:
     bool has_key = false;
     
     uint8_t map[12][12];
-    DoomSprite sprites[20];
+    DoomSprite sprites[30];
     int num_sprites = 0;
 };
 
