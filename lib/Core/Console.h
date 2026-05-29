@@ -32,11 +32,7 @@
 
 class OS;
 
-enum DrawColor : uint8_t {
-    COLOR_BLACK = 0,
-    COLOR_WHITE = 1,
-    COLOR_XOR   = 2
-};
+
 
 class Console {
 public:
@@ -188,12 +184,7 @@ public:
     static constexpr uint8_t COLOR_WHITE = 1; // set/solid
     static constexpr uint8_t COLOR_XOR   = 2; // invert
 
-    struct DrawState {
-        uint8_t color;
-    };
-    DrawState _drawStack[4];
-    uint8_t _drawStackCount = 0;
-
+    // Save/restore draw color across nested drawing operations.
     void pushDrawState() {
         if (_drawStackCount < 4) {
             _drawStack[_drawStackCount].color = _disp.getDrawColor();
@@ -228,18 +219,28 @@ public:
 
     // Draws a shaded box using spatial dithering (0=Black, 1=DarkGray 25%, 2=LightGray 50%, 3=Silvery 75%, 4=White)
     void drawDitherBox(int x, int y, int w, int h, uint8_t shade) {
+        if (shade == 0) return;
+        
         int cx = x + _camX();
         int cy = y + _camY();
-        for(int py = cy; py < cy + h; py++) {
-            if (py < 0 || py >= H) continue;
-            for(int px = cx; px < cx + w; px++) {
-                if (px < 0 || px >= W) continue;
+        int clipX = max(0, cx);
+        int clipY = max(0, cy);
+        int clipMaxX = min((int)W, cx + w);
+        int clipMaxY = min((int)H, cy + h);
+        
+        if (clipX >= clipMaxX || clipY >= clipMaxY) return;
+
+        if (shade >= 4) {
+            _disp.drawBox(clipX, clipY, clipMaxX - clipX, clipMaxY - clipY);
+            return;
+        }
+
+        for(int py = clipY; py < clipMaxY; py++) {
+            for(int px = clipX; px < clipMaxX; px++) {
                 bool draw = false;
-                if (shade == 0)      { draw = false; }
-                else if (shade == 1) { draw = (px % 2 == 0) && (py % 2 == 0); }           // 25% pattern
+                if (shade == 1)      { draw = (px % 2 == 0) && (py % 2 == 0); }           // 25% pattern
                 else if (shade == 2) { draw = ((px + py) % 2) == 0; }                     // 50% checkerboard
                 else if (shade == 3) { draw = !((px % 2 != 0) && (py % 2 != 0)); }        // 75% pattern
-                else                 { draw = true; }                                     // 100% solid
                 
                 if (draw) _disp.drawPixel(px, py);
             }
@@ -356,17 +357,32 @@ public:
         // Optimization: check if bounding box is entirely off-screen
         if (cx >= W || cx + w <= 0 || cy >= H || cy + h <= 0) return;
 
-        for (int py = 0; py < h; py++) {
+        // Clip source Y bounds to avoid off-screen row processing
+        int srcYStart = 0;
+        int srcYEnd = h;
+        if ((flags & BMP_FLIP_V) == 0) {
+            if (cy < 0) srcYStart = -cy;
+            if (cy + h > H) srcYEnd = H - cy;
+        } else {
+            if (cy < 0) srcYEnd = h + cy;
+            if (cy + h > H) srcYStart = (cy + h) - H;
+        }
+
+        for (int py = srcYStart; py < srcYEnd; py++) {
             int drawY = cy + ((flags & BMP_FLIP_V) ? (h - 1 - py) : py);
-            if (drawY < 0 || drawY >= H) continue;
 
-            for (int px = 0; px < w; px++) {
-                int drawX = cx + ((flags & BMP_FLIP_H) ? (w - 1 - px) : px);
-                if (drawX < 0 || drawX >= W) continue;
+            for (int bx = 0; bx < bytesPerRow; bx++) {
+                uint8_t byteVal = pgm_read_byte(bmp + (py * bytesPerRow) + bx);
+                if (!byteVal) continue; // Fast skip empty 8-pixel blocks
 
-                uint8_t byteVal = pgm_read_byte(bmp + (py * bytesPerRow) + (px / 8));
-                if (byteVal & (1 << (7 - (px % 8)))) {
-                    _disp.drawPixel(drawX, drawY);
+                for (int bit = 0; bit < 8; bit++) {
+                    int px = bx * 8 + bit;
+                    if (px >= w) break;
+                    
+                    if (byteVal & (1 << (7 - bit))) {
+                        int drawX = cx + ((flags & BMP_FLIP_H) ? (w - 1 - px) : px);
+                        if (drawX >= 0 && drawX < W) _disp.drawPixel(drawX, drawY);
+                    }
                 }
             }
         }
@@ -399,6 +415,16 @@ public:
         }
     }
 
+    // ── Emergency flush ───────────────────────────────────────────────────────
+    // Force-send the display buffer immediately.  Use only for critical moments
+    // where the normal OS draw cycle can't be waited for (e.g., right before
+    // deep sleep or a hard reset).
+    void flush() { _disp.sendBuffer(); }
+
+    // Enter or exit hardware display power-save mode.
+    // 1 = display off (lowest power), 0 = display on.
+    void setPowerSave(uint8_t mode) { _disp.setPowerSave(mode); }
+
     // ── Escape hatch ──────────────────────────────────────────────────────────
     // Returns the raw U8G2 reference for features not covered above.
     // Avoid where possible — coupling your game to U8G2 makes driver swaps harder.
@@ -413,6 +439,13 @@ private:
 
     int _camX() const { return (_camera && !_screenSpace) ? _camera->getOffsetX() : 0; }
     int _camY() const { return (_camera && !_screenSpace) ? _camera->getOffsetY() : 0; }
+
+    // ── Draw state stack (internal) ───────────────────────────────────────────
+    struct DrawState {
+        uint8_t color;
+    };
+    DrawState _drawStack[4];
+    uint8_t _drawStackCount = 0;
 
     U8G2&         _disp;
     InputManager& _input;

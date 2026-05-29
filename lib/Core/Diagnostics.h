@@ -37,21 +37,7 @@ public:
         }
     }
 
-// ─── Profiling Macro ────────────────────────────────────────────────────────
-// Use PROFILE_SCOPE("Name") at the top of a function or block to measure
-// its execution time and print it to the Serial monitor.
-// ─────────────────────────────────────────────────────────────────────────────
-class ProfileScope {
-    const char* _name;
-    uint32_t _start;
-public:
-    ProfileScope(const char* name) : _name(name), _start(micros()) {}
-    ~ProfileScope() {
-        uint32_t diff = micros() - _start;
-        Serial.printf("[Profile] %s: %lu us\n", _name, diff);
-    }
-};
-#define PROFILE_SCOPE(name) ProfileScope _prof_##__LINE__(name)
+
 
     // Renders the diagnostics overlay on top of everything
     static void draw(Console& ctx) {
@@ -121,3 +107,19 @@ private:
     static DebugRect _rects[MAX_DEBUG_RECTS];
     static int _rectCount;
 };
+
+// ─── Profiling Macro ────────────────────────────────────────────────────────
+// Use PROFILE_SCOPE("Name") at the top of a function or block to measure
+// its execution time and print it to the Serial monitor.
+// ─────────────────────────────────────────────────────────────────────────────
+class ProfileScope {
+    const char* _name;
+    uint32_t _start;
+public:
+    ProfileScope(const char* name) : _name(name), _start(micros()) {}
+    ~ProfileScope() {
+        uint32_t diff = micros() - _start;
+        Serial.printf("[Profile] %s: %lu us\n", _name, diff);
+    }
+};
+#define PROFILE_SCOPE(name) ProfileScope _prof_##__LINE__(name)
