@@ -112,9 +112,8 @@ void SnakePlayScene::_pushInput(Dir d) {
 }
 
 void SnakePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
-    if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
+    if (ctx.justPressed(Btn::B) ) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::PAUSE);
         return;
@@ -365,9 +364,8 @@ void SnakePlayScene::draw(Console& ctx) {
 void SnakePauseScene::onEnter(Console& ctx) {}
 
 void SnakePauseScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
+    if ( ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::RESUME);
     }
@@ -399,11 +397,7 @@ void SnakeNameEntryScene::_saveToNVS(Console& ctx) {
 void SnakeNameEntryScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
     
-    if (ctx.justPressed(Btn::MENU1)) { 
-        _saveToNVS(ctx); 
-        sm.emit(ctx, Event::QUIT); 
-        return; 
-    }
+
 
     if (ctx.justPressed(Btn::UP) || ctx.repeat(Btn::UP)) {
         _currName[_nameIdx]++;
@@ -468,7 +462,6 @@ void SnakeDeadScene::onEnter(Console& ctx) {
 
 void SnakeDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // PlayScene

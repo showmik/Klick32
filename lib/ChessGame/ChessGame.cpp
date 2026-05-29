@@ -16,12 +16,8 @@ void ChessTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Custom event to transition to play
     }
-    if (ctx.justPressed(Btn::MENU1)) {
-        sm.emit(ctx, Event::QUIT); // Exit game
-    }
-    if (ctx.justPressed(Btn::B)) {
-        sm.emit(ctx, Event::QUIT); // Exit game
-    }
+
+
 }
 
 void ChessTitleScene::draw(Console& ctx) {
@@ -286,10 +282,7 @@ void ChessPlayScene::doAIMove(Console& ctx) {
 }
 
 void ChessPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) {
-        sm.emit(ctx, Event::QUIT);
-        return;
-    }
+
 
     if (_gameOver) {
         if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) {

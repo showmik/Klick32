@@ -23,9 +23,9 @@ void BBTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Start Game
     }
-    if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
+    if (ctx.justPressed(Btn::B)) {
         ctx.sfxMenuBack();
-        sm.clear(ctx);
+        sm.pop(ctx);
     }
 }
 
@@ -290,10 +290,6 @@ bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, 
 
 void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::MENU1)) {
-        sm.clear(ctx);
-        return;
-    }
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
         sm.emit(ctx, Event::PAUSE);
         return;
     }
@@ -649,11 +645,8 @@ void BBPlayScene::drawField(Console& ctx) const {
 
 // ─── BBPauseScene ───────────────────────────────────────────────────────────
 void BBPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B) ) {
         sm.pop(ctx);
-    }
-    if (ctx.justPressed(Btn::MENU1)) {
-        sm.clear(ctx); // Exit game
     }
 }
 
@@ -669,10 +662,7 @@ void BBGameOverScene::onEnter(Console& ctx) {
 
 void BBGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) {
-        sm.clear(ctx);
-        return;
-    }
+
     if (_frame > 30) {
         if (ctx.justPressed(Btn::A)) {
             // Cleanly restart without stacking another play scene

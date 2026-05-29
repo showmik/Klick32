@@ -66,9 +66,8 @@ void RogueTitleScene::onEnter(Console& ctx) {
 
 void RogueTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
+    if (ctx.justPressed(Btn::A) ) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Map CUSTOM_1 to PlayScene in Game
     }
@@ -791,7 +790,6 @@ void RoguePlayScene::_updateCamera(bool snap) {
 
 void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_hudMessageTimer > 0) _hudMessageTimer--;
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     // --- Fade Transition Logic ---
     if (_descending) {
@@ -819,7 +817,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             _altarMenuCursor = (_altarMenuCursor == 0) ? 1 : 0;
             ctx.sfxMenuNav();
         }
-        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::LEFT)) {
+        if (ctx.justPressed(Btn::B)  || ctx.justPressed(Btn::LEFT)) {
             _altarMenuOpen = false;
             ctx.sfxMenuNav();
         }
@@ -885,7 +883,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         _processMonsterTurns(ctx, sm);
     }
 
-    if (ctx.justPressed(Btn::MENU2)) {
+    if (ctx.justPressed(Btn::MENU1)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::PAUSE);
         return;
@@ -999,7 +997,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 _processMonsterTurns(ctx, sm);
             }
         }
-        else if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
+        else if (ctx.justPressed(Btn::B) ) {
             isAiming = false;
             ctx.sfxMenuBack();
         }
@@ -1516,8 +1514,7 @@ void RogueShopScene::onEnter(Console& ctx) {
 
 void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_introFrames < 10) _introFrames++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+    if ( ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::RESUME);
         return;
@@ -1941,8 +1938,7 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 void RoguePauseScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_introFrames < 10) _introFrames++;
     
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
+    if ( ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::RESUME);
     }
@@ -1980,7 +1976,6 @@ void RogueDeadScene::onEnter(Console& ctx) {
 
 void RogueDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // PlayScene
@@ -2041,14 +2036,13 @@ void RogueInventoryScene::onEnter(Console& ctx) {
 }
 
 void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     if (_upgrading) {
         if (ctx.justPressed(Btn::UP) || ctx.justPressed(Btn::DOWN)) {
             _upgradeSelect = (_upgradeSelect == 0) ? 1 : 0;
             ctx.sfxMenuNav();
         }
-        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2)) {
+        if (ctx.justPressed(Btn::B) ) {
             _upgrading = false;
             ctx.sfxMenuNav();
         }
@@ -2080,7 +2074,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
             _itemMenuCursor = (_itemMenuCursor == 0) ? 1 : 0;
             ctx.sfxMenuNav();
         }
-        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::LEFT)) {
+        if (ctx.justPressed(Btn::B)  || ctx.justPressed(Btn::LEFT)) {
             _itemMenuOpen = false;
             ctx.sfxMenuNav();
         }
@@ -2185,7 +2179,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
         return;
     }
 
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+    if ( ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::RESUME);
         return;

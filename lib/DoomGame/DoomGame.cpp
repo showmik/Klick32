@@ -20,7 +20,6 @@ void DoomTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Play
     }
-    if (ctx.justPressed(Btn::MENU1)) sm.emit(ctx, Event::QUIT);
 }
 
 void DoomTitleScene::draw(Console& ctx) {
@@ -69,7 +68,7 @@ void DoomWinScene::onEnter(Console& ctx) {
 }
 
 void DoomWinScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B) ) {
         sm.emit(ctx, Event::QUIT); // Return to title
     }
 }
@@ -139,9 +138,8 @@ void DoomPlayScene::loadLevel(Console& ctx) {
 }
 
 void DoomPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::B)) { show_minimap = !show_minimap; }
-    if (ctx.justPressed(Btn::MENU2)) {
+    if (ctx.justPressed(Btn::MENU1)) {
         _data->weapon = (_data->weapon == 0) ? 1 : 0;
         ctx.beep(300, 20); // swap sound
     }

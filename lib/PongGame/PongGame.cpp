@@ -15,9 +15,8 @@ void PongTitleScene::onEnter(Console& ctx) {
 void PongTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
 
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
 
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
+    if (ctx.justPressed(Btn::A) ) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Map to PlayScene
     }
@@ -175,10 +174,9 @@ if (_hitStopFrames > 0) {
 }
 
     // MENU1 → hard exit back to OS
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
     // MENU2 / B → pause
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+    if ( ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::PAUSE);
         return;
@@ -270,9 +268,8 @@ void PongPlayScene::draw(Console& ctx) {
 void PongPauseScene::onEnter(Console& ctx) {}
 
 void PongPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
 
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
+    if ( ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::RESUME);
     }
@@ -295,7 +292,6 @@ void PongGameOverScene::onEnter(Console& ctx) {
 
 void PongGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1);   // fresh match, scores reset in onEnter

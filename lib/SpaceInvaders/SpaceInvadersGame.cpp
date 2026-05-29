@@ -10,7 +10,6 @@ void SITitleScene::onEnter(Console& ctx) { _frame = 0; }
 
 void SITitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.clear(ctx); return; }
     if (ctx.justPressed(Btn::A)) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // PlayScene
@@ -67,8 +66,7 @@ void SIPlayScene::_initLevel() {
 }
 
 void SIPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B)) {
+    if ( ctx.justPressed(Btn::B)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::PAUSE);
         return;
@@ -314,8 +312,7 @@ void SIPlayScene::drawField(Console& ctx) const {
 // SIPauseScene & SIGameOverScene
 // ═════════════════════════════════════════════════════════════════════════════
 void SIPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
-    if (ctx.justPressed(Btn::MENU2) || ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
+    if ( ctx.justPressed(Btn::B) || ctx.justPressed(Btn::A)) {
         ctx.sfxMenuNav();
         sm.emit(ctx, Event::RESUME);
     }
@@ -330,7 +327,6 @@ void SIGameOverScene::onEnter(Console& ctx) { _frame = 0; }
 
 void SIGameOverScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
-    if (ctx.justPressed(Btn::MENU1)) { sm.emit(ctx, Event::QUIT); return; }
     
     if (_frame > 30) {
         if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::UP)) {
