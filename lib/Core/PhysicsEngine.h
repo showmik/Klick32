@@ -47,16 +47,26 @@ public:
         float exitTimeX, exitTimeY;
 
         if (velocity.x == 0.0f) {
-            entryTimeX = -std::numeric_limits<float>::infinity();
-            exitTimeX  = std::numeric_limits<float>::infinity();
+            if (movingBox.x + movingBox.w <= staticBox.x || staticBox.x + staticBox.w <= movingBox.x) {
+                entryTimeX = -std::numeric_limits<float>::infinity();
+                exitTimeX  = -std::numeric_limits<float>::infinity();
+            } else {
+                entryTimeX = -std::numeric_limits<float>::infinity();
+                exitTimeX  = std::numeric_limits<float>::infinity();
+            }
         } else {
             entryTimeX = invEntryX / velocity.x;
             exitTimeX  = invExitX / velocity.x;
         }
 
         if (velocity.y == 0.0f) {
-            entryTimeY = -std::numeric_limits<float>::infinity();
-            exitTimeY  = std::numeric_limits<float>::infinity();
+            if (movingBox.y + movingBox.h <= staticBox.y || staticBox.y + staticBox.h <= movingBox.y) {
+                entryTimeY = -std::numeric_limits<float>::infinity();
+                exitTimeY  = -std::numeric_limits<float>::infinity();
+            } else {
+                entryTimeY = -std::numeric_limits<float>::infinity();
+                exitTimeY  = std::numeric_limits<float>::infinity();
+            }
         } else {
             entryTimeY = invEntryY / velocity.y;
             exitTimeY  = invExitY / velocity.y;

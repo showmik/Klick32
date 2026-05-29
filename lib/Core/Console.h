@@ -412,8 +412,8 @@ public:
         // Calculate visible tile range
         int startCol = gclamp(-cx / tileW, 0, mapW - 1);
         int startRow = gclamp(-cy / tileH, 0, mapH - 1);
-        int endCol   = gclamp((W - cx + tileW - 1) / tileW, 0, mapW - 1);
-        int endRow   = gclamp((H - cy + tileH - 1) / tileH, 0, mapH - 1);
+        int endCol   = gclamp((W - cx - 1) / tileW, 0, mapW - 1);
+        int endRow   = gclamp((H - cy - 1) / tileH, 0, mapH - 1);
 
         for (int row = startRow; row <= endRow; row++) {
             for (int col = startCol; col <= endCol; col++) {

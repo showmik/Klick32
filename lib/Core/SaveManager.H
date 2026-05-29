@@ -168,10 +168,10 @@ private:
         // Constructor for assignment logic
         CacheData() { u = 0; }
         CacheData(uint32_t val) { u = val; }
-        CacheData(int32_t val) { i = val; }
-        CacheData(float val) { f = val; }
-        CacheData(bool val) { b = val; }
-        CacheData(uint8_t val) { u8 = val; }
+        CacheData(int32_t val) { u = 0; i = val; }
+        CacheData(float val) { u = 0; f = val; }
+        CacheData(bool val) { u = 0; b = val; }
+        CacheData(uint8_t val) { u = 0; u8 = val; }
         
         bool operator==(const CacheData& o) const { return u == o.u; }
     };

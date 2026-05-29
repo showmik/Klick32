@@ -163,15 +163,18 @@ void SynthEngine::_audioTask(void* userdata, uint8_t* stream, int len) {
             } else if (v.wave == Waveform::TRIANGLE) {
                 sample = (v.phase < 0.5f) ? (v.phase * 4.0f - 1.0f) : (3.0f - v.phase * 4.0f);
             } else if (v.wave == Waveform::NOISE) {
-                sample = ((float)random(0, 1000) / 500.0f) - 1.0f;
+                // Fast and thread-safe local LCG noise generator
+                static uint32_t noiseSeed = 123456789;
+                noiseSeed = noiseSeed * 1664525 + 1013904223;
+                sample = ((float)(noiseSeed & 0x7FFF) / 16384.0f) - 1.0f;
             }
             
             // Apply Attack / Release envelope
             uint32_t elapsed = nowMs - v.startTimeMs;
             float env = 1.0f;
-            if (elapsed < v.attackMs) {
+            if (v.attackMs > 0 && elapsed < v.attackMs) {
                 env = (float)elapsed / (float)v.attackMs;
-            } else if (elapsed > v.durationMs - v.releaseMs) {
+            } else if (v.releaseMs > 0 && v.durationMs >= v.releaseMs && elapsed > (v.durationMs - v.releaseMs)) {
                 env = (float)(v.durationMs - elapsed) / (float)v.releaseMs;
             }
             
@@ -244,7 +247,10 @@ void SynthEngine::_audioTask(void* pvParameters) {
             } else if (v.wave == Waveform::TRIANGLE) {
                 sample = (v.phase < 0.5f) ? (v.phase * 4.0f - 1.0f) : (3.0f - v.phase * 4.0f);
             } else if (v.wave == Waveform::NOISE) {
-                sample = ((float)random(0, 1000) / 500.0f) - 1.0f;
+                // Fast and thread-safe local LCG noise generator
+                static uint32_t noiseSeed = 987654321;
+                noiseSeed = noiseSeed * 1664525 + 1013904223;
+                sample = ((float)(noiseSeed & 0x7FFF) / 16384.0f) - 1.0f;
             }
             
             // Apply Attack / Release envelope

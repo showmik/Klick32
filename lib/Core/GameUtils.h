@@ -147,6 +147,7 @@ struct Rect {
 //
 //   int x = lerpi(0, 128, frame, 10);  // slide across screen over 10 frames
 inline int lerpi(int a, int b, int t, int tmax) {
+    if (tmax <= 0) return b;
     t = gclamp(t, 0, tmax);
     return a + (b - a) * t / tmax;
 }

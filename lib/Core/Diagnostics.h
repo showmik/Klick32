@@ -72,14 +72,14 @@ public:
         uint32_t maxBlockKb = maxBlock / 1024;
         
         ctx.drawPrintf(2, 6, "%uF | %lu.%lums | R:%luK | M:%luK", 
-                       _fps, 
-                       logicTimeUs / 1000, (logicTimeUs % 1000) / 100, 
-                       freeHeapKb, 
-                       maxBlockKb);
+                       (unsigned int)_fps, 
+                       (unsigned long)(logicTimeUs / 1000), (unsigned long)((logicTimeUs % 1000) / 100), 
+                       (unsigned long)freeHeapKb, 
+                       (unsigned long)maxBlockKb);
 #else
         ctx.drawPrintf(2, 6, "%uF | %lu.%lums | PC Sim", 
-                       _fps, 
-                       logicTimeUs / 1000, (logicTimeUs % 1000) / 100);
+                       (unsigned int)_fps, 
+                       (unsigned long)(logicTimeUs / 1000), (unsigned long)((logicTimeUs % 1000) / 100));
 #endif
         ctx.endScreenSpace();
     }
