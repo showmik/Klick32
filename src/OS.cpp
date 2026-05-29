@@ -71,6 +71,15 @@ void OS::run() {
     bool isMuted = _save.getBool("mute", false);
     _sound.setMuted(isMuted);
 
+    // ── Check for WiFi Dashboard Boot (Hold MENU1 + UP) ──
+    _input.update();
+    if (_input.held(Btn::MENU1) && _input.held(Btn::UP)) {
+#ifndef SIMULATOR
+        extern void startWifiDashboard(U8G2& disp, InputManager& input);
+        startWifiDashboard(_disp, _input);
+#endif
+    }
+
     // Minimalist Boot Splash
     uint32_t splashStart = millis();
     while (millis() - splashStart < 1500) {
