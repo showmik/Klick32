@@ -362,18 +362,18 @@ void OS::run() {
                     
                     items[4] = "Quit to Menu";
                     
+                    _console.setDrawColor(Console::COLOR_WHITE);
                     for (int i = 0; i < 5; i++) {
                         int itemY = y + 20 + (i * 8);
-                        if (i == osOverlayCursor) {
-                            _console.drawStr(18, itemY, ">");
-                        }
-                        _console.drawStr(25, itemY, items[i]);
+                        // Indent active item slightly to create a subtle micro-animation
+                        int textX = (i == osOverlayCursor) ? 28 : 24;
+                        _console.drawStr(textX, itemY, items[i]);
                     }
                     
-                    // Draw selection highlight pill
+                    // Draw single cohesive XOR selection pill
                     int selectY = y + 20 + (osOverlayCursor * 8);
                     _console.setDrawColor(Console::COLOR_XOR);
-                    _console.drawRBox(16, selectY - 7, 96, 9, 2);
+                    _console.drawRBox(18, selectY - 7, 92, 9, 2);
                 }
                 
                 _console.endScreenSpace();
