@@ -357,6 +357,53 @@ void SnakePlayScene::draw(Console& ctx) {
     drawField(ctx);
 }
 
+void SnakePlayScene::saveSnapshot(Console& ctx) {
+    ctx.saveUInt("snk_len", _len);
+    ctx.saveBytes("snk_sx", _sx, _len * sizeof(int));
+    ctx.saveBytes("snk_sy", _sy, _len * sizeof(int));
+    ctx.saveUInt("snk_dir", (uint32_t)_dir);
+    ctx.saveUInt("snk_score", _score);
+    ctx.saveUInt("snk_ax", _ax);
+    ctx.saveUInt("snk_ay", _ay);
+    ctx.saveUInt("snk_numw", _numWalls);
+    ctx.saveBytes("snk_wx", _wx, _numWalls * sizeof(int));
+    ctx.saveBytes("snk_wy", _wy, _numWalls * sizeof(int));
+    ctx.saveUInt("snk_speed", _speed);
+    ctx.saveBool("snk_bonA", _bonusActive);
+    ctx.saveUInt("snk_bx", _bx);
+    ctx.saveUInt("snk_by", _by);
+    ctx.saveUInt("snk_bonT", _bonusTimer);
+    ctx.saveBool("snk_poiA", _poisonActive);
+    ctx.saveUInt("snk_px", _px);
+    ctx.saveUInt("snk_py", _py);
+    ctx.saveUInt("snk_poiT", _poisonTimer);
+}
+
+void SnakePlayScene::loadSnapshot(Console& ctx) {
+    if (!ctx.hasSave("snk_len")) return; // No snapshot found
+
+    _len = ctx.loadUInt("snk_len");
+    ctx.loadBytes("snk_sx", _sx, _len * sizeof(int));
+    ctx.loadBytes("snk_sy", _sy, _len * sizeof(int));
+    _dir = (Dir)ctx.loadUInt("snk_dir");
+    _score = ctx.loadUInt("snk_score");
+    _ax = ctx.loadUInt("snk_ax");
+    _ay = ctx.loadUInt("snk_ay");
+    _numWalls = ctx.loadUInt("snk_numw");
+    ctx.loadBytes("snk_wx", _wx, _numWalls * sizeof(int));
+    ctx.loadBytes("snk_wy", _wy, _numWalls * sizeof(int));
+    _speed = ctx.loadUInt("snk_speed");
+    _bonusActive = ctx.loadBool("snk_bonA");
+    _bx = ctx.loadUInt("snk_bx");
+    _by = ctx.loadUInt("snk_by");
+    _bonusTimer = ctx.loadUInt("snk_bonT");
+    _poisonActive = ctx.loadBool("snk_poiA");
+    _px = ctx.loadUInt("snk_px");
+    _py = ctx.loadUInt("snk_py");
+    _poisonTimer = ctx.loadUInt("snk_poiT");
+    _queueLen = 0; // Clear input queue
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // SnakePauseScene
 // ═════════════════════════════════════════════════════════════════════════════

@@ -47,6 +47,16 @@ public:
 
     // Default implementations for standard GameBase methods
     
+    void saveSnapshot(Console& ctx) override {
+        Scene* current = _sm.current();
+        if (current) current->saveSnapshot(ctx);
+    }
+
+    void loadSnapshot(Console& ctx) override {
+        Scene* current = _sm.current();
+        if (current) current->loadSnapshot(ctx);
+    }
+
     void onExit(Console& ctx) override {
         // SceneManager::clear automatically calls onExit() on any active scenes
         _sm.clear(ctx);

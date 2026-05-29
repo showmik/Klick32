@@ -787,6 +787,85 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     }
 }
 
+void BBPlayScene::saveSnapshot(Console& ctx) {
+    ctx.saveBytes("bb_bricks", _bricks, sizeof(_bricks));
+    ctx.saveBytes("bb_balls", _balls, sizeof(_balls));
+    ctx.saveBytes("bb_pwrs", _powerUps, sizeof(_powerUps));
+    ctx.saveBytes("bb_lasers", _lasers, sizeof(_lasers));
+    ctx.saveBytes("bb_boss", &_boss, sizeof(_boss));
+    ctx.saveBytes("bb_projs", _projectiles, sizeof(_projectiles));
+    
+    ctx.saveFloat("bb_padX", _padX);
+    ctx.saveFloat("bb_padW", _padW);
+    ctx.saveFloat("bb_padS", _padSpeed);
+    ctx.saveBool("bb_sticky", _stickyPaddle);
+    
+    ctx.saveUInt("bb_msgT", _msgTimer);
+    ctx.saveUInt("bb_bLeft", _bricksLeft);
+    ctx.saveUInt("bb_combo", _combo);
+    ctx.saveBool("bb_clrP", _levelClearPause);
+    ctx.saveUInt("bb_clrT", _clearTimer);
+    ctx.saveUInt("bb_lTime", _lastTimeBonus);
+    ctx.saveUInt("bb_lLevel", _lastLevelBonus);
+    
+    ctx.saveBool("bb_lasA", _laserActive);
+    ctx.saveUInt("bb_lasT", _laserTimer);
+    
+    ctx.saveUInt("bb_flash", _screenFlashFrames);
+    ctx.saveBytes("bb_rOff", _rowOffsetX, sizeof(_rowOffsetX));
+    ctx.saveBytes("bb_rSpd", _rowSpeedX, sizeof(_rowSpeedX));
+    ctx.saveUInt("bb_lFrm", _levelFrames);
+    
+    if (_data) {
+        ctx.saveUInt("bb_score", _data->score);
+        ctx.saveUInt("bb_lives", _data->lives);
+        ctx.saveUInt("bb_level", _data->level);
+    }
+}
+
+void BBPlayScene::loadSnapshot(Console& ctx) {
+    if (!ctx.hasSave("bb_padW")) return;
+    
+    ctx.loadBytes("bb_bricks", _bricks, sizeof(_bricks));
+    ctx.loadBytes("bb_balls", _balls, sizeof(_balls));
+    ctx.loadBytes("bb_pwrs", _powerUps, sizeof(_powerUps));
+    ctx.loadBytes("bb_lasers", _lasers, sizeof(_lasers));
+    ctx.loadBytes("bb_boss", &_boss, sizeof(_boss));
+    ctx.loadBytes("bb_projs", _projectiles, sizeof(_projectiles));
+    
+    _padX = ctx.loadFloat("bb_padX");
+    _padW = ctx.loadFloat("bb_padW");
+    _padSpeed = ctx.loadFloat("bb_padS");
+    _stickyPaddle = ctx.loadBool("bb_sticky");
+    
+    _msgTimer = ctx.loadUInt("bb_msgT");
+    _bricksLeft = ctx.loadUInt("bb_bLeft");
+    _combo = ctx.loadUInt("bb_combo");
+    _levelClearPause = ctx.loadBool("bb_clrP");
+    _clearTimer = ctx.loadUInt("bb_clrT");
+    _lastTimeBonus = ctx.loadUInt("bb_lTime");
+    _lastLevelBonus = ctx.loadUInt("bb_lLevel");
+    
+    _laserActive = ctx.loadBool("bb_lasA");
+    _laserTimer = ctx.loadUInt("bb_lasT");
+    
+    _screenFlashFrames = ctx.loadUInt("bb_flash");
+    ctx.loadBytes("bb_rOff", _rowOffsetX, sizeof(_rowOffsetX));
+    ctx.loadBytes("bb_rSpd", _rowSpeedX, sizeof(_rowSpeedX));
+    _levelFrames = ctx.loadUInt("bb_lFrm");
+    
+    if (_data) {
+        _data->score = ctx.loadUInt("bb_score");
+        _data->lives = ctx.loadUInt("bb_lives");
+        _data->level = ctx.loadUInt("bb_level");
+    }
+    
+    _msg[0] = '\0';
+    if (_msgTimer > 0) {
+        snprintf(_msg, sizeof(_msg), "Level %d", _data->level);
+    }
+}
+
 void BBPlayScene::draw(Console& ctx) {
     drawField(ctx);
     

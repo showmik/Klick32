@@ -71,6 +71,9 @@ public:
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
+    
+    void saveSnapshot(Console& ctx) override;
+    void loadSnapshot(Console& ctx) override;
 
     // Called by overlay scenes so they can paint the frozen field as background.
     void drawField(Console& ctx) const;

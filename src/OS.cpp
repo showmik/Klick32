@@ -233,12 +233,12 @@ void OS::run() {
         if (osOverlayActive) {
             if (_console.justPressed(Btn::UP)) {
                 osOverlayCursor--;
-                if (osOverlayCursor < 0) osOverlayCursor = 4;
+                if (osOverlayCursor < 0) osOverlayCursor = 6;
                 SFX::menuNav(_sound);
             }
             if (_console.justPressed(Btn::DOWN)) {
                 osOverlayCursor++;
-                if (osOverlayCursor > 4) osOverlayCursor = 0;
+                if (osOverlayCursor > 6) osOverlayCursor = 0;
                 SFX::menuNav(_sound);
             }
             if (_console.justPressed(Btn::A)) {
@@ -246,6 +246,15 @@ void OS::run() {
                     SFX::menuEnter(_sound);
                     osOverlayActive = false; // Resume
                 } else if (osOverlayCursor == 1) {
+                    activeGame->saveSnapshot(_console);
+                    _save.commit(); // Force write to NVS immediately
+                    SFX::menuEnter(_sound);
+                    osOverlayActive = false; // Resume after saving
+                } else if (osOverlayCursor == 2) {
+                    activeGame->loadSnapshot(_console);
+                    SFX::menuEnter(_sound);
+                    osOverlayActive = false; // Resume after loading
+                } else if (osOverlayCursor == 3) {
                     _sound.toggleMute(); // Toggle Mute
                     
                     // Switch to OS namespace temporarily to save Mute
@@ -257,7 +266,7 @@ void OS::run() {
                     _save.begin(currentGameName);
                     
                     SFX::menuEnter(_sound);
-                } else if (osOverlayCursor == 2) {
+                } else if (osOverlayCursor == 4) {
                     // CPU Speed Cycle: 240 -> 160 -> 80
                     if (osCpuSpeed == 240) osCpuSpeed = 160;
                     else if (osCpuSpeed == 160) osCpuSpeed = 80;
@@ -274,7 +283,7 @@ void OS::run() {
                     _save.begin(currentGameName);
                     
                     SFX::menuEnter(_sound);
-                } else if (osOverlayCursor == 3) {
+                } else if (osOverlayCursor == 5) {
                     Diagnostics::toggle();
                     
                     // Switch to OS namespace temporarily to save HUD state
@@ -286,7 +295,7 @@ void OS::run() {
                     _save.begin(currentGameName);
                     
                     SFX::menuEnter(_sound);
-                } else if (osOverlayCursor == 4) {
+                } else if (osOverlayCursor == 6) {
                     // Quit Game
                     osOverlayActive = false;
                     
@@ -325,8 +334,8 @@ void OS::run() {
                 _console.endScreenSpace();
                 
                 // 2. Centered Modal Dialog
-                int h = (int)(56 * osOverlayAnim);
-                int y = 4 + (56 - h) / 2;
+                int h = (int)(62 * osOverlayAnim);
+                int y = 1 + (62 - h) / 2;
                 
                 _console.beginScreenSpace();
                 
@@ -340,40 +349,42 @@ void OS::run() {
                 
                 // Content only if fully or mostly open
                 if (osOverlayAnim >= 0.9f) {
-                    _console.drawHLine(16, y + 11, 96);
+                    _console.drawHLine(16, y + 9, 96);
                     
                     _console.setFont(u8g2_font_5x7_tf);
-                    _console.drawStrCentered(y + 9, "QUICK SETTINGS");
+                    _console.drawStrCentered(y + 7, "QUICK SETTINGS");
                     
-                    const char* items[5];
+                    const char* items[7];
                     items[0] = "Resume Game";
+                    items[1] = "Save Snapshot";
+                    items[2] = "Load Snapshot";
                     
                     char soundBuf[16];
                     snprintf(soundBuf, sizeof(soundBuf), "Audio: %s", _sound.isMuted() ? "OFF" : "ON");
-                    items[1] = soundBuf;
+                    items[3] = soundBuf;
                     
                     char cpuBuf[20];
                     snprintf(cpuBuf, sizeof(cpuBuf), "CPU: %s", (osCpuSpeed == 240) ? "Max 240M" : (osCpuSpeed == 160) ? "Bal 160M" : "Eco 80M");
-                    items[2] = cpuBuf;
+                    items[4] = cpuBuf;
                     
                     char hudBuf[20];
                     snprintf(hudBuf, sizeof(hudBuf), "Debug HUD: %s", Diagnostics::isVisible() ? "ON" : "OFF");
-                    items[3] = hudBuf;
+                    items[5] = hudBuf;
                     
-                    items[4] = "Quit to Menu";
+                    items[6] = "Quit to Menu";
                     
                     _console.setDrawColor(Console::COLOR_WHITE);
-                    for (int i = 0; i < 5; i++) {
-                        int itemY = y + 20 + (i * 8);
+                    for (int i = 0; i < 7; i++) {
+                        int itemY = y + 17 + (i * 7);
                         // Indent active item slightly to create a subtle micro-animation
                         int textX = (i == osOverlayCursor) ? 28 : 24;
                         _console.drawStr(textX, itemY, items[i]);
                     }
                     
                     // Draw single cohesive XOR selection pill
-                    int selectY = y + 20 + (osOverlayCursor * 8);
+                    int selectY = y + 17 + (osOverlayCursor * 7);
                     _console.setDrawColor(Console::COLOR_XOR);
-                    _console.drawRBox(18, selectY - 7, 92, 9, 2);
+                    _console.drawRBox(18, selectY - 6, 92, 8, 2);
                 }
                 
                 _console.endScreenSpace();

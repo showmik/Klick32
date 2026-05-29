@@ -87,6 +87,10 @@ public:
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
+    
+    void saveSnapshot(Console& ctx) override;
+    void loadSnapshot(Console& ctx) override;
+    
     void drawField(Console& ctx) const;
 
 private:
@@ -183,6 +187,15 @@ public:
     bool           isRunning() const override;
     const char*    getName()   const override;
     const uint8_t* getCoverArt() const override;
+
+    void saveSnapshot(Console& ctx) override {
+        Scene* current = _sm.current();
+        if (current) current->saveSnapshot(ctx);
+    }
+    void loadSnapshot(Console& ctx) override {
+        Scene* current = _sm.current();
+        if (current) current->loadSnapshot(ctx);
+    }
 
 private:
     BBSharedData      _data;

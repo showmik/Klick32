@@ -50,6 +50,14 @@ public:
     // NVS namespace is still open — safe to call ctx.save*() here.
     virtual void onExit(Console& ctx) = 0;
 
+    // Called when the user triggers a "Save Snapshot" from the OS quick menu.
+    // Games should serialize their current state to NVS here.
+    virtual void saveSnapshot(Console& ctx) {}
+    
+    // Called when the user triggers a "Load Snapshot" from the OS quick menu.
+    // Games should deserialize their state from NVS here.
+    virtual void loadSnapshot(Console& ctx) {}
+
     // Called every frame: advance game logic, read input, trigger sounds.
     virtual void update(Console& ctx, float dt) = 0;
 

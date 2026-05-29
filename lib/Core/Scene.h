@@ -40,6 +40,10 @@ public:
     virtual void onEnter(Console& ctx) {}
     virtual void onExit (Console& ctx) {}
 
+    // Called when the OS requests a snapshot save/load.
+    virtual void saveSnapshot(Console& ctx) {}
+    virtual void loadSnapshot(Console& ctx) {}
+
     // Called every frame while this scene is on top of the stack.
     // Use sm to trigger transitions; use ctx for input, sound, and drawing.
     virtual void update(Console& ctx, SceneManager& sm, float dt) = 0;
