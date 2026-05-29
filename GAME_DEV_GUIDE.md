@@ -290,38 +290,39 @@ The cover art must be exactly 128 pixels wide (16 bytes per row) and 45 pixels h
 
 # Part 3: Advanced Systems
 
-## 8. Zero-Allocation Entity Management
+## 8. Zero-Allocation ECS (Entity Component System)
 
-Because `std::vector` is forbidden, Klick32 provides a templated `EntityManager`. It allocates a fixed block of memory at boot and recycles object slots dynamically.
+Because `std::vector` is forbidden, Klick32 provides a lightweight, SoA (Structure-of-Arrays) ECS designed specifically for microcontrollers. It completely replaces OOP inheritance (e.g., `class Bullet : public Entity`) with pure, contiguous data arrays for maximum cache locality and physics performance.
 
 ```cpp
-// 1. Define your entity by subclassing Entity
-class Bullet : public Entity {
-public:
-    int x, y;
-    void init(int startX, int startY) {
-        x = startX;
-        y = startY;
-    }
-    void update(Console& ctx, float dt) override {
-        x += 50 * dt; // Move right 50 pixels per second
-        if (x > 128) destroy(); // Returns this slot to the pool
-    }
-    void draw(Console& ctx) override {
-        ctx.drawBox(x, y, 2, 2);
-    }
-};
+#include "ECS.h"
 
-// 2. Instantiate the manager in your Game/Scene class
-EntityManager<Bullet, 32> _bullets; // Pool of 32 bullets
+// 1. Define your components as simple structs
+struct Transform { float x, y; };
+struct Physics   { float vx, vy; };
+
+// 2. Instantiate your registry and component pools
+ECSRegistry<32> _registry;
+ComponentPool<Transform, 32> _transforms;
+ComponentPool<Physics, 32> _physics;
 
 // 3. Spawn entities
-Bullet* b = _bullets.spawn();
-if (b) b->init(playerX, playerY); // Check for nullptr if pool is full!
+EntityID e = _registry.create();
+if (e != INVALID_ENTITY) {
+    _transforms.add(e, {playerX, playerY});
+    _physics.add(e, {50.0f, 0.0f}); // Move right 50 pixels per sec
+}
 
-// 4. Update and Draw
-_bullets.update(ctx, dt);
-_bullets.draw(ctx);
+// 4. Update via system loops (Fast contiguous array iteration!)
+for (EntityID i = 0; i < 32; i++) {
+    if (_registry.isValid(i) && _transforms.has[i] && _physics.has[i]) {
+        _transforms.data[i].x += _physics.data[i].vx * dt;
+        
+        if (_transforms.data[i].x > 128) {
+            _registry.destroy(i);
+        }
+    }
+}
 ```
 
 ---
