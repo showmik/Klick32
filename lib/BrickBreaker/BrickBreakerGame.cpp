@@ -243,9 +243,9 @@ bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, 
         
         if (!ball.fireball || brick.type == BrickType::SOLID) {
             if (abs(cX - bcX) / BRICK_W > abs(cY - bcY) / BRICK_H) {
-                ball.vx = -ball.vx;
+                ball.vx = (cX < bcX) ? -abs(ball.vx) : abs(ball.vx);
             } else {
-                ball.vy = -ball.vy;
+                ball.vy = (cY < bcY) ? -abs(ball.vy) : abs(ball.vy);
             }
         }
 
@@ -366,22 +366,29 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         int r = (cy >= 0) ? (cy / BRICK_H) : -1;
         
         if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-            if (_bricks[r][c].active && _bricks[r][c].type != BrickType::SOLID) {
+            if (_bricks[r][c].active) {
                 _lasers[i].active = false;
-                _bricks[r][c].hp--;
-                
-                if (_particles) {
-                    _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+                if (_bricks[r][c].type != BrickType::SOLID) {
+                    _bricks[r][c].hp--;
+                    
+                    if (_particles) {
+                        _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+                    }
+                    
+                    if (_bricks[r][c].hp <= 0) {
+                        _bricks[r][c].active = false;
+                        _bricksLeft--;
+                        _data->score += (_bricks[r][c].type == BrickType::HARD) ? 20 : 10;
+                        ctx.updateHiScore(_data->score);
+                        _spawnPowerUp(GRID_OX + c*BRICK_W + BRICK_W/2.0f, GRID_OY + r*BRICK_H + BRICK_H/2.0f);
+                    }
+                    ctx.beep(400, 10);
+                } else {
+                    if (_particles) {
+                        _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+                    }
+                    ctx.beep(300, 10);
                 }
-                
-                if (_bricks[r][c].hp <= 0) {
-                    _bricks[r][c].active = false;
-                    _bricksLeft--;
-                    _data->score += (_bricks[r][c].type == BrickType::HARD) ? 20 : 10;
-                    ctx.updateHiScore(_data->score);
-                    _spawnPowerUp(GRID_OX + c*BRICK_W + BRICK_W/2.0f, GRID_OY + r*BRICK_H + BRICK_H/2.0f);
-                }
-                ctx.beep(400, 10);
             }
         }
     }
@@ -437,7 +444,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     if (ctx.pressed(Btn::RIGHT)) _balls[i].vx += 0.6f;
                     
                     _balls[i].vy = -INIT_SPEED;
-                    _normalizeBallVelocity(_balls[i], INIT_SPEED + (_data->level * 0.2f)); 
+                    _normalizeBallVelocity(_balls[i], min((float)MAX_SPEED, INIT_SPEED + (_data->level * 0.2f))); 
                 }
                 ctx.beep(500, 15);
             }
@@ -501,6 +508,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             if (rectIntersect(_powerUps[i].x - 4, _powerUps[i].y - 4, 8, 8, _padX, PAD_Y, _padW, 3)) {
                 _applyPowerUp(_powerUps[i].type, ctx);
                 _powerUps[i].active = false;
+                if (_padX + _padW > Console::W) _padX = Console::W - _padW;
             } else if (_powerUps[i].y > Console::H) {
                 _powerUps[i].active = false;
             }
@@ -540,7 +548,7 @@ void BBPlayScene::draw(Console& ctx) {
                     ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y, 4, 2);
                 }
             } else {
-                ctx.drawBox((int)_balls[i].x, (int)_balls[i].y, 2, 2);
+                ctx.drawBox((int)_balls[i].x - 1, (int)_balls[i].y - 1, 2, 2);
             }
         }
     }
