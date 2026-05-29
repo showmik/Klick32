@@ -74,6 +74,19 @@ void OS::run() {
     bool isMuted = _save.getBool("mute", false);
     _sound.setMuted(isMuted);
 
+    int savedCpuSpeed = _save.getInt("cpu_speed", 240);
+    if (savedCpuSpeed != 240 && savedCpuSpeed != 160 && savedCpuSpeed != 80) {
+        savedCpuSpeed = 240;
+    }
+#ifndef SIMULATOR
+    setCpuFrequencyMhz(savedCpuSpeed);
+#endif
+
+    bool savedHud = _save.getBool("hud_visible", false);
+    if (savedHud != Diagnostics::isVisible()) {
+        Diagnostics::toggle();
+    }
+
     // ── Check for WiFi Dashboard Boot (Hold MENU1 + UP) ──
     _input.update();
     if (_input.held(Btn::MENU1) && _input.held(Btn::UP)) {
@@ -117,6 +130,8 @@ void OS::run() {
     uint32_t lastTime = millis();
     uint32_t lastGlobalInputTime = millis();
 
+    static int osCpuSpeed = savedCpuSpeed;
+
     while (true) {
 #ifdef SIMULATOR
         extern bool g_quit;
@@ -129,8 +144,22 @@ void OS::run() {
 
         static bool osOverlayActive = false;
         static int  osOverlayCursor = 0;
+        static float osOverlayAnim = 0.0f;
 
         _input.update();
+
+        // Update overlay animation
+        if (osOverlayActive) {
+            if (osOverlayAnim < 1.0f) {
+                osOverlayAnim += dt * 8.0f;
+                if (osOverlayAnim > 1.0f) osOverlayAnim = 1.0f;
+            }
+        } else {
+            if (osOverlayAnim > 0.0f) {
+                osOverlayAnim -= dt * 8.0f;
+                if (osOverlayAnim < 0.0f) osOverlayAnim = 0.0f;
+            }
+        }
         
         // ── Global Idle Sleep Check ──
         bool anyInput = false;
@@ -161,6 +190,15 @@ void OS::run() {
 
         if (_console.pressed(Btn::MENU1) && _console.justPressed(Btn::MENU2)) {
             Diagnostics::toggle();
+            
+            // Switch to OS namespace temporarily to save HUD state
+            const char* currentGameName = activeGame->getName();
+            _save.end();
+            _save.begin("__os");
+            _save.putBool("hud_visible", Diagnostics::isVisible());
+            _save.end();
+            _save.begin(currentGameName);
+            
             osOverlayActive = false;
         } else if (activeGame != &_sysMenu && _console.justPressed(Btn::MENU2)) {
             osOverlayActive = !osOverlayActive;
@@ -173,12 +211,12 @@ void OS::run() {
         if (osOverlayActive) {
             if (_console.justPressed(Btn::UP)) {
                 osOverlayCursor--;
-                if (osOverlayCursor < 0) osOverlayCursor = 2;
+                if (osOverlayCursor < 0) osOverlayCursor = 4;
                 SFX::menuNav(_sound);
             }
             if (_console.justPressed(Btn::DOWN)) {
                 osOverlayCursor++;
-                if (osOverlayCursor > 2) osOverlayCursor = 0;
+                if (osOverlayCursor > 4) osOverlayCursor = 0;
                 SFX::menuNav(_sound);
             }
             if (_console.justPressed(Btn::A)) {
@@ -187,8 +225,46 @@ void OS::run() {
                     osOverlayActive = false; // Resume
                 } else if (osOverlayCursor == 1) {
                     _sound.toggleMute(); // Toggle Mute
+                    
+                    // Switch to OS namespace temporarily to save Mute
+                    const char* currentGameName = activeGame->getName();
+                    _save.end();
+                    _save.begin("__os");
+                    _save.putBool("mute", _sound.isMuted());
+                    _save.end();
+                    _save.begin(currentGameName);
+                    
                     SFX::menuEnter(_sound);
                 } else if (osOverlayCursor == 2) {
+                    // CPU Speed Cycle: 240 -> 160 -> 80
+                    if (osCpuSpeed == 240) osCpuSpeed = 160;
+                    else if (osCpuSpeed == 160) osCpuSpeed = 80;
+                    else osCpuSpeed = 240;
+                    
+                    _console.setCPUSpeed(osCpuSpeed);
+                    
+                    // Switch to OS namespace temporarily to save CPU Speed
+                    const char* currentGameName = activeGame->getName();
+                    _save.end();
+                    _save.begin("__os");
+                    _save.putInt("cpu_speed", osCpuSpeed);
+                    _save.end();
+                    _save.begin(currentGameName);
+                    
+                    SFX::menuEnter(_sound);
+                } else if (osOverlayCursor == 3) {
+                    Diagnostics::toggle();
+                    
+                    // Switch to OS namespace temporarily to save HUD state
+                    const char* currentGameName = activeGame->getName();
+                    _save.end();
+                    _save.begin("__os");
+                    _save.putBool("hud_visible", Diagnostics::isVisible());
+                    _save.end();
+                    _save.begin(currentGameName);
+                    
+                    SFX::menuEnter(_sound);
+                } else if (osOverlayCursor == 4) {
                     // Quit Game
                     osOverlayActive = false;
                     
@@ -215,33 +291,70 @@ void OS::run() {
         }
 
         // 2. CONDITIONAL DRAWING
-        if (activeGame->needsRedraw() || Diagnostics::isVisible() || osOverlayActive) {
+        if (activeGame->needsRedraw() || Diagnostics::isVisible() || osOverlayActive || osOverlayAnim > 0.0f) {
             _disp.clearBuffer();
             activeGame->draw(_console);
             
-            if (osOverlayActive) {
-                // Draw Quick Settings popup
-                _console.setDrawColor(0);
-                _console.drawBox(16, 8, 96, 48); // Black bg
-                _console.setDrawColor(1);
-                _console.drawFrame(16, 8, 96, 48); // White border
-                _console.drawHLine(16, 20, 96);
+            if (osOverlayAnim > 0.0f) {
+                // 1. Full Screen Dither Dimming (XOR checkerboard)
+                _console.beginScreenSpace();
+                _console.setDrawColor(Console::COLOR_XOR);
+                _console.drawDitherBox(0, 0, 128, 64, 2);
+                _console.endScreenSpace();
                 
-                int titleW = _console.strWidth("QUICK SETTINGS");
-                _console.drawStr(64 - (titleW/2), 17, "QUICK SETTINGS");
+                // 2. Centered Modal Dialog
+                int h = (int)(56 * osOverlayAnim);
+                int y = 4 + (56 - h) / 2;
                 
-                const char* items[] = {
-                    "Resume Game",
-                    _sound.isMuted() ? "Mute: ON" : "Mute: OFF",
-                    "Quit to Menu"
-                };
-                for (int i=0; i<3; i++) {
-                    int y = 30 + (i*11);
-                    _console.drawStr(34, y, items[i]);
-                    if (i == osOverlayCursor) {
-                        _console.drawStr(24, y, ">");
+                _console.beginScreenSpace();
+                
+                // Solid black background
+                _console.setDrawColor(Console::COLOR_BLACK);
+                _console.drawRBox(10, y, 108, h, 4);
+                
+                // White rounded border
+                _console.setDrawColor(Console::COLOR_WHITE);
+                _console.drawRFrame(10, y, 108, h, 4);
+                
+                // Content only if fully or mostly open
+                if (osOverlayAnim >= 0.9f) {
+                    _console.drawHLine(16, y + 11, 96);
+                    
+                    _console.setFont(u8g2_font_5x7_tf);
+                    _console.drawStrCentered(y + 9, "QUICK SETTINGS");
+                    
+                    const char* items[5];
+                    items[0] = "Resume Game";
+                    
+                    char soundBuf[16];
+                    snprintf(soundBuf, sizeof(soundBuf), "Audio: %s", _sound.isMuted() ? "OFF" : "ON");
+                    items[1] = soundBuf;
+                    
+                    char cpuBuf[20];
+                    snprintf(cpuBuf, sizeof(cpuBuf), "CPU: %s", (osCpuSpeed == 240) ? "Max 240M" : (osCpuSpeed == 160) ? "Bal 160M" : "Eco 80M");
+                    items[2] = cpuBuf;
+                    
+                    char hudBuf[20];
+                    snprintf(hudBuf, sizeof(hudBuf), "Debug HUD: %s", Diagnostics::isVisible() ? "ON" : "OFF");
+                    items[3] = hudBuf;
+                    
+                    items[4] = "Quit to Menu";
+                    
+                    for (int i = 0; i < 5; i++) {
+                        int itemY = y + 20 + (i * 8);
+                        if (i == osOverlayCursor) {
+                            _console.drawStr(18, itemY, ">");
+                        }
+                        _console.drawStr(25, itemY, items[i]);
                     }
+                    
+                    // Draw selection highlight pill
+                    int selectY = y + 20 + (osOverlayCursor * 8);
+                    _console.setDrawColor(Console::COLOR_XOR);
+                    _console.drawRBox(16, selectY - 7, 96, 9, 2);
                 }
+                
+                _console.endScreenSpace();
             }
 
             Diagnostics::draw(_console);
@@ -264,6 +377,9 @@ void OS::run() {
                     activeGame = rec->factory();
                     _save.begin(rec->name);  // Open game namespace
                     activeGame->onEnter(_console);
+#ifndef SIMULATOR
+                    setCpuFrequencyMhz(osCpuSpeed); // Apply configured CPU Speed
+#endif
                 }
             } else {
                 // Game wants to exit -> Return to the menu!
