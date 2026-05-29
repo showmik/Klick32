@@ -52,18 +52,47 @@ void SystemMenu::update(Console& ctx, float dt) {
         return; // Skip normal menu logic
     }
 
-    // ── Navigation (UPDATED FOR SLIDING) ──
-    if (ctx.repeat(Btn::LEFT)) {
-        _prevSelected = _selected;
-        _selected = (_selected == 0) ? *_gameCount - 1 : _selected - 1;
-        _slideOffset = -Console::W; // Start off-screen left
-        ctx.sfxMenuNav();
-    }
-    if (ctx.repeat(Btn::RIGHT)) {
-        _prevSelected = _selected;
-        _selected = (_selected + 1) % *_gameCount;
-        _slideOffset = Console::W;  // Start off-screen right
-        ctx.sfxMenuNav();
+    // ── Navigation ──
+    if (_viewMode == ViewMode::CONDENSED_GRID) {
+        uint8_t count = *_gameCount;
+        if (ctx.repeat(Btn::UP)) {
+            if (_selected >= Grid::COLS) {
+                _selected -= Grid::COLS;
+                ctx.sfxMenuNav();
+            }
+        }
+        if (ctx.repeat(Btn::DOWN)) {
+            if (_selected + Grid::COLS < count) {
+                _selected += Grid::COLS;
+                ctx.sfxMenuNav();
+            }
+        }
+        if (ctx.repeat(Btn::LEFT)) {
+            if (_selected % Grid::COLS > 0) {
+                _selected--;
+                ctx.sfxMenuNav();
+            }
+        }
+        if (ctx.repeat(Btn::RIGHT)) {
+            if ((_selected % Grid::COLS < Grid::COLS - 1) && (_selected + 1 < count)) {
+                _selected++;
+                ctx.sfxMenuNav();
+            }
+        }
+    } else {
+        // ── Normal Card Sliding Navigation ──
+        if (ctx.repeat(Btn::LEFT)) {
+            _prevSelected = _selected;
+            _selected = (_selected == 0) ? *_gameCount - 1 : _selected - 1;
+            _slideOffset = -Console::W; // Start off-screen left
+            ctx.sfxMenuNav();
+        }
+        if (ctx.repeat(Btn::RIGHT)) {
+            _prevSelected = _selected;
+            _selected = (_selected + 1) % *_gameCount;
+            _slideOffset = Console::W;  // Start off-screen right
+            ctx.sfxMenuNav();
+        }
     }
 
     // ── Animation Physics ──
@@ -86,6 +115,17 @@ void SystemMenu::update(Console& ctx, float dt) {
         ctx.toggleMute();
         if (!ctx.isMuted()) ctx.beep(800, 40); 
         ctx.saveBool("mute", ctx.isMuted()); // Persist setting
+    }
+    
+    // ── Toggle View Mode via MENU1 ──
+    if (ctx.justPressed(Btn::MENU1) && !ctx.pressed(Btn::MENU2)) {
+        if (_viewMode == ViewMode::CARDS) {
+            _viewMode = ViewMode::CONDENSED_GRID;
+        } else {
+            _viewMode = ViewMode::CARDS;
+        }
+        ctx.sfxMenuEnter();
+        _dirty = true;
     }
     
     // ── Open About Page ──
@@ -114,6 +154,55 @@ void SystemMenu::draw(Console& ctx) {
     
     if (_inAboutPage) {
         _drawAboutPage(ctx);
+        _dirty = false;
+        return;
+    }
+
+    if (_viewMode == ViewMode::CONDENSED_GRID) {
+        // 1. Calculate active page
+        uint8_t page = _selected / Grid::PAGE_LIMIT;
+        uint8_t startIdx = page * Grid::PAGE_LIMIT;
+        uint8_t endIdx = min((uint8_t)*_gameCount, (uint8_t)(startIdx + Grid::PAGE_LIMIT));
+        
+        ctx.setFont(u8g2_font_4x6_tr); // Compact high-readability font
+        
+        for (uint8_t i = startIdx; i < endIdx; i++) {
+            uint8_t slot = i - startIdx;
+            uint8_t row = slot / Grid::COLS;
+            uint8_t col = slot % Grid::COLS;
+            
+            int x = Grid::START_X + (col * (Grid::COL_W + Grid::GUTTER));
+            int y = Grid::START_Y + (row * Grid::ROW_H);
+            
+            // Draw selection pill in XOR if focused
+            if (i == _selected) {
+                ctx.setDrawColor(Console::COLOR_WHITE);
+                ctx.drawRBox(x - 2, y, Grid::COL_W + 2, Grid::ROW_H - 1, 2);
+                ctx.setDrawColor(Console::COLOR_BLACK);
+            } else {
+                ctx.setDrawColor(Console::COLOR_WHITE);
+            }
+            
+            // Draw tiny icon fallback (a small box or dot)
+            ctx.drawBox(x, y + 2, 5, 5);
+            
+            // Truncate game name to fit column limits
+            char trunc[12];
+            snprintf(trunc, sizeof(trunc), "%s", _games[i].name);
+            ctx.drawStr(x + 7, y + 7, trunc);
+        }
+        
+        // Draw footer pagination overrides
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
+        ctx.setFont(u8g2_font_5x7_tf);
+        ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[M1]Card View");
+        
+        char pageBuf[12];
+        snprintf(pageBuf, sizeof(pageBuf), "Page %u/%u", page + 1, (*_gameCount + Grid::PAGE_LIMIT - 1) / Grid::PAGE_LIMIT);
+        int pw = ctx.strWidth(pageBuf);
+        ctx.drawStr(Console::W - pw - Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, pageBuf);
+        
         _dirty = false;
         return;
     }
@@ -168,16 +257,15 @@ void SystemMenu::_drawGameCard(Console& ctx, uint8_t idx, int offsetX) {
     const uint8_t* cover = g.cover;
     const uint8_t* icon = g.icon;
 
-    // 1. Sharp Card Frame (Slides)
-    ctx.drawFrame(Layout::CARD_FRAME_X + offsetX, Layout::CARD_FRAME_Y, Layout::CARD_FRAME_W, Layout::CARD_FRAME_H);
-
     if (cover) {
-        // 2. Full-Card Cover Art (Slides) - Padding removed!
+        // 2. Full-Card Cover Art (Slides) - Edge-to-Edge borderless visual
         int coverX = Layout::CARD_FRAME_X + offsetX;
         int coverY = Layout::CARD_FRAME_Y; 
         ctx.drawBitmap(coverX, coverY, Layout::CARD_COVER_BPR, Layout::CARD_COVER_H, cover);
     } else {
-        // ... Keep existing fallback Icon & Text logic here ...
+        // 1. Sharp Card Frame (Slides) - Draw frame only if cover art is missing
+        ctx.drawFrame(Layout::CARD_FRAME_X + offsetX, Layout::CARD_FRAME_Y, Layout::CARD_FRAME_W, Layout::CARD_FRAME_H);
+
         int bounce = (millis() / 200) % 4;
         int floatOffset = (bounce == 3) ? 1 : bounce; 
         int iconY = Layout::CARD_ICON_Y - floatOffset;
@@ -216,7 +304,7 @@ void SystemMenu::_drawFooter(Console& ctx) {
     ctx.setFont(u8g2_font_5x7_tf);
     
     // Left Text
-    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B]About [A]Play");
+    ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B]About [M1]List [A]Play");
 
     // Right Text (Game Count)
     char countBuf[10];

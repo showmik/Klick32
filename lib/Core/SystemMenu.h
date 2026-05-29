@@ -6,6 +6,11 @@
 
 class SystemMenu : public GameBase {
 public:
+    enum class ViewMode : uint8_t {
+        CARDS,
+        CONDENSED_GRID
+    };
+
     // Takes references to the OS's game list and hardware
     SystemMenu(GameRecord* games, const uint8_t* gameCount, Battery* batt);
 
@@ -40,6 +45,7 @@ private:
     uint8_t        _animTick = 0;
     uint8_t        _arrowTick = 0;
     bool           _inAboutPage = false;
+    ViewMode       _viewMode = ViewMode::CARDS;
 
     // These should only appear ONCE in the class
     void _drawHeader(Console& ctx);
@@ -82,5 +88,17 @@ private:
         static constexpr int FTR_LINE_Y     = 55;
         static constexpr int FTR_TEXT_X     = 4;
         static constexpr int FTR_TEXT_Y     = 63;
+    };
+
+    struct Grid {
+        static constexpr int ROW_H = 10;        // Height of each list item row
+        static constexpr int COL_W = 56;        // Width of each item slot
+        static constexpr int COLS  = 2;
+        static constexpr int ROWS  = 4;
+        static constexpr int PAGE_LIMIT = 8;    // Max items per screen (COLS * ROWS)
+        
+        static constexpr int START_X = 4;       // Horizontal left offset
+        static constexpr int START_Y = 12;      // Vertical top offset
+        static constexpr int GUTTER  = 8;       // Horizontal separation margin
     };
 };
