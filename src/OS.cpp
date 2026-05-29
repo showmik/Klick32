@@ -163,8 +163,15 @@ void OS::run() {
                 SFX::menuBack(_sound);
             }
         }
+        
+        // 4. AUTO-SAVE WEAR LEVELING CACHE (Every 60 seconds)
+        static uint32_t lastSaveTime = 0;
+        if (now - lastSaveTime > 60000) {
+            _save.commit();
+            lastSaveTime = now;
+        }
 
-        // 4. FRAME TIMING
+        // 5. FRAME TIMING
         Diagnostics::tick();
         uint32_t elapsed = millis() - now;
         if (elapsed < FRAME_MS) {
