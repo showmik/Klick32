@@ -136,14 +136,16 @@ void PauseScene::draw(Console& ctx) {
 
 The `Console` object (passed as `ctx`) is your sole interface to the hardware. You never include `U8g2` or `Preferences` directly in your game files.
 
-### 5.1 Input Polling
-Read button states during `update()`:
-* `ctx.pressed(Btn::A)`: Returns true every frame the button is held. Good for continuous movement (e.g., accelerating a car).
-* `ctx.justPressed(Btn::A)`: Returns true for exactly one frame when the button is first pushed. Good for single actions (e.g., jumping, menu selection).
-* `ctx.justReleased(Btn::A)`: Returns true when the button is let go.
-* `ctx.repeat(Btn::UP)`: Returns true on press, and then pulses true repeatedly if held (ideal for navigating menus quickly).
+### 8. Input (Buttons)
+Read inputs via the `ctx` object in `update()`:
+- `ctx.pressed(Btn::A)` — true as long as held.
+- `ctx.justPressed(Btn::A)` — true only on the exact frame it was pressed down.
+- `ctx.justReleased(Btn::A)` — true only on the frame it was let go.
 
 Available buttons: `UP`, `DOWN`, `LEFT`, `RIGHT`, `A`, `B`, `MENU1`, `MENU2`.
+
+> **Note on MENU2:** The Klick32 OS intercepts `MENU2` to open the universal **Quick Settings** overlay (which pauses the game and allows muting audio or quitting). You should avoid using `MENU2` for in-game actions, as it will physically suspend your game loop!
+> Holding `MENU1` + `MENU2` toggles the Developer Diagnostics HUD.
 
 ### 5.2 Drawing
 All drawing is automatically translated by the Camera system (see Section 10).

@@ -114,21 +114,96 @@ void OS::run() {
         if (dt <= 0.001f) dt = 0.001f;
         lastTime = now;
 
+        static bool osOverlayActive = false;
+        static int  osOverlayCursor = 0;
+
         _input.update();
 
-        if (_console.justPressed(Btn::MENU2)) {
+        if (_console.pressed(Btn::MENU1) && _console.justPressed(Btn::MENU2)) {
             Diagnostics::toggle();
+            osOverlayActive = false;
+        } else if (activeGame != &_sysMenu && _console.justPressed(Btn::MENU2)) {
+            osOverlayActive = !osOverlayActive;
+            osOverlayCursor = 0;
+            if (osOverlayActive) SFX::menuEnter(_sound);
+            else SFX::menuBack(_sound);
         }
 
         // 1. UPDATE LOGIC
-        Diagnostics::markUpdateStart();
-        activeGame->update(_console, dt);
-        Diagnostics::markUpdateEnd();
+        if (osOverlayActive) {
+            if (_console.justPressed(Btn::UP)) {
+                osOverlayCursor--;
+                if (osOverlayCursor < 0) osOverlayCursor = 2;
+                SFX::menuNav(_sound);
+            }
+            if (_console.justPressed(Btn::DOWN)) {
+                osOverlayCursor++;
+                if (osOverlayCursor > 2) osOverlayCursor = 0;
+                SFX::menuNav(_sound);
+            }
+            if (_console.justPressed(Btn::A)) {
+                if (osOverlayCursor == 0) {
+                    SFX::menuEnter(_sound);
+                    osOverlayActive = false; // Resume
+                } else if (osOverlayCursor == 1) {
+                    _sound.toggleMute(); // Toggle Mute
+                    SFX::menuEnter(_sound);
+                } else if (osOverlayCursor == 2) {
+                    // Quit Game
+                    osOverlayActive = false;
+                    
+                    activeGame->onExit(_console);
+                    _save.end(); // triggers commit
+#ifndef SIMULATOR
+                    setCpuFrequencyMhz(240);
+#endif
+                    activeGame = &_sysMenu;
+                    _save.begin("__os");
+                    activeGame->onEnter(_console);
+                    SFX::menuBack(_sound);
+                    continue; // Skip the rest of this frame
+                }
+            }
+            if (_console.justPressed(Btn::B)) {
+                osOverlayActive = false;
+                SFX::menuBack(_sound);
+            }
+        } else {
+            Diagnostics::markUpdateStart();
+            activeGame->update(_console, dt);
+            Diagnostics::markUpdateEnd();
+        }
 
         // 2. CONDITIONAL DRAWING
-        if (activeGame->needsRedraw() || Diagnostics::isVisible()) {
+        if (activeGame->needsRedraw() || Diagnostics::isVisible() || osOverlayActive) {
             _disp.clearBuffer();
             activeGame->draw(_console);
+            
+            if (osOverlayActive) {
+                // Draw Quick Settings popup
+                _console.setDrawColor(0);
+                _console.drawBox(16, 8, 96, 48); // Black bg
+                _console.setDrawColor(1);
+                _console.drawFrame(16, 8, 96, 48); // White border
+                _console.drawHLine(16, 20, 96);
+                
+                int titleW = _console.strWidth("QUICK SETTINGS");
+                _console.drawStr(64 - (titleW/2), 17, "QUICK SETTINGS");
+                
+                const char* items[] = {
+                    "Resume Game",
+                    _sound.isMuted() ? "Mute: ON" : "Mute: OFF",
+                    "Quit to Menu"
+                };
+                for (int i=0; i<3; i++) {
+                    int y = 30 + (i*11);
+                    _console.drawStr(34, y, items[i]);
+                    if (i == osOverlayCursor) {
+                        _console.drawStr(24, y, ">");
+                    }
+                }
+            }
+
             Diagnostics::draw(_console);
             _disp.sendBuffer();
 #ifdef SIMULATOR
