@@ -289,6 +289,61 @@ void DinoPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     }
 }
 
+void DinoPlayScene::saveSnapshot(Console& ctx) {
+    ctx.saveBool("dno_duck", _isDucking);
+    ctx.saveFloat("dno_y", _dinoY);
+    ctx.saveFloat("dno_vy", _dinoVY);
+    ctx.saveBool("dno_gnd", _onGround);
+    ctx.saveUInt("dno_coyo", _coyoteFrames);
+    ctx.saveUInt("dno_jump", _jumpBuffer);
+    ctx.saveUInt("dno_mile", _lastMilestone);
+    ctx.saveUInt("dno_flsh", _flashTimer);
+    ctx.saveUInt("dno_blnk", _blinkTimer);
+    ctx.saveFloat("dno_spd", _speed);
+    
+    ctx.saveBytes("dno_obs", _obs, sizeof(_obs));
+    ctx.saveBytes("dno_cld", _clouds, sizeof(_clouds));
+    ctx.saveBytes("dno_dst", _dust, sizeof(_dust));
+    ctx.saveBytes("dno_swt", _sweat, sizeof(_sweat));
+    
+    ctx.saveUInt("dno_frm", _frameCnt);
+    ctx.saveUInt("dno_atim", _animTimer);
+    ctx.saveUInt("dno_afrm", _animFrame);
+    
+    if (_data) {
+        ctx.saveUInt("dno_score", _data->score);
+    }
+}
+
+void DinoPlayScene::loadSnapshot(Console& ctx) {
+    if (!ctx.hasSave("dno_y")) return;
+    
+    _isDucking = ctx.loadBool("dno_duck");
+    _dinoY = ctx.loadFloat("dno_y");
+    _dinoVY = ctx.loadFloat("dno_vy");
+    _onGround = ctx.loadBool("dno_gnd");
+    _coyoteFrames = ctx.loadUInt("dno_coyo");
+    _jumpBuffer = ctx.loadUInt("dno_jump");
+    _lastMilestone = ctx.loadUInt("dno_mile");
+    _flashTimer = ctx.loadUInt("dno_flsh");
+    _blinkTimer = ctx.loadUInt("dno_blnk");
+    _speed = ctx.loadFloat("dno_spd");
+    
+    ctx.loadBytes("dno_obs", _obs, sizeof(_obs));
+    ctx.loadBytes("dno_cld", _clouds, sizeof(_clouds));
+    ctx.loadBytes("dno_dst", _dust, sizeof(_dust));
+    ctx.loadBytes("dno_swt", _sweat, sizeof(_sweat));
+    
+    _frameCnt = ctx.loadUInt("dno_frm");
+    _animTimer = ctx.loadUInt("dno_atim");
+    _animFrame = ctx.loadUInt("dno_afrm");
+    
+    if (_data) {
+        _data->score = ctx.loadUInt("dno_score");
+        _data->speed = _speed;
+    }
+}
+
 void DinoPlayScene::draw(Console& ctx) {
     drawField(ctx, false);
 }
@@ -510,6 +565,7 @@ void DinoGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
 
     _play.setData(&_data);
     _play.setEngine(&_camera, &_particles);
+    setSnapshotScene(&_play);
 
     _dead.setData(&_data);
     _dead.setEngine(&_camera, &_particles);

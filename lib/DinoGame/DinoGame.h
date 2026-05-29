@@ -41,6 +41,9 @@ public:
     void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 
+    void saveSnapshot(Console& ctx) override;
+    void loadSnapshot(Console& ctx) override;
+
     void drawField(Console& ctx, bool isDead) const;
 
     float getSpeed() const { return _speed; }
