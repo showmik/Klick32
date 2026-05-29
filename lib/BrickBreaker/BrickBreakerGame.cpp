@@ -713,7 +713,7 @@ void BBGameOverScene::draw(Console& ctx) {
 
 // ─── BrickBreakerGame ───────────────────────────────────────────────────────
 
-void BrickBreakerGame::onEnter(Console& ctx) {
+void BrickBreakerGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _data.hiScore = ctx.loadHiScore();
     _play.setData(&_data);
     _play.setEngine(&_camera, &_particles);

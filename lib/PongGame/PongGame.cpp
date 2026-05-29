@@ -345,7 +345,7 @@ void PongGameOverScene::draw(Console& ctx) {
 // PongGame  — just wires scenes and delegates
 // ═════════════════════════════════════════════════════════════════════════════
 
-void PongGame::onEnter(Console& ctx) {
+void PongGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _play.setEngine(&_camera, &_particles);
     
     _gameover.setState(_play.getStatePtr(), _play.getPlayerWonPtr());

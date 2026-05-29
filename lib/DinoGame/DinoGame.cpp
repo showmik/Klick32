@@ -517,7 +517,7 @@ void DinoDeadScene::draw(Console& ctx) {
 // DinoGame - Framework Integration
 // ═════════════════════════════════════════════════════════════════════════════
 
-void DinoGame::onEnter(Console& ctx) {
+void DinoGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _data.hiScore = ctx.loadHiScore();
 
     _play.setData(&_data);

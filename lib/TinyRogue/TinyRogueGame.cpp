@@ -2392,7 +2392,7 @@ void RogueInventoryScene::draw(Console& ctx) {
 // TinyRogueGame - OS Registration Hook
 // ═════════════════════════════════════════════════════════════════════════════
 
-void TinyRogueGame::onEnter(Console& ctx) {
+void TinyRogueGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _data.hiScore = ctx.loadHiScore();
     
     bool loaded = false;

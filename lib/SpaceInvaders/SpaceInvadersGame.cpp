@@ -353,7 +353,7 @@ void SIGameOverScene::draw(Console& ctx) {
 // ═════════════════════════════════════════════════════════════════════════════
 // SpaceInvadersGame - OS Registration Hook
 // ═════════════════════════════════════════════════════════════════════════════
-void SpaceInvadersGame::onEnter(Console& ctx) {
+void SpaceInvadersGame::onEnter(Console& ctx) { ctx.setCPUSpeed(160);
     _data.hiScore = ctx.loadHiScore();
 
     _play.setData(&_data);

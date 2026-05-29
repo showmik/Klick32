@@ -483,7 +483,7 @@ void SnakeDeadScene::draw(Console& ctx) {
 // SnakeGame — Framework Integration
 // ═════════════════════════════════════════════════════════════════════════════
 
-void SnakeGame::onEnter(Console& ctx) {
+void SnakeGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _data.hiScore = ctx.loadUInt("hiscore", 0);
     ctx.loadStr("hiname", _data.hiName, sizeof(_data.hiName), "AAA");
 
