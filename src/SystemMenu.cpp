@@ -44,7 +44,7 @@ void SystemMenu::update(Console& ctx, float dt) {
     
     // ── About Page Logic ──
     if (_inAboutPage) {
-        if (ctx.justPressed(Btn::B)) {
+        if (ctx.justPressed(Btn::B) || ctx.justPressed(Btn::MENU1)) {
             _inAboutPage = false;
             ctx.sfxMenuBack();
             _dirty = true;
@@ -226,23 +226,58 @@ void SystemMenu::_drawFooter(Console& ctx) {
 }
 
 void SystemMenu::_drawAboutPage(Console& ctx) {
-    ctx.setFont(u8g2_font_ncenB08_tr);
-    ctx.drawStrCentered(22, "Klick32 OS");
+    // 1. Draw a premium solid white header bar with black text
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    ctx.drawBox(0, 0, Console::W, 11);
     
-    ctx.setFont(u8g2_font_4x6_tf);
-    ctx.drawStrCentered(32, "Version 1.0.0");
-    ctx.drawStrCentered(40, "Built for ESP32-S3");
+    ctx.setDrawColor(Console::COLOR_BLACK);
+    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.drawStrCentered(8, "SYSTEM INFORMATION");
+    
+    // 2. Draw refined tabular system info in white
+    ctx.setDrawColor(Console::COLOR_WHITE);
+    ctx.setFont(u8g2_font_4x6_tr); // Sleek tiny font
+    
+    // Left column (labels) at x = 6
+    ctx.drawStr(6, 22, "OS Name:");
+    ctx.drawStr(6, 30, "Firmware:");
+    ctx.drawStr(6, 38, "Processor:");
+    ctx.drawStr(6, 46, "System RAM:");
+    
+    // Right column (values) starting at x = 58
+    ctx.drawStr(58, 22, FW_NAME " OS");
+    ctx.drawStr(58, 30, FW_VERSION);
     
 #ifdef SIMULATOR
-    ctx.drawStrCentered(48, "Environment: Simulator");
+    ctx.drawStr(58, 38, "PC (Simulator)");
+    ctx.drawStr(58, 46, "N/A (Virtual)");
 #else
+    ctx.drawStr(58, 38, "ESP32-S3");
+    
     uint32_t freeHeap = ESP.getFreeHeap() / 1024;
-    char ramStr[32];
-    sprintf(ramStr, "Free RAM: %lu KB", freeHeap);
-    ctx.drawStrCentered(48, ramStr);
+    char ramStr[24];
+    snprintf(ramStr, sizeof(ramStr), "%lu KB Free", freeHeap);
+    ctx.drawStr(58, 46, ramStr);
 #endif
 
-    // Footer override for About Page
+    // 3. Draw a tiny battery indicator widget aligned in the top right
+    char battStr[12];
+    if (_batt->isCharging()) {
+        snprintf(battStr, sizeof(battStr), "%u%% +", _battPct);
+    } else {
+        snprintf(battStr, sizeof(battStr), "%u%%", _battPct);
+    }
+    int strW = ctx.strWidth(battStr);
+    ctx.drawStr(108 - strW, 22, battStr);
+    
+    ctx.drawFrame(112, 17, 10, 6); // outline
+    ctx.drawBox(122, 19, 1, 2);    // tip
+    
+    int fillW = (int)(8 * (_battPct / 100.0f));
+    if (fillW > 8) fillW = 8;
+    ctx.drawBox(113, 18, fillW, 4);
+
+    // 4. Footer override for About Page
     ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
     ctx.setFont(u8g2_font_5x7_tf);
     ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B/M1] Back");
