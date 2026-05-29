@@ -7,6 +7,15 @@
 #include "ParticleManager.h"
 #include "SceneGame.h"
 
+enum class TurnAction : uint8_t {
+    NONE = 0,
+    COMPLETED = 1,
+    OPEN_ALTAR = 2,
+    OPEN_MERCHANT = 3,
+    DESCEND_STAIRS = 4,
+    GAME_OVER = 5
+};
+
 // ─── Game Data Structures ───────────────────────────────────────────────────
 
 enum class ItemType : uint8_t { 
@@ -86,6 +95,8 @@ struct RogueSharedData {
     Item equippedWeapon;
     Item equippedArmor;
     Item equippedAccessory;
+    char hudMessage[32] = "";
+    uint8_t hudMessageTimer = 0;
 };
 
 struct BSPNode {
@@ -165,8 +176,7 @@ private:
     RogueSharedData* _data   = nullptr;
     Camera*          _camera = nullptr;
     ParticleManager* _particles = nullptr;
-    char _hudMessage[32] = "";
-    uint8_t _hudMessageTimer = 0;
+    
     bool _resumed = false;
     
     // Fade Transition State
@@ -178,20 +188,12 @@ private:
     uint8_t _altarMenuCursor = 0;
     int _activeAltarX = 0;
     int _activeAltarY = 0;
-    Monster* _getMonsterAt(int x, int y) const;
-    void _processMonsterTurns(Console& ctx, SceneManager& sm);
+    
 
-    void _generateMap();            // The "Router"
-    void _generateBSPMap();         // The Castle generator
-    void _generateCaveMap();        // The Cave generator
-    void _generateMazeMap();        // NEW: The Labyrinth generator
-    void _generateBossMap();        // The Boss Arena generator
-    void _spawnMonsters();          // Shared monster spawner
+              // Shared monster spawner
 
-    bool _processTurn(Console& ctx, SceneManager& sm, int dx, int dy);
+    
     void _updateCamera(bool snap = false);
-
-    void _spawnHitEffect(int gridX, int gridY);
 };
 
 class RoguePauseScene : public Scene {

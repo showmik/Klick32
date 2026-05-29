@@ -1,60 +1,10 @@
+#include "TinyRogueMapGen.h"
+#include "TinyRogueCombat.h"
 #include "TinyRogueGame.h"
 #include "GameRegistry.h"
 #include "TinyRogueSprites.h"
 #include "CommonScreens.h"
 
-static int getWeaponAttack(ItemType t) {
-    if (t == ItemType::DAGGER) return 1;
-    if (t == ItemType::SWORD) return 2;
-    if (t == ItemType::AXE) return 3;
-    return 0;
-}
-
-static int getArmorDefense(ItemType t) {
-    if (t == ItemType::LEATHER) return 1;
-    if (t == ItemType::CHAINMAIL) return 2;
-    if (t == ItemType::PLATE) return 3;
-    return 0;
-}
-
-static const char* getItemName(ItemType t) {
-    switch(t) {
-        case ItemType::POTION: return "Potion";
-        case ItemType::ELIXIR: return "Elixir";
-        case ItemType::SCROLL_UPGRADE: return "Upg Scroll";
-        case ItemType::THROWING_DART: return "Dart";
-        case ItemType::DAGGER: return "Dagger";
-        case ItemType::SWORD: return "Sword";
-        case ItemType::AXE: return "Axe";
-        case ItemType::LEATHER: return "Leather";
-        case ItemType::CHAINMAIL: return "Chainmail";
-        case ItemType::PLATE: return "Plate";
-        case ItemType::RING_VAMPIRE: return "Vamp Ring";
-        case ItemType::RING_WEALTH: return "Wealth Ring";
-        case ItemType::RING_OWL: return "Owl Ring";
-        case ItemType::RING_BERSERKER: return "Berserk Ring";
-        default: return "-";
-    }
-}
-
-static void recalcStats(RogueSharedData* _data) {
-    _data->player.attack = _data->player.baseAttack + getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level;
-    _data->player.defense = _data->player.baseDefense + getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level;
-    
-    // Hard Stat Caps & Secondary Stats
-    _data->player.critChance = (_data->equippedWeapon.type == ItemType::DAGGER) ? 25 : 10;
-    _data->player.critChance += _data->equippedWeapon.level * 2;
-    if (_data->player.critChance > 50) _data->player.critChance = 50;
-
-    _data->player.dodge = (_data->equippedArmor.type == ItemType::LEATHER) ? 15 : 5;
-    if (_data->equippedAccessory.type == ItemType::RING_OWL) _data->player.dodge += 15;
-    if (_data->player.dodge > 60) _data->player.dodge = 60;
-
-    // Sword: +1 Passive Defense (Parrying)
-    if (_data->equippedWeapon.type == ItemType::SWORD) {
-        _data->player.defense += 1;
-    }
-}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // RogueTitleScene
@@ -87,7 +37,7 @@ void RoguePlayScene::onEnter(Console& ctx) {
     _altarMenuOpen = false;
     if (_resumed) {
         _resumed = false;
-        recalcStats(_data);
+        TinyRogueCombat::recalcStats(_data);
         _updateCamera(true);
         isAiming = false;
         return;
@@ -104,672 +54,26 @@ void RoguePlayScene::onEnter(Console& ctx) {
     _data->equippedWeapon.type = ItemType::NONE;
     _data->equippedArmor.type = ItemType::NONE;
     _data->equippedAccessory.type = ItemType::NONE;
-    recalcStats(_data);
+    TinyRogueCombat::recalcStats(_data);
     for (int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
         _data->inventory[i].type = ItemType::NONE;
     }
-    _generateMap();
+    TinyRogueMapGen::generateMap(_data);
 }
 
-void RoguePlayScene::_spawnHitEffect(int gridX, int gridY) {
-    int px = (gridX * 8) + 4;
-    int py = (gridY * 8) + 4;
-    for (int i = 0; i < 4; i++) {
-        _particles->spawnPixel(px, py, (random(-20, 21) / 10.0f), (random(-20, 21) / 10.0f), random(5, 12));
-    }
-}
 
-void RoguePlayScene::_generateMap() {
-    // 1. Reset Fog of War
-    memset(_data->explored, 0, sizeof(_data->explored));
 
-    if (_data->currentDepth % 5 == 0) _data->currentBiome = Biome::BOSS_ARENA;
-    else if (_data->currentDepth < 5) _data->currentBiome = Biome::SEWERS;
-    else if (_data->currentDepth < 10) _data->currentBiome = Biome::PRISON;
-    else _data->currentBiome = Biome::DEEP_CAVES;
 
-    // Roll for Level Mutator (25% chance, except on Boss levels)
-    _data->currentMutator = LevelMutator::NONE;
-    if (_data->currentDepth % 5 != 0 && random(100) < 25) {
-        int m = random(6);
-        if (m == 0) _data->currentMutator = LevelMutator::PITCH_BLACK;
-        else if (m == 1) _data->currentMutator = LevelMutator::INFESTED;
-        else if (m == 2) _data->currentMutator = LevelMutator::TREASURE_TROVE;
-        else if (m == 3) _data->currentMutator = LevelMutator::FLOODED;
-        else if (m == 4) _data->currentMutator = LevelMutator::OVERGROWN;
-        else if (m == 5) _data->currentMutator = LevelMutator::LABYRINTH;
-    }
 
-    // 2. Biomes and Boss Arenas
-    bool isBSP = false; // FIX: Track if map is BSP
-    if (_data->currentDepth % 5 == 0) {
-        _data->currentBiome = Biome::BOSS_ARENA;
-        _generateBossMap();
-    } else {
-        if (_data->currentDepth < 5) _data->currentBiome = Biome::SEWERS;
-        else if (_data->currentDepth < 10) _data->currentBiome = Biome::PRISON;
-        else _data->currentBiome = Biome::DEEP_CAVES;
 
-        if (_data->currentMutator == LevelMutator::LABYRINTH) {
-            _generateMazeMap();
-        } else if (_data->currentDepth < 5) {
-            _generateCaveMap();
-        } else if (_data->currentDepth < 10) {
-            _generateBSPMap();
-            isBSP = true;
-        } else {
-            if (random(100) < 50) { _generateBSPMap(); isBSP = true; }
-            else _generateCaveMap();
-        }
-    }
 
-    // 3. Shared Spawning & Setup
-    _data->keys = 0;
-    
-    // FIX: Only spawn doors on non-boss levels that use the BSP generator.
-    // Cave and Maze maps have disconnected areas that break the choke-point key/chest logic.
-    if (_data->currentDepth % 5 != 0 && isBSP) {
-        // Find stairs to ensure they are always reachable
-        int sx = -1, sy = -1, totalFloors = 0;
-        for (int y = 0; y < RogueSharedData::MAP_H; y++) {
-            for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-                if (_data->map[y][x] == TileType::STAIRS_DOWN) { sx = x; sy = y; }
-                if (_data->map[y][x] != TileType::WALL) totalFloors++;
-            }
-        }
 
-        struct Coord { uint8_t x, y; };
-        static Coord corridors[300];
-        int corridorCount = 0;
-        
-        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                if (_data->map[y][x] == TileType::CORRIDOR) {
-                    if (corridorCount < 300) corridors[corridorCount++] = {(uint8_t)x, (uint8_t)y};
-                }
-            }
-        }
 
-        // Shuffle corridors
-        for (int i = 0; i < corridorCount; i++) {
-            int j = random(corridorCount);
-            Coord temp = corridors[i];
-            corridors[i] = corridors[j];
-            corridors[j] = temp;
-        }
 
-        static bool reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
-        static Coord queue[1024];
 
-        // Find a valid choke point
-        for (int i = 0; i < corridorCount; i++) {
-            Coord c = corridors[i];
-            _data->map[c.y][c.x] = TileType::LOCKED_DOOR;
-            
-            memset(reachable, 0, sizeof(reachable));
-            int head = 0, tail = 0;
-            queue[tail++] = {(uint8_t)_data->player.x, (uint8_t)_data->player.y};
-            reachable[_data->player.y][_data->player.x] = true;
-            
-            int reachableCount = 0;
-            while(head < tail) {
-                Coord curr = queue[head++];
-                reachableCount++;
-                
-                int dx[] = {0, 0, -1, 1};
-                int dy[] = {-1, 1, 0, 0};
-                for(int d = 0; d < 4; d++) {
-                    int nx = curr.x + dx[d];
-                    int ny = curr.y + dy[d];
-                    if (nx >= 0 && nx < RogueSharedData::MAP_W && ny >= 0 && ny < RogueSharedData::MAP_H) {
-                        if (!reachable[ny][nx]) {
-                            TileType t = _data->map[ny][nx];
-                            if (t != TileType::WALL && t != TileType::LOCKED_DOOR) {
-                                reachable[ny][nx] = true;
-                                queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Check if valid bridge (Stairs are reachable, but some floors are blocked off)
-            if (reachable[sy][sx] && reachableCount < totalFloors) {
-                // 1. Place Key in reachable area
-                Coord validKeys[400]; int validKeyCount = 0;
-                for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-                    for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                        if (reachable[y][x] && _data->map[y][x] == TileType::FLOOR && (x != _data->player.x || y != _data->player.y)) {
-                            if (validKeyCount < 400) validKeys[validKeyCount++] = {(uint8_t)x, (uint8_t)y};
-                        }
-                    }
-                }
-                
-                if (validKeyCount > 0) {
-                    Coord kp = validKeys[random(validKeyCount)];
-                    _data->map[kp.y][kp.x] = TileType::KEY;
-                    
-                    // 2. Place Chest in isolated area to guarantee reward
-                    Coord validChests[400]; int validChestCount = 0;
-                    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-                        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                            if (!reachable[y][x] && _data->map[y][x] == TileType::FLOOR) {
-                                if (validChestCount < 400) validChests[validChestCount++] = {(uint8_t)x, (uint8_t)y};
-                            }
-                        }
-                    }
-                    if (validChestCount > 0) {
-                        Coord cp = validChests[random(validChestCount)];
-                        _data->map[cp.y][cp.x] = TileType::CHEST;
-                    }
-                    break; // Successfully placed door!
-                }
-            }
-            // Revert if not a valid choke point
-            _data->map[c.y][c.x] = TileType::CORRIDOR;
-        }
-    }
 
-    // Apply Flooded and Overgrown mutators
-    if (_data->currentMutator == LevelMutator::FLOODED || _data->currentMutator == LevelMutator::OVERGROWN) {
-        TileType targetTile = (_data->currentMutator == LevelMutator::FLOODED) ? TileType::WATER : TileType::TALL_GRASS;
-        int chance = (_data->currentMutator == LevelMutator::FLOODED) ? 35 : 45;
-        
-        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                if (_data->map[y][x] == TileType::FLOOR && (x != _data->player.x || y != _data->player.y)) {
-                    if (random(100) < chance) {
-                        _data->map[y][x] = targetTile;
-                    }
-                }
-            }
-        }
-    }
 
-    _spawnMonsters();
-    _updateCamera(true); 
-    isAiming = false;
 
-    // Display Level Entry Message
-    if (_data->currentMutator == LevelMutator::PITCH_BLACK) {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Pitch Black...");
-    } else if (_data->currentMutator == LevelMutator::INFESTED) {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Infested!");
-    } else if (_data->currentMutator == LevelMutator::TREASURE_TROVE) {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Treasure Trove!");
-    } else if (_data->currentMutator == LevelMutator::FLOODED) {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Flooded!");
-    } else if (_data->currentMutator == LevelMutator::OVERGROWN) {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Overgrown!");
-    } else if (_data->currentMutator == LevelMutator::LABYRINTH) {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Labyrinth!");
-    } else {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Floor %d", _data->currentDepth);
-    }
-    _hudMessageTimer = 80;
-}
-
-void RoguePlayScene::_generateBSPMap() {
-    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
-        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-            _data->map[y][x] = TileType::WALL;
-        }
-    }
-
-    const int MAX_NODES = 31;
-    BSPNode nodes[MAX_NODES];
-    int numNodes = 0;
-
-    nodes[numNodes++] = { {1, 1, RogueSharedData::MAP_W - 2, RogueSharedData::MAP_H - 2}, {0,0,0,0}, -1, -1 };
-
-    for (int i = 0; i < numNodes; i++) {
-        if (numNodes >= MAX_NODES - 1) break;
-
-        Rect b = nodes[i].bounds;
-        bool splitH = random(2) == 0;
-        if (b.w > b.h && b.w / b.h >= 1.25f) splitH = false; 
-        else if (b.h > b.w && b.h / b.w >= 1.25f) splitH = true; 
-
-        int maxSplit = (splitH ? b.h : b.w) - 6; 
-        if (maxSplit <= 6) continue; 
-
-        int splitLoc = random(6, maxSplit);
-
-        nodes[i].leftNode = numNodes;
-        nodes[i].rightNode = numNodes + 1;
-
-        if (splitH) {
-            nodes[numNodes++] = { {b.x, b.y, b.w, splitLoc}, {0,0,0,0}, -1, -1 };
-            nodes[numNodes++] = { {b.x, b.y + splitLoc, b.w, b.h - splitLoc}, {0,0,0,0}, -1, -1 };
-        } else {
-            nodes[numNodes++] = { {b.x, b.y, splitLoc, b.h}, {0,0,0,0}, -1, -1 };
-            nodes[numNodes++] = { {b.x + splitLoc, b.y, b.w - splitLoc, b.h}, {0,0,0,0}, -1, -1 };
-        }
-    }
-
-    int leafCount = 0;
-    int leafIndices[16];
-
-    for (int i = 0; i < numNodes; i++) {
-        if (nodes[i].leftNode == -1 && nodes[i].rightNode == -1) { 
-            Rect b = nodes[i].bounds;
-            int rw = random(4, b.w - 1);
-            int rh = random(4, b.h - 1);
-            int rx = b.x + random(1, b.w - rw);
-            int ry = b.y + random(1, b.h - rh);
-
-            nodes[i].room = {rx, ry, rw, rh};
-
-            for (int y = ry; y < ry + rh; y++) {
-                for (int x = rx; x < rx + rw; x++) {
-                    _data->map[y][x] = TileType::FLOOR;
-                }
-            }
-            if (leafCount < 16) leafIndices[leafCount++] = i;
-        }
-    }
-
-    for (int i = numNodes - 1; i >= 0; i--) {
-        if (nodes[i].leftNode != -1) {
-            BSPNode& l = nodes[nodes[i].leftNode];
-            BSPNode& r = nodes[nodes[i].rightNode];
-
-            nodes[i].room = l.room; 
-            int lx = l.room.x + l.room.w / 2;
-            int ly = l.room.y + l.room.h / 2;
-            int rx = r.room.x + r.room.w / 2;
-            int ry = r.room.y + r.room.h / 2;
-
-            int curX = lx, curY = ly;
-            
-            if (random(2) == 0) {
-                while (curX != rx) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(rx - curX); }
-                while (curY != ry) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(ry - curY); }
-            } else {
-                while (curY != ry) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(ry - curY); }
-                while (curX != rx) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(rx - curX); }
-            }
-        }
-    }
-
-    if (leafCount > 0) {
-        Rect firstRoom = nodes[leafIndices[0]].room;
-        _data->player.x = firstRoom.x + firstRoom.w / 2;
-        _data->player.y = firstRoom.y + firstRoom.h / 2;
-
-        Rect lastRoom = nodes[leafIndices[leafCount - 1]].room;
-        _data->map[lastRoom.y + lastRoom.h / 2][lastRoom.x + lastRoom.w / 2] = TileType::STAIRS_DOWN;
-        
-        for (int i = 1; i < leafCount - 1; i++) {
-            int chestChance = (_data->currentMutator == LevelMutator::TREASURE_TROVE) ? 60 : 30;
-            if (random(100) < chestChance) {
-                Rect r = nodes[leafIndices[i]].room;
-                _data->map[r.y + 1][r.x + 1] = TileType::CHEST;
-            }
-        }
-    }
-
-    // Spawn exactly 1 Merchant on an open floor tile
-    int mx, my;
-    do {
-        mx = random(1, RogueSharedData::MAP_W - 1);
-        my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
-    _data->map[my][mx] = TileType::MERCHANT;
-
-    // Spawn Altar (30% chance per floor)
-    if (random(100) < 30) {
-        int ax, ay;
-        do {
-            ax = random(1, RogueSharedData::MAP_W - 1);
-            ay = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
-        _data->map[ay][ax] = TileType::ALTAR;
-    }
-
-    // Spawn Spikes
-    int numSpikes = random(2, 7);
-    if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numSpikes *= 2;
-    for (int i = 0; i < numSpikes; i++) {
-        int sx, sy;
-        do {
-            sx = random(1, RogueSharedData::MAP_W - 1);
-            sy = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
-        _data->map[sy][sx] = TileType::SPIKE;
-    }
-
-    // Spawn Tall Grass
-    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-            if (_data->map[y][x] == TileType::FLOOR && random(100) < 15) {
-                _data->map[y][x] = TileType::TALL_GRASS;
-            }
-        }
-    }
-
-    // Spawn Rubble and Webs
-    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-            if (_data->map[y][x] == TileType::FLOOR) {
-                if (random(100) < 4) _data->map[y][x] = TileType::RUBBLE;
-                if (random(100) < 3) _data->map[y][x] = TileType::WEB;
-            }
-        }
-    }
-}
-
-void RoguePlayScene::_generateCaveMap() {
-    // 1. Initial Noise (45% walls)
-    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
-        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-            if (x == 0 || x == RogueSharedData::MAP_W - 1 || y == 0 || y == RogueSharedData::MAP_H - 1) {
-                _data->map[y][x] = TileType::WALL; // Hard borders
-            } else {
-                _data->map[y][x] = (random(100) < 45) ? TileType::WALL : TileType::FLOOR;
-            }
-        }
-    }
-
-    // 2. Cellular Automata Smoothing Passes
-    static TileType temp[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
-    for (int i = 0; i < 4; i++) {
-        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                int wallCount = 0;
-                for (int dy = -1; dy <= 1; dy++) {
-                    for (int dx = -1; dx <= 1; dx++) {
-                        if (dx == 0 && dy == 0) continue;
-                        if (_data->map[y+dy][x+dx] == TileType::WALL) wallCount++;
-                    }
-                }
-                
-                // Rule: Become wall if crowded, become floor if open
-                if (wallCount >= 5) temp[y][x] = TileType::WALL;
-                else if (wallCount <= 3) temp[y][x] = TileType::FLOOR;
-                else temp[y][x] = _data->map[y][x];
-            }
-        }
-        // Copy back
-        for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-            for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                _data->map[y][x] = temp[y][x];
-            }
-        }
-    }
-
-    // 3. Helper to find open space
-    auto getOpenTile = [&]() {
-        int tx, ty;
-        do {
-            tx = random(1, RogueSharedData::MAP_W - 1);
-            ty = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[ty][tx] != TileType::FLOOR);
-        return Vec2{(float)tx, (float)ty};
-    };
-
-    // 4. Place Player, Stairs, and Loot
-    Vec2 p = getOpenTile();
-    _data->player.x = p.ix();
-    _data->player.y = p.iy();
-
-    Vec2 s;
-    int attempts = 0; // Prevent infinite loop on tiny disconnected maps
-    do { 
-        s = getOpenTile(); 
-        attempts++;
-    } while (abs(s.ix() - _data->player.x) + abs(s.iy() - _data->player.y) < 15 && attempts < 50); 
-    _data->map[s.iy()][s.ix()] = TileType::STAIRS_DOWN;
-
-    // --- BUG FIX: Guarantee connectivity between player and stairs ---
-    int curX = _data->player.x;
-    int curY = _data->player.y;
-    
-    if (random(2) == 0) {
-        while (curX != s.ix()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(s.ix() - curX); }
-        while (curY != s.iy()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(s.iy() - curY); }
-    } else {
-        while (curY != s.iy()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(s.iy() - curY); }
-        while (curX != s.ix()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(s.ix() - curX); }
-    }
-    // ---------------------------------------------------------------
-
-    int numChests = random(1, 4);
-    for (int i = 0; i < numChests; i++) {
-        Vec2 c = getOpenTile();
-        if (c.ix() != _data->player.x || c.iy() != _data->player.y) {
-            _data->map[c.iy()][c.ix()] = TileType::CHEST;
-        }
-    }
-
-    // Spawn exactly 1 Merchant on an open floor tile
-    int mx, my;
-    do {
-        mx = random(1, RogueSharedData::MAP_W - 1);
-        my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
-    _data->map[my][mx] = TileType::MERCHANT;
-
-    // Spawn Altar (30% chance per floor)
-    if (random(100) < 30) {
-        int ax, ay;
-        do {
-            ax = random(1, RogueSharedData::MAP_W - 1);
-            ay = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
-        _data->map[ay][ax] = TileType::ALTAR;
-    }
-
-    // Spawn Spikes
-    int numSpikes = random(2, 7);
-    if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numSpikes *= 2;
-    for (int i = 0; i < numSpikes; i++) {
-        int sx, sy;
-        do {
-            sx = random(1, RogueSharedData::MAP_W - 1);
-            sy = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
-        _data->map[sy][sx] = TileType::SPIKE;
-    }
-
-    // Spawn Tall Grass
-    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-            if (_data->map[y][x] == TileType::FLOOR && random(100) < 15) {
-                _data->map[y][x] = TileType::TALL_GRASS;
-            }
-        }
-    }
-
-    // Spawn Water (Clusters) and Webs
-    for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
-        for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-            if (_data->map[y][x] == TileType::FLOOR) {
-                if (_data->currentBiome == Biome::SEWERS && random(100) < 15) {
-                    _data->map[y][x] = TileType::WATER;
-                } else if (random(100) < 5) {
-                    _data->map[y][x] = TileType::WEB;
-                }
-            }
-        }
-    }
-}
-
-void RoguePlayScene::_generateMazeMap() {
-    // Fill completely with walls
-    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
-        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-            _data->map[y][x] = TileType::WALL;
-        }
-    }
-
-    int curX = RogueSharedData::MAP_W / 2;
-    int curY = RogueSharedData::MAP_H / 2;
-    int floorCount = 0;
-    int targetFloors = (RogueSharedData::MAP_W * RogueSharedData::MAP_H) * 0.35f; // Carve 35% of the map
-    
-    _data->player.x = curX;
-    _data->player.y = curY;
-    
-    // Tunnel Digger
-    while(floorCount < targetFloors) {
-        if (_data->map[curY][curX] == TileType::WALL) {
-            _data->map[curY][curX] = TileType::FLOOR;
-            floorCount++;
-        }
-        
-        int dir = random(4);
-        int nx = curX + (dir == 0 ? 1 : (dir == 1 ? -1 : 0));
-        int ny = curY + (dir == 2 ? 1 : (dir == 3 ? -1 : 0));
-        
-        // Keep in bounds with 1 tile padding
-        if (nx > 0 && nx < RogueSharedData::MAP_W - 1 && ny > 0 && ny < RogueSharedData::MAP_H - 1) {
-            curX = nx; 
-            curY = ny;
-        }
-    }
-    
-    // Last position becomes the stairs
-    _data->map[curY][curX] = TileType::STAIRS_DOWN;
-
-    // Spawn 1 Merchant
-    int mx, my;
-    do {
-        mx = random(1, RogueSharedData::MAP_W - 1);
-        my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
-    _data->map[my][mx] = TileType::MERCHANT;
-
-    // Scatter Chests
-    int numChests = random(1, 4);
-    for (int i = 0; i < numChests; i++) {
-        int cx, cy;
-        do {
-            cx = random(1, RogueSharedData::MAP_W - 1);
-            cy = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[cy][cx] != TileType::FLOOR || (cx == _data->player.x && cy == _data->player.y));
-        _data->map[cy][cx] = TileType::CHEST;
-    }
-}
-
-void RoguePlayScene::_generateBossMap() {
-    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
-        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-            _data->map[y][x] = TileType::WALL;
-        }
-    }
-
-    int variant = random(3); // 0 = Open, 1 = Pillars, 2 = Moat
-
-    for (int y = 8; y <= 24; y++) {
-        for (int x = 8; x <= 24; x++) {
-            if (x == 8 || x == 24 || y == 8 || y == 24) {
-                _data->map[y][x] = TileType::WALL;
-            } else {
-                _data->map[y][x] = TileType::FLOOR;
-                
-                // Variant 1: Pillars for cover
-                if (variant == 1 && (x % 4 == 0) && (y % 4 == 0)) {
-                    _data->map[y][x] = TileType::WALL;
-                }
-                // Variant 2: Moat around the center
-                else if (variant == 2 && (x >= 12 && x <= 20) && (y >= 12 && y <= 20) && (x == 12 || x == 20 || y == 12 || y == 20)) {
-                    // Leave bridges at the exact midpoints
-                    if (x != 16 && y != 16) {
-                        _data->map[y][x] = TileType::WATER;
-                    }
-                }
-            }
-        }
-    }
-    _data->player.x = 16;
-    _data->player.y = 22;
-}
-
-void RoguePlayScene::_spawnMonsters() {
-    for (auto& m : _data->monsters) m.active = false;
-
-    float depth = (float)_data->currentDepth;
-
-    if (_data->currentDepth % 5 == 0) {
-        // Boss Room Setup
-        _data->monsters[0].active = true;
-        _data->monsters[0].type = MonsterType::BOSS;
-        _data->monsters[0].x = 16;
-        _data->monsters[0].y = 10;
-        _data->monsters[0].maxHp = (int)(40 * pow(1.18f, depth));
-        _data->monsters[0].hp = _data->monsters[0].maxHp;
-        _data->monsters[0].attack = (int)(4 * pow(1.14f, depth));
-        _data->monsters[0].defense = (int)(2 * pow(1.12f, depth));
-        _data->monsters[0].alert = true;
-        return;
-    }
-
-    int targetMonsters = (_data->currentDepth * 2) + 6;
-    if (_data->currentMutator == LevelMutator::INFESTED) targetMonsters *= 2;
-    
-    if (targetMonsters > RogueSharedData::MAX_MONSTERS) {
-        targetMonsters = RogueSharedData::MAX_MONSTERS;
-    }
-
-    for (int i = 0; i < targetMonsters; i++) {
-        int mx, my;
-        bool validSpot = false;
-        
-        while (!validSpot) {
-            mx = random(1, RogueSharedData::MAP_W - 1);
-            my = random(1, RogueSharedData::MAP_H - 1);
-            
-            if (_data->map[my][mx] == TileType::FLOOR && (mx != _data->player.x || my != _data->player.y)) {
-                bool occupied = false;
-                for (int j = 0; j < i; j++) {
-                    if (_data->monsters[j].x == mx && _data->monsters[j].y == my) {
-                        occupied = true; break;
-                    }
-                }
-                if (!occupied) validSpot = true;
-            }
-        }
-
-        _data->monsters[i].x = mx;
-        _data->monsters[i].y = my;
-        _data->monsters[i].active = true;
-        
-        _data->monsters[i].maxHp = (int)(6 * pow(1.15f, depth));
-        _data->monsters[i].attack = (int)(2 * pow(1.12f, depth));
-        _data->monsters[i].defense = (int)(pow(1.10f, depth));
-
-        if (_data->currentMutator == LevelMutator::INFESTED) {
-            _data->monsters[i].type = (random(2) == 0) ? MonsterType::RAT : MonsterType::BAT;
-            _data->monsters[i].maxHp = (_data->monsters[i].maxHp * 80) / 100; // -20% HP for swarms
-        } else if (_data->currentDepth < 5) {
-            // Sewers
-            int r = random(3);
-            if (r == 0) _data->monsters[i].type = MonsterType::RAT;
-            else if (r == 1) _data->monsters[i].type = MonsterType::BAT;
-            else _data->monsters[i].type = MonsterType::GOBLIN;
-        } else if (_data->currentDepth < 10) {
-            // Prison
-            int r = random(3);
-            if (r == 0) _data->monsters[i].type = MonsterType::SKELETON;
-            else if (r == 1) _data->monsters[i].type = MonsterType::ORC;
-            else _data->monsters[i].type = MonsterType::GOBLIN;
-        } else {
-            // Deep Caves
-            int r = random(3);
-            if (r == 0) _data->monsters[i].type = MonsterType::TROLL;
-            else if (r == 1) _data->monsters[i].type = MonsterType::ORC;
-            else _data->monsters[i].type = MonsterType::BAT;
-            
-            if (_data->monsters[i].type == MonsterType::TROLL) {
-                _data->monsters[i].maxHp *= 2;
-                _data->monsters[i].attack += 2;
-            }
-        }
-        _data->monsters[i].hp = _data->monsters[i].maxHp;
-        _data->monsters[i].alert = false;
-    }
-}
 
 void RoguePlayScene::_updateCamera(bool snap) {
     int focusX = isAiming ? aimX : _data->player.x;
@@ -789,7 +93,7 @@ void RoguePlayScene::_updateCamera(bool snap) {
 }
 
 void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (_hudMessageTimer > 0) _hudMessageTimer--;
+    if (_data->hudMessageTimer > 0) _data->hudMessageTimer--;
 
     // --- Fade Transition Logic ---
     if (_descending) {
@@ -797,7 +101,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         if (_fadeTimer == 0) {
             // Screen is completely black, generate the next level!
             _data->currentDepth++;
-            _generateMap(); 
+            TinyRogueMapGen::generateMap(_data); 
             _camera->snapTo((_data->player.x * 8) - (Console::W / 2) + 4, 
                             (_data->player.y * 8) - (Console::H / 2) + 4);
             _descending = false;
@@ -832,8 +136,8 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 ctx.sfxDeath();
                 
                 if (_data->player.hp <= 0) {
-                    snprintf(_hudMessage, sizeof(_hudMessage), "Fatal Sacrifice!");
-                    _hudMessageTimer = 60;
+                    snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Fatal Sacrifice!");
+                    _data->hudMessageTimer = 60;
                     if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
                     sm.emit(ctx, Event::GAME_OVER);
                     return;
@@ -841,10 +145,10 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     int boon = random(3);
                     if (boon == 0) {
                         _data->player.baseAttack += 1;
-                        snprintf(_hudMessage, sizeof(_hudMessage), "Boon: +1 Attack!");
+                        snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boon: +1 Attack!");
                     } else if (boon == 1) {
                         _data->player.baseDefense += 1;
-                        snprintf(_hudMessage, sizeof(_hudMessage), "Boon: +1 Defense!");
+                        snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boon: +1 Defense!");
                     } else {
                         bool added = false;
                         for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
@@ -863,14 +167,14 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                                 }
                             }
                         }
-                        if (added) snprintf(_hudMessage, sizeof(_hudMessage), "Boon: Upg Scroll!");
-                        else snprintf(_hudMessage, sizeof(_hudMessage), "Boon Wasted(Pack Full)");
+                        if (added) snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boon: Upg Scroll!");
+                        else snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boon Wasted(Pack Full)");
                     }
-                    recalcStats(_data);
-                    _hudMessageTimer = 60;
+                    TinyRogueCombat::recalcStats(_data);
+                    _data->hudMessageTimer = 60;
                     _data->map[_activeAltarY][_activeAltarX] = TileType::FLOOR;
-                    _data->turnCount++; // FIX: Advance turn counter to prevent slow monster exploit
-                    _processMonsterTurns(ctx, sm); // Consumes a turn
+                    TinyRogueCombat::advanceTurn(_data); // FIX: Advance turn counter to prevent slow monster exploit
+                    TinyRogueCombat::processMonsterTurns(_data, ctx, sm, _camera, _particles); // Consumes a turn
                 }
             }
         }
@@ -879,8 +183,8 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 
     if (_data->inventoryTurnUsed) {
         _data->inventoryTurnUsed = false;
-        _data->turnCount++; // FIX: Advance turn counter to prevent slow monster exploit
-        _processMonsterTurns(ctx, sm);
+        TinyRogueCombat::advanceTurn(_data); // FIX: Advance turn counter to prevent slow monster exploit
+        TinyRogueCombat::processMonsterTurns(_data, ctx, sm, _camera, _particles);
     }
 
     if (ctx.justPressed(Btn::MENU1)) {
@@ -929,8 +233,8 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             }
 
             if (hitWall) {
-                snprintf(_hudMessage, sizeof(_hudMessage), "Path Blocked!");
-                _hudMessageTimer = 40;
+                snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Path Blocked!");
+                _data->hudMessageTimer = 40;
                 ctx.beep(150, 100);
             } else {
                 // Consume dart
@@ -942,7 +246,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     }
                 }
 
-                Monster* m = _getMonsterAt(aimX, aimY);
+                Monster* m = TinyRogueCombat::getMonsterAt(_data, aimX, aimY);
                 if (m) {
                     int dartDamage = _data->player.baseAttack * 2;
                     if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->player.hp <= (_data->player.maxHp * 3) / 10) {
@@ -950,12 +254,16 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     }
                     if (dartDamage < 3) dartDamage = 3;
                     m->hp -= dartDamage;
-                    _spawnHitEffect(aimX, aimY);
+                    TinyRogueCombat::spawnHitEffect(_particles, aimX, aimY);
                     ctx.beep(1200, 30);
                     
                     if (m->hp <= 0) {
                         m->active = false;
-                        _data->player.xp += m->maxHp;
+                        if (m->type == MonsterType::BOSS) {
+                            _data->player.xp += 50 + _data->currentDepth * 5;
+                        } else {
+                            _data->player.xp += 10 + _data->currentDepth * 2;
+                        }
                         
                         // Bloodlust heal
                         int healAmt = (_data->equippedAccessory.type == ItemType::RING_VAMPIRE) ? 2 : 1;
@@ -969,12 +277,12 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                             _data->player.maxHp += 5;
                             _data->player.hp = _data->player.maxHp; 
                             _data->player.baseAttack += 1;
-                            recalcStats(_data);
+                            TinyRogueCombat::recalcStats(_data);
                             leveledUp = true;
                         }
                         if (leveledUp) {
-                            snprintf(_hudMessage, sizeof(_hudMessage), "LEVEL UP!");
-                            _hudMessageTimer = 60;
+                            snprintf(_data->hudMessage, sizeof(_data->hudMessage), "LEVEL UP!");
+                            _data->hudMessageTimer = 60;
                             ctx.beep(800, 100); ctx.beep(1200, 150);
                         }
                         if (m->type == MonsterType::BOSS) {
@@ -982,8 +290,8 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                             if (_data->map[m->y + 1][m->x] == TileType::FLOOR) {
                                 _data->map[m->y + 1][m->x] = TileType::CHEST;
                             }
-                            snprintf(_hudMessage, sizeof(_hudMessage), "Boss Defeated!");
-                            _hudMessageTimer = 80;
+                            snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boss Defeated!");
+                            _data->hudMessageTimer = 80;
                             ctx.beep(1500, 200);
                         }
                     }
@@ -993,8 +301,8 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 }
                 
                 isAiming = false;
-                _data->turnCount++; // FIX: Advance turn counter to prevent slow monster exploit
-                _processMonsterTurns(ctx, sm);
+                TinyRogueCombat::advanceTurn(_data); // FIX: Advance turn counter to prevent slow monster exploit
+                TinyRogueCombat::processMonsterTurns(_data, ctx, sm, _camera, _particles);
             }
         }
         else if (ctx.justPressed(Btn::B) ) {
@@ -1013,494 +321,48 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     else if (ctx.justPressed(Btn::A)) waited = true;
 
     if (dx != 0 || dy != 0 || waited) {
-        if (_processTurn(ctx, sm, dx, dy)) {
-            _processMonsterTurns(ctx, sm); 
+        TurnAction action = TinyRogueCombat::processTurn(_data, ctx, sm, dx, dy, _camera, _particles);
+        if (action == TurnAction::COMPLETED) {
+            TinyRogueCombat::processMonsterTurns(_data, ctx, sm, _camera, _particles); 
+        } else if (action == TurnAction::OPEN_ALTAR) {
+            _altarMenuOpen = true;
+            _altarMenuCursor = 0;
+            _activeAltarX = _data->player.x + dx;
+            _activeAltarY = _data->player.y + dy;
+            ctx.sfxMenuEnter();
+        } else if (action == TurnAction::OPEN_MERCHANT) {
+            ctx.sfxMenuEnter();
+            sm.emit(ctx, Event::CUSTOM_2);
+        } else if (action == TurnAction::DESCEND_STAIRS) {
+            ctx.beep(400, 100); ctx.beep(300, 150); 
+            _descending = true;
+            _fadeTimer = 20;
+        } else if (action == TurnAction::GAME_OVER) {
+            if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
+            sm.emit(ctx, Event::GAME_OVER);
         }
     }
 
     _updateCamera(); 
-}
-
-Monster* RoguePlayScene::_getMonsterAt(int x, int y) const {
-    for (auto& m : _data->monsters) {
-        if (m.active && m.x == x && m.y == y) return &m;
-    }
-    return nullptr;
-}
-
-void RoguePlayScene::_processMonsterTurns(Console& ctx, SceneManager& sm) {
-    bool playerHit = false;
-
-    for (auto& m : _data->monsters) {
-        if (!m.active || _data->player.hp <= 0) continue;
-
-        if (m.rootDuration > 0) {
-            m.rootDuration--;
-            continue;
-        }
-
-        int aggro = 6;
-        if (m.type == MonsterType::BAT) aggro = 8;
-        else if (m.type == MonsterType::SKELETON) aggro = 5;
-        else if (m.type == MonsterType::BOSS) aggro = 15; // Boss tracks across the whole room
-
-        // Tall grass hides the player, severely reducing monster sight radius
-        if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
-            aggro = 2; 
-        }
-
-        if (m.type == MonsterType::SKELETON && (_data->turnCount % 2 != 0)) {
-            continue; 
-        }
-        if (m.type == MonsterType::TROLL && (_data->turnCount % 2 == 0)) {
-            continue; // Trolls are slow
-        }
-
-        int steps = (m.type == MonsterType::BAT) ? 2 : 1;
-
-        for (int s = 0; s < steps; s++) {
-            int dx = _data->player.x - m.x;
-            int dy = _data->player.y - m.y;
-
-            if (abs(dx) <= aggro && abs(dy) <= aggro) {
-                m.alert = true; // Monster woke up or spotted player
-                int stepX = 0, stepY = 0;
-
-                if (m.type == MonsterType::BAT && random(3) == 0) {
-                    if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
-                    else                stepY = (random(2) == 0) ? 1 : -1;
-                } 
-                else if (m.type == MonsterType::RAT && abs(dx) > 3 && abs(dy) > 3) {
-                    if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
-                    else                stepY = (random(2) == 0) ? 1 : -1;
-                }
-                else {
-                    stepX = gsign(dx);
-                    stepY = gsign(dy);
-
-                    if (stepX != 0 && stepY != 0) {
-                        if (random(2) == 0) stepY = 0; 
-                        else stepX = 0;
-                    }
-                }
-
-                int nx = m.x + stepX;
-                int ny = m.y + stepY;
-
-                if (nx < 0 || nx >= RogueSharedData::MAP_W || ny < 0 || ny >= RogueSharedData::MAP_H) continue;
-
-                if (nx == _data->player.x && ny == _data->player.y) {
-                    int currentDodge = (_data->map[_data->player.y][_data->player.x] == TileType::WATER) ? 0 : _data->player.dodge;
-                    if (random(100) < currentDodge) {
-                        snprintf(_hudMessage, sizeof(_hudMessage), "Dodged!");
-                        _hudMessageTimer = 30;
-                    } else {
-                        int rawDmg = m.attack;
-                        
-                        // Infested Flanking Bonus: +1 damage for each additional adjacent monster
-                        if (_data->currentMutator == LevelMutator::INFESTED) {
-                            for (auto& otherM : _data->monsters) {
-                                if (&otherM != &m && otherM.active && abs(otherM.x - _data->player.x) <= 1 && abs(otherM.y - _data->player.y) <= 1) {
-                                    rawDmg += 1;
-                                }
-                            }
-                        }
-
-                        int damage = (rawDmg * 100) / (100 + _data->player.defense * 8);
-                        if (damage < 1) damage = 1; 
-
-                        _data->player.hp -= damage;
-                        playerHit = true;
-                    }
-                    break; 
-                }
-                else if (_data->map[ny][nx] != TileType::WALL && !_getMonsterAt(nx, ny)) {
-                    if (_data->map[ny][nx] == TileType::RUBBLE) continue;
-                    
-                    if (_data->map[ny][nx] == TileType::WEB) {
-                        _data->map[ny][nx] = TileType::FLOOR;
-                        m.rootDuration = 1;
-                    }
-
-                    m.x = nx;
-                    m.y = ny;
-                }
-            }
-        }
-
-        // Boss Summoning Ability
-        if (m.type == MonsterType::BOSS && m.alert && random(100) < 15) {
-            // Find an inactive monster slot
-            for (auto& newM : _data->monsters) {
-                if (!newM.active) {
-                    int targetX = m.x + (random(3) - 1);
-                    int targetY = m.y + (random(3) - 1);
-                    
-                    // Validate position BEFORE activating
-                    if (targetX >= 0 && targetX < RogueSharedData::MAP_W && 
-                        targetY >= 0 && targetY < RogueSharedData::MAP_H &&
-                        _data->map[targetY][targetX] == TileType::FLOOR && 
-                        (targetX != _data->player.x || targetY != _data->player.y) &&
-                        !_getMonsterAt(targetX, targetY)) {
-                        
-                        newM.active = true;
-                        newM.type = (random(2) == 0) ? MonsterType::SKELETON : MonsterType::GOBLIN;
-                        newM.x = targetX;
-                        newM.y = targetY;
-                        
-                        float depthF = (float)_data->currentDepth;
-                        newM.maxHp = (int)(8 * pow(1.15f, depthF));
-                        newM.hp = newM.maxHp;
-                        newM.attack = (int)(2 * pow(1.12f, depthF));
-                        newM.defense = (int)(pow(1.10f, depthF));
-                        newM.alert = true;
-                        
-                        _camera->shake(5);
-                        ctx.beep(200, 100);
-                        snprintf(_hudMessage, sizeof(_hudMessage), "Boss Summons!");
-                        _hudMessageTimer = 60;
-                    } else {
-                        newM.active = false; // Cancel if spot is invalid
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    if (playerHit) {
-        ctx.sfxDeath(); 
-        _camera->shake(6);
-        
-        if (_data->player.hp <= 0) {
-            if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
-            ctx.sfxDeath();
-            sm.emit(ctx, Event::GAME_OVER);
-        }
-    } else {
-        ctx.beep(400, 10); 
-    }
-
-    // Trample Tall Grass AFTER monsters take their turn so stealth checks work
-    if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
-        _data->map[_data->player.y][_data->player.x] = TileType::FLOOR;
-    }
-}
-
-bool RoguePlayScene::_processTurn(Console& ctx, SceneManager& sm, int dx, int dy) {
-    auto finalizeTurn = [&]() {
-        _data->turnCount++; 
-        // Removed passive HP Regeneration - healing now requires combat or items
-        return true;
-    };
-
-    if (_data->player.rootDuration > 0) {
-        _data->player.rootDuration--;
-        snprintf(_hudMessage, sizeof(_hudMessage), "Stuck in Web!");
-        _hudMessageTimer = 30;
-        ctx.beep(150, 50);
-        return finalizeTurn();
-    }
-
-    if (dx == 0 && dy == 0) {
-        snprintf(_hudMessage, sizeof(_hudMessage), "Waiting...");
-        _hudMessageTimer = 20;
-        return finalizeTurn();
-    }
-
-    int targetX = _data->player.x + dx;
-    int targetY = _data->player.y + dy;
-
-    if (targetX < 0 || targetX >= RogueSharedData::MAP_W || targetY < 0 || targetY >= RogueSharedData::MAP_H) return false;
-
-    TileType targetTile = _data->map[targetY][targetX];
-    if (targetTile == TileType::WALL) return false; 
-    if (targetTile == TileType::RUBBLE) return false; // Impassable but doesn't block LOS
-
-    Monster* targetMonster = _getMonsterAt(targetX, targetY);
     
-    if (targetTile == TileType::KEY) {
-        _data->keys++;
-        _data->map[targetY][targetX] = TileType::FLOOR;
-        snprintf(_hudMessage, sizeof(_hudMessage), "Found a Key!");
-        _hudMessageTimer = 60;
-        ctx.beep(1200, 50);
-    }
-
-    if (targetMonster) {
-        int rawDmg = _data->player.attack;
-        if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->player.hp <= (_data->player.maxHp * 3) / 10) {
-            rawDmg += 3;
-        }
-        
-        // Combat Formula: Diminishing returns from monster defense
-        int dmg = (rawDmg * 100) / (100 + targetMonster->defense * 8);
-        if (dmg < 1) dmg = 1;
-
-        bool crit = false;
-
-        if (!targetMonster->alert) {
-            crit = true; // Guaranteed Sneak Attack!
-            targetMonster->alert = true;
-            snprintf(_hudMessage, sizeof(_hudMessage), "Sneak Attack!");
-            _hudMessageTimer = 40;
-        } else {
-            crit = (random(100) < _data->player.critChance);
-        }
-
-        if (crit) dmg *= 2;
-
-        targetMonster->hp -= dmg;
-        _camera->shake(crit ? 6 : 3); 
-        _spawnHitEffect(targetX, targetY);
-        ctx.beep(crit ? 1500 : 1000, 20); 
-
-        // Axe: Cleave Attack (50% damage to adjacent enemies)
-        if (_data->equippedWeapon.type == ItemType::AXE) {
-            int cleaveDmg = dmg / 2;
-            if (cleaveDmg < 1) cleaveDmg = 1;
-            bool cleaved = false;
-            for (auto& m : _data->monsters) {
-                if (m.active && &m != targetMonster) {
-                    // Check if adjacent to the primary target
-                    if (abs(m.x - targetX) <= 1 && abs(m.y - targetY) <= 1) {
-                        m.hp -= cleaveDmg;
-                        _spawnHitEffect(m.x, m.y);
-                        m.alert = true;
-                        cleaved = true;
-                    }
-                }
-            }
-            if (cleaved) ctx.beep(1200, 30);
-        }
-
-        // Check for deaths (Primary target + Cleaved targets)
-        int xpGained = 0;
-        bool bossDefeated = false;
-        int bossX = 0, bossY = 0;
-
-        for (auto& m : _data->monsters) {
-            if (m.active && m.hp <= 0) {
-                m.active = false;
-                xpGained += m.maxHp;
-
-                // Bloodlust heal
-                int healAmt = (_data->equippedAccessory.type == ItemType::RING_VAMPIRE) ? 2 : 1;
-                _data->player.hp += healAmt;
-                if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
-
-                if (m.type == MonsterType::BOSS) {
-                    bossDefeated = true;
-                    bossX = m.x;
-                    bossY = m.y;
-                }
+    // Update Fog of War
+    int sightRadius = (_data->currentMutator == LevelMutator::PITCH_BLACK) ? 5 : 20;
+    for (int y = max(0, _data->player.y - 6); y <= min(RogueSharedData::MAP_H - 1, _data->player.y + 6); y++) {
+        for (int x = max(0, _data->player.x - 6); x <= min(RogueSharedData::MAP_W - 1, _data->player.x + 6); x++) {
+            int distX = abs(x - _data->player.x);
+            int distY = abs(y - _data->player.y);
+            if (distX * distX + distY * distY <= sightRadius) {
+                _data->explored[y][x] = true;
             }
         }
-
-        if (xpGained > 0) {
-            _data->player.xp += xpGained;
-
-            bool leveledUp = false;
-            while (_data->player.xp >= _data->player.level * 15) {
-                _data->player.xp -= _data->player.level * 15;
-                _data->player.level++;
-                _data->player.maxHp += 5;
-                _data->player.hp = _data->player.maxHp; 
-                _data->player.baseAttack += 1;
-                recalcStats(_data);
-                leveledUp = true;
-            }
-            if (leveledUp) {
-                snprintf(_hudMessage, sizeof(_hudMessage), "LEVEL UP!");
-                _hudMessageTimer = 60;
-                ctx.beep(800, 100); ctx.beep(1200, 150);
-            }
-            if (bossDefeated) {
-                _data->map[bossY][bossX] = TileType::STAIRS_DOWN;
-                if (_data->map[bossY + 1][bossX] == TileType::FLOOR) {
-                    _data->map[bossY + 1][bossX] = TileType::CHEST;
-                }
-                snprintf(_hudMessage, sizeof(_hudMessage), "Boss Defeated!");
-                _hudMessageTimer = 80;
-                ctx.beep(1500, 200);
-            }
-        }
-        return finalizeTurn();
-    }    else if (targetTile == TileType::LOCKED_DOOR) {
-        if (_data->keys > 0) {
-            _data->keys--;
-            _data->map[targetY][targetX] = TileType::CORRIDOR; // Remove door
-            snprintf(_hudMessage, sizeof(_hudMessage), "Door Unlocked!");
-            _hudMessageTimer = 60;
-            ctx.beep(1000, 100);
-            return finalizeTurn(); // Takes a turn to unlock
-        } else {
-            snprintf(_hudMessage, sizeof(_hudMessage), "Locked!");
-            _hudMessageTimer = 40;
-            ctx.beep(150, 100);
-            return false; // Free action if you bump it without a key
-        }
-    }
-    else if (targetTile == TileType::CHEST) {
-        // Prevent mimics on Boss floors (depths 5, 10, 15...)
-        if (_data->currentDepth % 5 != 0 && random(100) < 15) {
-            _data->map[targetY][targetX] = TileType::FLOOR; 
-            snprintf(_hudMessage, sizeof(_hudMessage), "It's a MIMIC!");
-            _hudMessageTimer = 60;
-            ctx.beep(200, 150);
-            _camera->shake(8);
-            
-            for (auto& m : _data->monsters) {
-                if (!m.active) {
-                    m.x = targetX; m.y = targetY;
-                    m.active = true;
-                    float depthF = (float)_data->currentDepth;
-                    m.maxHp = (int)(15 * pow(1.15f, depthF));
-                    m.hp = m.maxHp;
-                    m.attack = (int)(3 * pow(1.12f, depthF));
-                    m.defense = (int)(2 * pow(1.10f, depthF));
-                    m.type = MonsterType::GOBLIN; 
-                    break;
-                }
-            }
-            return finalizeTurn(); 
-        }
-
-        int roll = random(100);
-        ItemType itemToGive = ItemType::NONE;
-        
-        if (roll < 20) { itemToGive = ItemType::POTION; }
-        else if (roll < 30) { itemToGive = ItemType::ELIXIR; }
-        else if (roll < 45) { itemToGive = ItemType::SCROLL_UPGRADE; }
-        else if (roll < 65) { 
-            if (_data->currentDepth < 3) itemToGive = (random(2)==0) ? ItemType::DAGGER : ItemType::SWORD;
-            else if (_data->currentDepth < 6) itemToGive = (random(2)==0) ? ItemType::SWORD : ItemType::AXE;
-            else itemToGive = ItemType::AXE;
-        } else if (roll < 85) {
-            if (_data->currentDepth < 3) itemToGive = (random(2)==0) ? ItemType::LEATHER : ItemType::CHAINMAIL;
-            else if (_data->currentDepth < 6) itemToGive = (random(2)==0) ? ItemType::CHAINMAIL : ItemType::PLATE;
-            else itemToGive = ItemType::PLATE;
-        } else {
-            int r = random(4);
-            if (r == 0) itemToGive = ItemType::RING_VAMPIRE;
-            else if (r == 1) itemToGive = ItemType::RING_WEALTH;
-            else if (r == 2) itemToGive = ItemType::RING_OWL;
-            else itemToGive = ItemType::RING_BERSERKER;
-        }
-        
-        if (itemToGive != ItemType::NONE) {
-            const char* itemName = getItemName(itemToGive);
-            bool added = false;
-            
-            if (itemToGive == ItemType::POTION || itemToGive == ItemType::ELIXIR || itemToGive == ItemType::SCROLL_UPGRADE) {
-                for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
-                    if(_data->inventory[i].type == itemToGive) {
-                        _data->inventory[i].count++;
-                        added = true; 
-                        break;
-                    }
-                }
-            }
-            
-            if (!added) {
-                for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
-                    if(_data->inventory[i].type == ItemType::NONE) {
-                        _data->inventory[i].type = itemToGive;
-                        _data->inventory[i].count = 1;
-                        _data->inventory[i].level = 0;
-                        added = true; 
-                        break;
-                    }
-                }
-            }
-            if(!added) {
-                snprintf(_hudMessage, sizeof(_hudMessage), "Pack Full!");
-                _hudMessageTimer = 60;
-                ctx.beep(150, 100);
-                return false; // Do not consume chest
-            }
-            _data->map[targetY][targetX] = TileType::FLOOR; 
-            snprintf(_hudMessage, sizeof(_hudMessage), "Got %s!", itemName);
-            _hudMessageTimer = 60;
-            ctx.beep(800, 40); ctx.beep(1200, 60);
-        } else {
-            _data->map[targetY][targetX] = TileType::FLOOR; 
-            int amount = 10 + (15 * _data->currentDepth);
-            if (_data->currentMutator == LevelMutator::TREASURE_TROVE) amount *= 2;
-            if (_data->equippedAccessory.type == ItemType::RING_WEALTH) amount += amount / 2; // +50% Gold
-            _data->gold += amount;
-            snprintf(_hudMessage, sizeof(_hudMessage), "Found %d Gold", amount);
-            _hudMessageTimer = 60;
-            ctx.beep(1200, 20); ctx.beep(1500, 40);
-        }
-        return finalizeTurn();
-    }
-    else if (targetTile == TileType::MERCHANT) {
-        ctx.sfxMenuEnter();
-        sm.emit(ctx, Event::CUSTOM_2); // Shop
-        return false; 
-    }
-    else if (targetTile == TileType::ALTAR) {
-        _altarMenuOpen = true;
-        _altarMenuCursor = 0;
-        _activeAltarX = targetX;
-        _activeAltarY = targetY;
-        ctx.sfxMenuEnter();
-        return false; 
-    }
-    else {
-        _data->player.x = targetX;
-        _data->player.y = targetY;
-
-        if (targetTile == TileType::WEB) {
-            _data->map[targetY][targetX] = TileType::FLOOR;
-            _data->player.rootDuration = 1;
-            snprintf(_hudMessage, sizeof(_hudMessage), "Trapped!");
-            _hudMessageTimer = 40;
-            ctx.beep(200, 100);
-        }
-
-        if (targetTile == TileType::TALL_GRASS) {
-            if (random(100) < 20 && _data->player.hp < _data->player.maxHp) {
-                _data->player.hp += 2;
-                if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
-                snprintf(_hudMessage, sizeof(_hudMessage), "Dewdrop: +2 HP");
-                _hudMessageTimer = 40;
-                ctx.beep(1000, 30);
-            }
-        }
-
-        if (targetTile == TileType::SPIKE) {
-            if (_data->equippedAccessory.type == ItemType::RING_OWL) {
-                snprintf(_hudMessage, sizeof(_hudMessage), "Owl Ring: Float!");
-                _hudMessageTimer = 40;
-            } else {
-                int spikeDmg = 2 + (_data->currentDepth / 3);
-                if (_data->currentMutator == LevelMutator::TREASURE_TROVE) spikeDmg *= 2;
-                _data->player.hp -= spikeDmg;
-                _camera->shake(4);
-                ctx.sfxDeath();
-                snprintf(_hudMessage, sizeof(_hudMessage), "Stepped on Spikes!");
-                _hudMessageTimer = 60;
-                
-                if (_data->player.hp <= 0) {
-                    if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
-                    sm.emit(ctx, Event::GAME_OVER);
-                    return true;
-                }
-            }
-        }
-
-        if (targetTile == TileType::STAIRS_DOWN) {
-            // Play a descending tone
-            ctx.beep(400, 100); ctx.beep(300, 150); 
-            _descending = true;
-            _fadeTimer = 20; // 20 frames for the cinematic bars to close in
-            return finalizeTurn();
-        }
-        return finalizeTurn();
     }
 }
+
+
+
+
+
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // RogueShopScene 
@@ -1674,16 +536,16 @@ void RoguePlayScene::draw(Console& ctx) {
     
     ctx.setFont(u8g2_font_5x7_tf);
     
-    if (_hudMessageTimer > 0) {
-        int floatY = lerpi(0, 12, _hudMessageTimer, 60);
-        bool visible = (_hudMessageTimer > 15) || (_hudMessageTimer % 2 == 0);
+    if (_data->hudMessageTimer > 0) {
+        int floatY = lerpi(0, 12, _data->hudMessageTimer, 60);
+        bool visible = (_data->hudMessageTimer > 15) || (_data->hudMessageTimer % 2 == 0);
         
         if (visible) {
-            int w = ctx.strWidth(_hudMessage);
+            int w = ctx.strWidth(_data->hudMessage);
             ctx.setDrawColor(0);
             ctx.drawBox((Console::W - w) / 2 - 2, floatY, w + 4, 9);
             ctx.setDrawColor(1);
-            ctx.drawStrCentered(floatY + 7, _hudMessage);
+            ctx.drawStrCentered(floatY + 7, _data->hudMessage);
         }
     } else {
         char topBuf[32];
@@ -1818,7 +680,6 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
             int sightRadius = (_data->currentMutator == LevelMutator::PITCH_BLACK) ? 5 : 20;
             bool inSight = (distX * distX + distY * distY <= sightRadius); 
             
-            if (inSight) _data->explored[mapY][mapX] = true;
             if (!_data->explored[mapY][mapX]) continue; 
 
             int renderX = (mapX * 8);
@@ -1857,7 +718,7 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
             } else if (t == TileType::ALTAR) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_altar);
             }
-            Monster* m = _getMonsterAt(mapX, mapY);
+            Monster* m = TinyRogueCombat::getMonsterAt(_data, mapX, mapY);
             if (m && inSight) {
                 ctx.setDrawColor(0);
                 ctx.drawBox(renderX, renderY, 8, 8);
@@ -2050,7 +911,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
             Item* target = (_upgradeSelect == 0) ? &_data->equippedWeapon : &_data->equippedArmor;
             if (target->type != ItemType::NONE) {
                 target->level++;
-                recalcStats(_data);
+                TinyRogueCombat::recalcStats(_data);
                 
                 _data->inventory[_cursor].count--;
                 if (_data->inventory[_cursor].count == 0) _data->inventory[_cursor].type = ItemType::NONE;
@@ -2114,7 +975,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                 } else if (item.type == ItemType::DAGGER || item.type == ItemType::SWORD || item.type == ItemType::AXE) {
                     if (_data->equippedWeapon.type == item.type) {
                         _data->equippedWeapon.level += item.level + 1; // Merge!
-                        recalcStats(_data);
+                        TinyRogueCombat::recalcStats(_data);
                         snprintf(_msg, sizeof(_msg), "Weapons Merged!");
                         ctx.beep(1200, 40); ctx.beep(1500, 60);
                         consumed = true;
@@ -2123,7 +984,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                         Item temp = _data->equippedWeapon;
                         _data->equippedWeapon = item;
                         _data->inventory[_cursor] = temp;
-                        recalcStats(_data);
+                        TinyRogueCombat::recalcStats(_data);
                         snprintf(_msg, sizeof(_msg), "Equipped Weapon!");
                         _data->inventoryTurnUsed = true;
                         ctx.sfxPoint();
@@ -2132,7 +993,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                 } else if (item.type == ItemType::LEATHER || item.type == ItemType::CHAINMAIL || item.type == ItemType::PLATE) {
                     if (_data->equippedArmor.type == item.type) {
                         _data->equippedArmor.level += item.level + 1; // Merge!
-                        recalcStats(_data);
+                        TinyRogueCombat::recalcStats(_data);
                         snprintf(_msg, sizeof(_msg), "Armors Merged!");
                         ctx.beep(1200, 40); ctx.beep(1500, 60);
                         consumed = true;
@@ -2141,7 +1002,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                         Item temp = _data->equippedArmor;
                         _data->equippedArmor = item;
                         _data->inventory[_cursor] = temp;
-                        recalcStats(_data);
+                        TinyRogueCombat::recalcStats(_data);
                         snprintf(_msg, sizeof(_msg), "Equipped Armor!");
                         _data->inventoryTurnUsed = true;
                         ctx.sfxPoint();
@@ -2151,7 +1012,7 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                     Item temp = _data->equippedAccessory;
                     _data->equippedAccessory = item;
                     _data->inventory[_cursor] = temp;
-                    recalcStats(_data);
+                    TinyRogueCombat::recalcStats(_data);
                     snprintf(_msg, sizeof(_msg), "Equipped Ring!");
                     _data->inventoryTurnUsed = true;
                     ctx.sfxPoint();
@@ -2238,14 +1099,14 @@ void RogueInventoryScene::draw(Console& ctx) {
             case ItemType::RING_OWL: return "Owl Rg";
             case ItemType::RING_BERSERKER: return "Bersk Rg";
             case ItemType::THROWING_DART: return "Dart";
-            default: return getItemName(type);
+            default: return TinyRogueCombat::getItemName(type);
         }
     };
 
     // --- Section 1: Equipped Gear ---
     char wStr[32];
     if (_data->equippedWeapon.type != ItemType::NONE) {
-        snprintf(wStr, sizeof(wStr), "%s+%d(+%d)", getShortName(_data->equippedWeapon.type), _data->equippedWeapon.level, getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level);
+        snprintf(wStr, sizeof(wStr), "%s+%d(+%d)", getShortName(_data->equippedWeapon.type), _data->equippedWeapon.level, TinyRogueCombat::getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level);
     } else {
         strcpy(wStr, "None");
     }
@@ -2254,7 +1115,7 @@ void RogueInventoryScene::draw(Console& ctx) {
 
     char aStr[32];
     if (_data->equippedArmor.type != ItemType::NONE) {
-        snprintf(aStr, sizeof(aStr), "%s+%d(+%d)", getShortName(_data->equippedArmor.type), _data->equippedArmor.level, getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level);
+        snprintf(aStr, sizeof(aStr), "%s+%d(+%d)", getShortName(_data->equippedArmor.type), _data->equippedArmor.level, TinyRogueCombat::getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level);
     } else {
         strcpy(aStr, "None");
     }
@@ -2297,8 +1158,8 @@ void RogueInventoryScene::draw(Console& ctx) {
             strcpy(nameBuf, "- Empty -");
         } else {
             const char* shortName = getShortName(item.type);
-            int atk = getWeaponAttack(item.type);
-            int def = getArmorDefense(item.type);
+            int atk = TinyRogueCombat::getWeaponAttack(item.type);
+            int def = TinyRogueCombat::getArmorDefense(item.type);
             
             if (atk > 0 || def > 0) snprintf(nameBuf, sizeof(nameBuf), "%s+%d", shortName, item.level);
             else snprintf(nameBuf, sizeof(nameBuf), "%s x%d", shortName, item.count);
