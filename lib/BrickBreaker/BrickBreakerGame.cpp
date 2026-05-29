@@ -412,11 +412,11 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         if (_particles) {
             if (_balls[i].fireball) {
                 if (random(100) < 60) {
-                    _particles->spawnPixel(_balls[i].x + 1, _balls[i].y + 1, random(-10, 10)*0.02f, random(-10, 10)*0.02f, random(10, 20));
+                    _particles->spawnPixel(_balls[i].x, _balls[i].y, random(-10, 10)*0.02f, random(-10, 10)*0.02f, random(10, 20));
                 }
             } else {
                 if (random(100) < 40) { // Subtle ghost trail for normal balls
-                    _particles->spawnPixel(_balls[i].x + 1, _balls[i].y + 1, 0, 0, random(3, 8));
+                    _particles->spawnPixel(_balls[i].x, _balls[i].y, 0, 0, random(3, 8));
                 }
             }
         }
