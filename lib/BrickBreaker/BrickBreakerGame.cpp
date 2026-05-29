@@ -67,6 +67,7 @@ void BBPlayScene::onEnter(Console& ctx) {
 }
 
 void BBPlayScene::_generateLevel() {
+    _levelFrames = 0;
     _bricksLeft = 0;
     _stickyPaddle = false;
 
@@ -435,7 +436,7 @@ bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, 
 void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (ctx.justPressed(Btn::B)) {
         ctx.sfxMenuBack();
-        sm.push(ctx, new BBPauseScene());
+        sm.push(new BBPauseScene(), ctx);
         return;
     }
 
