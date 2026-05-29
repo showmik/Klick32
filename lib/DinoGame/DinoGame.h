@@ -3,7 +3,6 @@
 #include "GameUtils.h"
 #include "SceneManager.h"
 #include "Scene.h"
-#include "Sprite.h"
 #include "Camera.h"
 #include "ParticleManager.h"
 

@@ -63,11 +63,6 @@ void OS::begin() {
     }
 }
 
-void OS::registerGame(GameBase* game) {
-    // Deprecated for dynamically instantiated games.
-    // Left empty to prevent compiling errors with old main.cpp if not removed.
-}
-
 void OS::run() {
     // ── Boot Settings & Splash ──
     _save.begin("__os");

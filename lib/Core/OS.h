@@ -24,8 +24,6 @@ public:
     // The infinite game loop. Call in loop().
     void run();
 
-    void registerGame(GameBase* game);
-
 private:
 #ifdef SIMULATOR
     U8G2_BITMAP _disp;
