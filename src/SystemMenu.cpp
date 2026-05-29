@@ -28,17 +28,9 @@ void SystemMenu::update(Console& ctx, float dt) {
     if (newAnimTick != _animTick) { _animTick = newAnimTick; _dirty = true; }
     if (newArrowTick != _arrowTick) { _arrowTick = newArrowTick; _dirty = true; }
 
-    // ── Check Input & Auto-Sleep ──
-    bool anyInput = false;
+    // ── Input Reset for Dirty Flag ──
     for (uint8_t i = 0; i < (uint8_t)Btn::COUNT; i++) {
-        if (ctx.pressed((Btn)i)) { anyInput = true; break; }
-    }
-    
-    if (anyInput) {
-        _lastInputTime = millis();
-        _dirty = true;
-    } else if (millis() - _lastInputTime >= IDLE_SLEEP_MS) {
-        _enterDeepSleep(ctx);
+        if (ctx.pressed((Btn)i)) { _dirty = true; break; }
     }
 
     // ── Battery Polling ──
@@ -257,19 +249,4 @@ void SystemMenu::_drawAboutPage(Console& ctx) {
     ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B/M1] Back");
 }
 
-void SystemMenu::_enterDeepSleep(Console& ctx) {
-    ctx.setDrawColor(0);
-    ctx.drawBox(0, 0, Console::W, Console::H);
-    ctx.setDrawColor(1);
-    ctx.setFont(u8g2_font_6x10_tf);
-    uint8_t w = ctx.strWidth("Sleeping...");
-    ctx.drawStr((Console::W - w) / 2, 34, "Sleeping...");
-    
-    // Force the buffer to send immediately before power cut
-    ctx.flush();
-    delay(1000);
 
-    ctx.stopSound();
-    ctx.setPowerSave(1); 
-    esp_deep_sleep_start();
-}

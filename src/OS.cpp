@@ -112,6 +112,7 @@ void OS::run() {
     GameBase* activeGame = &_sysMenu;
     activeGame->onEnter(_console);
     uint32_t lastTime = millis();
+    uint32_t lastGlobalInputTime = millis();
 
     while (true) {
 #ifdef SIMULATOR
@@ -127,6 +128,33 @@ void OS::run() {
         static int  osOverlayCursor = 0;
 
         _input.update();
+        
+        // ── Global Idle Sleep Check ──
+        bool anyInput = false;
+        for (uint8_t i = 0; i < (uint8_t)Btn::COUNT; i++) {
+            if (_input.held((Btn)i)) { anyInput = true; break; }
+        }
+        
+        if (anyInput) {
+            lastGlobalInputTime = now;
+        } else if (now - lastGlobalInputTime >= 60000UL) { // 60 seconds
+            _disp.clearBuffer();
+            _disp.setDrawColor(0);
+            _disp.drawBox(0, 0, 128, 64);
+            _disp.setDrawColor(1);
+            _disp.setFont(u8g2_font_6x10_tf);
+            int w = _disp.getStrWidth("Sleeping...");
+            _disp.drawStr((128 - w) / 2, 34, "Sleeping...");
+            _disp.sendBuffer();
+            delay(1000);
+            
+            _save.commit(); // Force write dirty cache to flash
+            _sound.stop();
+#ifndef SIMULATOR
+            _disp.setPowerSave(1);
+            esp_deep_sleep_start();
+#endif
+        }
 
         if (_console.pressed(Btn::MENU1) && _console.justPressed(Btn::MENU2)) {
             Diagnostics::toggle();

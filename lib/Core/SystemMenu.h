@@ -37,14 +37,11 @@ private:
     int            _slideOffset  = 0;
     uint8_t        _prevSelected = 0;
 
-    static constexpr uint32_t IDLE_SLEEP_MS = 60000;
-    uint32_t       _lastInputTime = 0;
     uint8_t        _animTick = 0;
     uint8_t        _arrowTick = 0;
     bool           _inAboutPage = false;
 
     // These should only appear ONCE in the class
-    void _enterDeepSleep(Console& ctx);
     void _drawHeader(Console& ctx);
     void _drawGameCard(Console& ctx, uint8_t idx, int offsetX); // Now takes an offset
     void _drawPagination(Console& ctx, uint8_t idx);            // Extracted static UI
