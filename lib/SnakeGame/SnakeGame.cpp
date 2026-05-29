@@ -530,6 +530,7 @@ void SnakeGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     // Wire sibling pointers
     _play.setData(&_data);
     _play.setEngine(&_camera, &_particles);
+    setSnapshotScene(&_play);
 
     _nameEntry.setData(&_data);
     _nameEntry.setEngine(&_camera);

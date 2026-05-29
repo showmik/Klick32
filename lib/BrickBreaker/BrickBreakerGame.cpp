@@ -1146,11 +1146,14 @@ void BBGameOverScene::draw(Console& ctx) {
 
 // ─── BrickBreakerGame ───────────────────────────────────────────────────────
 
-void BrickBreakerGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
+void BrickBreakerGame::onEnter(Console& ctx) { 
+    ctx.setCPUSpeed(80);
     _data.hiScore = ctx.loadHiScore();
     _title.setData(&_data);
     _play.setData(&_data);
     _play.setEngine(&_camera, &_particles);
+    setSnapshotScene(&_play);
+    
     _gameover.setData(&_data);
     _gameover.setPlayScene(&_play);
     
@@ -1162,10 +1165,6 @@ void BrickBreakerGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _sm.replace(&_title, ctx);
 }
 
-void BrickBreakerGame::onExit(Console& ctx) {
-    ctx.updateHiScore(_data.hiScore);
-}
-
 void BrickBreakerGame::update(Console& ctx, float dt) {
     if (_sm.current() == &_play) {
         if (_data.lives <= 0) {
@@ -1173,15 +1172,7 @@ void BrickBreakerGame::update(Console& ctx, float dt) {
         }
         _particles.update();
     }
-    _sm.update(ctx, dt);
-}
-
-void BrickBreakerGame::draw(Console& ctx) {
-    _sm.draw(ctx);
-}
-
-bool BrickBreakerGame::isRunning() const {
-    return !_sm.empty();
+    SceneGame<BBSharedData>::update(ctx, dt);
 }
 
 const char* BrickBreakerGame::getName() const {

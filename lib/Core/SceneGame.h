@@ -47,14 +47,18 @@ public:
 
     // Default implementations for standard GameBase methods
     
+    Scene* _snapshotScene = nullptr;
+    void setSnapshotScene(Scene* s) { _snapshotScene = s; }
+
     void saveSnapshot(Console& ctx) override {
-        Scene* current = _sm.current();
-        if (current) current->saveSnapshot(ctx);
+        if (_snapshotScene) _snapshotScene->saveSnapshot(ctx);
     }
 
     void loadSnapshot(Console& ctx) override {
-        Scene* current = _sm.current();
-        if (current) current->loadSnapshot(ctx);
+        if (_snapshotScene) {
+            _snapshotScene->loadSnapshot(ctx);
+            _sm.restoreSnapshotScene(_snapshotScene, ctx);
+        }
     }
 
     void onExit(Console& ctx) override {

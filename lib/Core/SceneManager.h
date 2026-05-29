@@ -51,6 +51,12 @@ public:
         if (s) { _stack[_depth++] = s; s->setManager(this); s->onEnter(ctx); }
     }
 
+    // Hard-cut directly into a scene bypassing onEnter(), used by snapshot system.
+    void restoreSnapshotScene(Scene* s, Console& ctx) {
+        while (_depth > 0) _stack[--_depth]->onExit(ctx);
+        if (s) { _stack[_depth++] = s; s->setManager(this); s->onSnapshotRestored(ctx); }
+    }
+
     // Overlay: pause the current top, push s on top.
     // Silently ignored if the stack is full.
     void push(Scene* s, Console& ctx, Effect effect = Effect::NONE) {

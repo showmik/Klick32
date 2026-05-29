@@ -1,8 +1,7 @@
 #pragma once
 #include "GameBase.h"
 #include "GameUtils.h"
-#include "SceneManager.h"
-#include "Scene.h"
+#include "SceneGame.h"
 #include "Camera.h"
 #include "ParticleManager.h"
 
@@ -178,28 +177,14 @@ private:
 };
 
 // ─── BrickBreakerGame ───────────────────────────────────────────────────────
-class BrickBreakerGame : public GameBase {
+class BrickBreakerGame : public SceneGame<BBSharedData> {
 public:
     void onEnter(Console& ctx) override;
-    void onExit (Console& ctx) override;
     void update (Console& ctx, float dt) override;
-    void draw   (Console& ctx) override;
-    bool           isRunning() const override;
     const char*    getName()   const override;
     const uint8_t* getCoverArt() const override;
 
-    void saveSnapshot(Console& ctx) override {
-        Scene* current = _sm.current();
-        if (current) current->saveSnapshot(ctx);
-    }
-    void loadSnapshot(Console& ctx) override {
-        Scene* current = _sm.current();
-        if (current) current->loadSnapshot(ctx);
-    }
-
 private:
-    BBSharedData      _data;
-    SceneManager      _sm;
     Camera            _camera;
     ParticleManager  _particles;
     
