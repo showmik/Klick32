@@ -15,7 +15,7 @@ struct BBSharedData {
 };
 
 // ─── Enums & Structs ────────────────────────────────────────────────────────
-enum class BrickType : uint8_t { NONE = 0, NORMAL = 1, HARD = 2, SOLID = 3 };
+enum class BrickType : uint8_t { NONE = 0, NORMAL = 1, HARD = 2, SOLID = 3, EXPLOSIVE = 4, SWITCH = 5, BARRIER = 6 };
 enum class PowerUpType : uint8_t { EXPAND, SHRINK, CATCH, MULTIBALL, FIREBALL, LIFE, LASER };
 
 struct BBBrick {
@@ -110,6 +110,10 @@ private:
     
     bool _laserActive = false;
     int _laserTimer = 0;
+    
+    uint8_t _screenFlashFrames = 0;
+    float _rowOffsetX[ROWS] = {0};
+    float _rowSpeedX[ROWS] = {0};
 
     void _generateLevel();
     void _spawnPowerUp(float x, float y);
@@ -117,6 +121,7 @@ private:
     void _resetBall(bool serve);
     void _normalizeBallVelocity(BBBall& b, float speedTarget);
     bool _checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, Console& ctx);
+    void _destroyBrick(int c, int r, Console& ctx, bool isExplosion = false);
 };
 
 // ─── BBPauseScene ───────────────────────────────────────────────────────────

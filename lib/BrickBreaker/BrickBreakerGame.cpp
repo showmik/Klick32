@@ -36,6 +36,7 @@ void BBTitleScene::draw(Console& ctx) {
 // ─── BBPlayScene ────────────────────────────────────────────────────────────
 
 void BBPlayScene::onEnter(Console& ctx) {
+    _screenFlashFrames = 0;
     _data->score = 0;
     _data->lives = 3;
     _data->level = 1;
@@ -52,40 +53,56 @@ void BBPlayScene::_generateLevel() {
     _bricksLeft = 0;
     _stickyPaddle = false;
 
-    int pattern = (_data->level - 1) % 5;
+    for (int r = 0; r < ROWS; ++r) {
+        _rowOffsetX[r] = 0;
+        _rowSpeedX[r] = 0;
+    }
+    
+    int level = _data->level;
     
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            bool active = true;
+            bool active = false;
             BrickType type = BrickType::NORMAL;
             int hp = 1;
 
-            if (pattern == 0) {
-                // Pattern 1: Standard Block (top rows only)
-                if (r > 2) active = false; 
-            } 
-            else if (pattern == 1) {
-                // Pattern 2: Checkerboard
-                if ((r + c) % 2 == 0) active = false;
-                if (r == 0) { type = BrickType::HARD; hp = 2; }
+            if (level == 1) {
+                // Basic block, top 3 rows
+                if (r < 3) active = true;
             }
-            else if (pattern == 2) {
-                // Pattern 3: Pyramid
+            else if (level == 2) {
+                // Checkerboard
+                if ((r + c) % 2 != 0 && r < 4) active = true;
+            }
+            else if (level == 3) {
+                // Pyramid with HARD base
                 int centerDist = abs(c - (COLS / 2));
-                if (centerDist > r) active = false;
-                if (r == ROWS - 1) { type = BrickType::HARD; hp = 2; }
+                if (centerDist <= r && r < 4) active = true;
+                if (r == 3 && active) { type = BrickType::HARD; hp = 2; }
             }
-            else if (pattern == 3) {
-                // Pattern 4: Solid Barriers
-                if (r == 2 && c % 4 == 2) {
-                    type = BrickType::SOLID; hp = -1;
-                } else if (r > 3) {
-                    active = false;
+            else if (level == 4) {
+                // Introduces EXPLOSIVE blocks
+                if (r % 2 == 0) active = true;
+                if (r == 0 && c % 3 == 1 && active) { type = BrickType::EXPLOSIVE; hp = 1; }
+                if (r == 2 && c % 3 == 2 && active) { type = BrickType::HARD; hp = 2; }
+            }
+            else if (level == 5) {
+                // Puzzle: Switch and Barrier
+                if (r == 3) { active = true; type = BrickType::BARRIER; hp = 1; }
+                else if (r == 0 && c == COLS / 2) { active = true; type = BrickType::SWITCH; hp = 1; }
+                else if (r == 1 && c % 2 == 0) active = true;
+            }
+            else {
+                // Level 6+: Procedural Mix
+                active = (random(100) < 60); // 60% chance to have a brick
+                if (r > 3) active = false; // Keep bottom clear
+                
+                if (active) {
+                    int randType = random(100);
+                    if (randType < 10) { type = BrickType::EXPLOSIVE; hp = 1; }
+                    else if (randType < 30) { type = BrickType::HARD; hp = 2; }
+                    else if (randType < 40 && r < 2) { type = BrickType::SOLID; hp = -1; }
                 }
-            }
-            else if (pattern == 4) {
-                // Pattern 5: Alternating Rows
-                if (r % 2 == 0) { type = BrickType::HARD; hp = 2; }
             }
 
             // Slowly increase overall difficulty by upgrading some random normal bricks to hard ones
@@ -100,8 +117,27 @@ void BBPlayScene::_generateLevel() {
             _bricks[r][c].type = type;
             _bricks[r][c].hp = hp;
             
-            if (active && type != BrickType::SOLID) {
+            if (active && type != BrickType::SOLID && type != BrickType::BARRIER) {
                 _bricksLeft++;
+            }
+        }
+    }
+    
+    // Add row movement for Level 6+
+    if (level >= 6) {
+        for (int r = 0; r < ROWS; ++r) {
+            bool canMove = true;
+            bool hasBricks = false;
+            for (int c = 0; c < COLS; ++c) {
+                if (_bricks[r][c].active) {
+                    hasBricks = true;
+                    if (_bricks[r][c].type == BrickType::SOLID || _bricks[r][c].type == BrickType::BARRIER) {
+                        canMove = false;
+                    }
+                }
+            }
+            if (hasBricks && canMove && random(100) < 40) { // 40% chance for a row to move
+                _rowSpeedX[r] = (r % 2 == 0) ? 0.3f : -0.3f;
             }
         }
     }
@@ -186,6 +222,7 @@ void BBPlayScene::_applyPowerUp(PowerUpType type, Console& ctx) {
             _stickyPaddle = true;
             break;
         case PowerUpType::MULTIBALL: {
+            _screenFlashFrames = 2;
             int activeBalls = 0;
             int sourceBallIdx = 0;
             for (int i = 0; i < MAX_BALLS; ++i) {
@@ -218,19 +255,76 @@ void BBPlayScene::_applyPowerUp(PowerUpType type, Console& ctx) {
             }
             break;
         case PowerUpType::LIFE:
+            _screenFlashFrames = 2;
             if (_data->lives < 5) _data->lives++;
             break;
         case PowerUpType::LASER:
+            _screenFlashFrames = 2;
             _laserActive = true;
             _laserTimer = 400; // ~13 seconds
             break;
     }
 }
 
+void BBPlayScene::_destroyBrick(int c, int r, Console& ctx, bool isExplosion) {
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+    if (!_bricks[r][c].active || _bricks[r][c].type == BrickType::SOLID) return;
+    
+    _bricks[r][c].active = false;
+    if (_bricks[r][c].type != BrickType::BARRIER) {
+        _bricksLeft--;
+    }
+    
+    int baseScore = 10;
+    if (_bricks[r][c].type == BrickType::HARD) baseScore = 20;
+    else if (_bricks[r][c].type == BrickType::EXPLOSIVE) baseScore = 30;
+    else if (_bricks[r][c].type == BrickType::SWITCH) baseScore = 50;
+    
+    _data->score += baseScore * _combo;
+    ctx.updateHiScore(_data->score);
+    
+    float brX = GRID_OX + c * BRICK_W + _rowOffsetX[r];
+    float brY = GRID_OY + r * BRICK_H;
+    
+    if (!isExplosion) {
+        _spawnPowerUp(brX + BRICK_W / 2.0f, brY + BRICK_H / 2.0f);
+    }
+    
+    if (_particles) {
+        for(int p=0; p<6; p++) {
+            _particles->spawnPixel(brX + BRICK_W / 2.0f, brY + BRICK_H / 2.0f, random(-20, 20)*0.1f, random(-20, 20)*0.1f, random(10, 20));
+        }
+    }
+    
+    if (_bricks[r][c].type == BrickType::SWITCH) {
+        ctx.beep(1500, 30);
+        _screenFlashFrames = 2;
+        if (_camera) _camera->shake(3);
+        for (int rr = 0; rr < ROWS; ++rr) {
+            for (int cc = 0; cc < COLS; ++cc) {
+                if (_bricks[rr][cc].active && _bricks[rr][cc].type == BrickType::BARRIER) {
+                    _destroyBrick(cc, rr, ctx, true);
+                }
+            }
+        }
+    }
+    
+    if (_bricks[r][c].type == BrickType::EXPLOSIVE) {
+        ctx.beep(100, 40);
+        if (_camera) _camera->shake(4);
+        for (int dr = -1; dr <= 1; ++dr) {
+            for (int dc = -1; dc <= 1; ++dc) {
+                if (dr == 0 && dc == 0) continue;
+                _destroyBrick(c + dc, r + dr, ctx, true);
+            }
+        }
+    }
+}
+
 bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, Console& ctx) {
     if (!brick.active) return false;
 
-    float brX = GRID_OX + bx * BRICK_W;
+    float brX = GRID_OX + bx * BRICK_W + _rowOffsetX[by];
     float brY = GRID_OY + by * BRICK_H;
 
     // AABB collision
@@ -268,18 +362,8 @@ bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, 
             }
 
             if (brick.hp <= 0) {
-                brick.active = false;
-                _bricksLeft--;
-                int baseScore = (brick.type == BrickType::HARD) ? 20 : 10;
-                _data->score += baseScore * _combo;
+                _destroyBrick(bx, by, ctx, false);
                 _combo = min(10, _combo + 1); // Cap combo at 10x
-                ctx.updateHiScore(_data->score);
-                _spawnPowerUp(brX + BRICK_W / 2.0f, brY + BRICK_H / 2.0f);
-                if (_particles) {
-                    for(int p=0; p<6; p++) {
-                        _particles->spawnPixel(brX + BRICK_W / 2.0f, brY + BRICK_H / 2.0f, random(-20, 20)*0.1f, random(-20, 20)*0.1f, random(10, 20));
-                    }
-                }
             }
         }
         ctx.beep(400, 10);
@@ -293,6 +377,8 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         sm.emit(ctx, Event::PAUSE);
         return;
     }
+
+    if (_screenFlashFrames > 0) _screenFlashFrames--;
 
     if (_msgTimer > 0) _msgTimer--;
     if (_levelClearPause) {
@@ -314,6 +400,30 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     // Clamp paddle
     if (_padX < 0) _padX = 0;
     if (_padX + _padW > Console::W) _padX = Console::W - _padW;
+
+    // Update Moving Rows
+    for (int r = 0; r < ROWS; ++r) {
+        if (_rowSpeedX[r] != 0) {
+            _rowOffsetX[r] += _rowSpeedX[r];
+            
+            // Calculate row bounds dynamically
+            float minX = 999;
+            float maxX = -999;
+            for (int c = 0; c < COLS; ++c) {
+                if (_bricks[r][c].active) {
+                    float bx = GRID_OX + c * BRICK_W + _rowOffsetX[r];
+                    if (bx < minX) minX = bx;
+                    if (bx + BRICK_W > maxX) maxX = bx + BRICK_W;
+                }
+            }
+            
+            // Bounce if hitting screen edges
+            if (minX < 0 || maxX > Console::W) {
+                _rowSpeedX[r] = -_rowSpeedX[r];
+                _rowOffsetX[r] += _rowSpeedX[r] * 2;
+            }
+        }
+    }
 
     // Launch Ball & Fire Lasers
     if (ctx.justPressed(Btn::A)) {
@@ -357,37 +467,32 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             if (_particles) _particles->spawnPixel(_lasers[i].x, 8, 0, 1.0f, 10);
             continue;
         }
-        
-        int cx = (int)_lasers[i].x - GRID_OX;
-        int cy = (int)_lasers[i].y - GRID_OY;
-        
-        // Prevent negative truncation mapping to index 0
-        int c = (cx >= 0) ? (cx / BRICK_W) : -1;
-        int r = (cy >= 0) ? (cy / BRICK_H) : -1;
-        
-        if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-            if (_bricks[r][c].active) {
-                _lasers[i].active = false;
-                if (_bricks[r][c].type != BrickType::SOLID) {
-                    _bricks[r][c].hp--;
-                    
-                    if (_particles) {
-                        _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+        bool hit = false;
+        for (int r = 0; r < ROWS && !hit; ++r) {
+            for (int c = 0; c < COLS && !hit; ++c) {
+                if (_bricks[r][c].active) {
+                    float brX = GRID_OX + c * BRICK_W + _rowOffsetX[r];
+                    float brY = GRID_OY + r * BRICK_H;
+                    if (_lasers[i].x >= brX && _lasers[i].x <= brX + BRICK_W &&
+                        _lasers[i].y >= brY && _lasers[i].y <= brY + BRICK_H) {
+                        
+                        hit = true;
+                        _lasers[i].active = false;
+                        
+                        if (_bricks[r][c].type != BrickType::SOLID) {
+                            _bricks[r][c].hp--;
+                            
+                            if (_bricks[r][c].hp <= 0) {
+                                _destroyBrick(c, r, ctx, false);
+                            } else if (_particles) {
+                                _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+                                ctx.beep(400, 10);
+                            }
+                        } else {
+                            if (_particles) _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+                            ctx.beep(300, 10);
+                        }
                     }
-                    
-                    if (_bricks[r][c].hp <= 0) {
-                        _bricks[r][c].active = false;
-                        _bricksLeft--;
-                        _data->score += (_bricks[r][c].type == BrickType::HARD) ? 20 : 10;
-                        ctx.updateHiScore(_data->score);
-                        _spawnPowerUp(GRID_OX + c*BRICK_W + BRICK_W/2.0f, GRID_OY + r*BRICK_H + BRICK_H/2.0f);
-                    }
-                    ctx.beep(400, 10);
-                } else {
-                    if (_particles) {
-                        _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
-                    }
-                    ctx.beep(300, 10);
                 }
             }
         }
@@ -482,6 +587,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_bricksLeft <= 0 && !_levelClearPause) {
         _levelClearPause = true;
         _clearTimer = 90;
+        _screenFlashFrames = 3;
         snprintf(_msg, sizeof(_msg), "LEVEL CLEAR!");
         _msgTimer = 90;
         
@@ -649,19 +755,34 @@ void BBPlayScene::draw(Console& ctx) {
     }
     ctx.popDrawState();
     ctx.endScreenSpace();
+    
+    if (_screenFlashFrames > 0) {
+        ctx.pushDrawState();
+        ctx.setDrawColor(Console::COLOR_XOR);
+        ctx.drawBox(0, 0, Console::W, Console::H);
+        ctx.popDrawState();
+    }
 }
 
 void BBPlayScene::drawField(Console& ctx) const {
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
             if (_bricks[r][c].active) {
-                int x = GRID_OX + c * BRICK_W;
+                int x = GRID_OX + c * BRICK_W + (int)_rowOffsetX[r];
                 int y = GRID_OY + r * BRICK_H;
                 if (_bricks[r][c].type == BrickType::HARD) {
                     ctx.drawBox(x + 1, y + 1, BRICK_W - 2, BRICK_H - 2);
                     ctx.drawFrame(x, y, BRICK_W, BRICK_H);
                 } else if (_bricks[r][c].type == BrickType::SOLID) {
                     ctx.drawDitherBox(x, y, BRICK_W, BRICK_H, 2);
+                } else if (_bricks[r][c].type == BrickType::EXPLOSIVE) {
+                    ctx.drawDitherBox(x, y, BRICK_W, BRICK_H, 3);
+                    ctx.drawFrame(x, y, BRICK_W, BRICK_H);
+                } else if (_bricks[r][c].type == BrickType::SWITCH) {
+                    ctx.drawBox(x + 2, y + 1, BRICK_W - 4, BRICK_H - 2);
+                } else if (_bricks[r][c].type == BrickType::BARRIER) {
+                    ctx.drawDitherBox(x, y, BRICK_W, BRICK_H, 1);
+                    ctx.drawFrame(x, y, BRICK_W, BRICK_H);
                 } else {
                     ctx.drawFrame(x, y, BRICK_W, BRICK_H);
                 }
