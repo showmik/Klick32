@@ -129,6 +129,8 @@ private:
     int _combo = 1;
     bool _levelClearPause = false;
     uint8_t _clearTimer = 0;
+    int _lastTimeBonus = 0;
+    int _lastLevelBonus = 0;
     
     bool _laserActive = false;
     int _laserTimer = 0;

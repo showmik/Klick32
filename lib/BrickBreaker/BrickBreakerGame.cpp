@@ -178,9 +178,12 @@ void BBPlayScene::_generateLevel() {
         }
     }
 
-    // Add row movement for Level 6+
-    if (level >= 6) {
-        for (int r = 0; r < ROWS; ++r) {
+    // Set up slide-in animation and row movement for Level 6+
+    for (int r = 0; r < ROWS; ++r) {
+        _rowOffsetX[r] = (r % 2 == 0) ? -Console::W : Console::W;
+        _rowSpeedX[r] = 0;
+        
+        if (level >= 6) {
             bool canMove = true;
             bool hasBricks = false;
             for (int c = 0; c < COLS; ++c) {
@@ -191,7 +194,7 @@ void BBPlayScene::_generateLevel() {
                     }
                 }
             }
-            if (hasBricks && canMove && random(100) < 40) { // 40% chance for a row to move
+            if (hasBricks && canMove && random(100) < 40) {
                 _rowSpeedX[r] = (r % 2 == 0) ? 0.3f : -0.3f;
             }
         }
@@ -430,8 +433,9 @@ bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, 
 }
 
 void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::MENU1)) {
-        sm.emit(ctx, Event::PAUSE);
+    if (ctx.justPressed(Btn::B)) {
+        ctx.sfxMenuBack();
+        sm.push(ctx, new BBPauseScene());
         return;
     }
 
@@ -445,10 +449,14 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_levelClearPause) {
         if (_clearTimer > 0) {
             _clearTimer--;
+            // Pop random fireworks!
+            if (_clearTimer % 15 == 0 && _particles) {
+                _particles->spawnPixel(random(10, Console::W - 10), random(10, Console::H / 2), random(-30, 30)*0.1f, random(-30, 30)*0.1f, random(20, 50));
+                ctx.beep(random(800, 1500), 5);
+            }
         } else {
-            _levelFrames = 0;
-            _levelClearPause = false;
             _data->level++;
+            _levelClearPause = false;
             _generateLevel();
             _resetBall(true);
         }
@@ -465,7 +473,9 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 
     // Update Moving Rows
     for (int r = 0; r < ROWS; ++r) {
-        if (_rowSpeedX[r] != 0) {
+        if (_levelFrames < 60) {
+            _rowOffsetX[r] *= 0.85f; // Slide in animation
+        } else if (_rowSpeedX[r] != 0) {
             _rowOffsetX[r] += _rowSpeedX[r];
             
             // Calculate row bounds dynamically
@@ -744,34 +754,28 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     // Level Clear
     if (_bricksLeft <= 0 && !_levelClearPause) {
         _levelClearPause = true;
-        _clearTimer = 90;
+        _clearTimer = 150; // Give time to read
         _screenFlashFrames = 3;
-        snprintf(_msg, sizeof(_msg), "LEVEL CLEAR!");
-        _msgTimer = 90;
+        _msgTimer = 0; // Disable normal msg so we can draw our own
         
         int parFrames = 60 * 30; // 30 seconds par time
-        int timeBonus = max(0, parFrames - _levelFrames) / 60 * 10;
-        int bonus = 100 * _data->level + timeBonus;
+        _lastTimeBonus = max(0, parFrames - _levelFrames) / 60 * 10;
+        _lastLevelBonus = 100 * _data->level;
+        int bonus = _lastLevelBonus + _lastTimeBonus;
         _data->score += bonus;
         ctx.updateHiScore(_data->score);
         
         ctx.beep(600, 10);
         ctx.beep(800, 10);
         ctx.beep(1000, 20);
-
-        if (_particles) {
-            // Massive Fireworks explosion
-            for (int i = 0; i < 40; i++) {
-                _particles->spawnPixel(Console::W/2.0f, Console::H/2.0f, random(-40, 40)*0.1f, random(-40, 40)*0.1f, random(30, 60));
-            }
-        }
     }
 
     // Powerups
     for (int i = 0; i < MAX_POWERUPS; ++i) {
         if (_powerUps[i].active) {
             _powerUps[i].y += 1.0f;
-            if (rectIntersect(_powerUps[i].x - 4, _powerUps[i].y - 4, 8, 8, _padX, PAD_Y, _padW, 3)) {
+            float hoverX = _powerUps[i].x + sin(_powerUps[i].y * 0.1f) * 3.0f;
+            if (rectIntersect(hoverX - 4, _powerUps[i].y - 4, 8, 8, _padX, PAD_Y, _padW, 3)) {
                 _applyPowerUp(_powerUps[i].type, ctx);
                 _powerUps[i].active = false;
                 if (_padX + _padW > Console::W) _padX = Console::W - _padW;
@@ -876,7 +880,8 @@ void BBPlayScene::draw(Console& ctx) {
                 case PowerUpType::LASER: spr = spr_pw_laser; break;
             }
             if (spr) {
-                ctx.drawBitmapEx((int)_powerUps[i].x - 4, (int)_powerUps[i].y - 4, 1, 8, spr);
+                int hoverX = (int)(_powerUps[i].x + sin(_powerUps[i].y * 0.1f) * 3.0f);
+                ctx.drawBitmapEx(hoverX - 4, (int)_powerUps[i].y - 4, 1, 8, spr);
             }
         }
     }
@@ -918,12 +923,12 @@ void BBPlayScene::draw(Console& ctx) {
         }
     }
     
-    // Level/Action Message Pop-up
+    // Overlay Message
     if (_msgTimer > 0) {
-        int boxW = 60;
-        int boxH = _levelClearPause ? 24 : 15;
-        int boxX = Console::W/2 - boxW/2;
-        int boxY = Console::H/2 - boxH/2 + 5;
+        int boxW = 80;
+        int boxH = 15;
+        int boxX = (Console::W - boxW) / 2;
+        int boxY = (Console::H - boxH) / 2;
         
         ctx.setDrawColor(Console::COLOR_BLACK);
         ctx.drawBox(boxX, boxY, boxW, boxH);
@@ -931,13 +936,28 @@ void BBPlayScene::draw(Console& ctx) {
         ctx.drawFrame(boxX, boxY, boxW, boxH);
         
         ctx.drawStrCentered(boxY + 9, _msg);
+    }
+    
+    if (_levelClearPause) {
+        int boxW = 100;
+        int boxH = 34;
+        int boxX = (Console::W - boxW) / 2;
+        int boxY = (Console::H - boxH) / 2;
         
-        if (_levelClearPause) {
-            ctx.setFont(u8g2_font_4x6_tr);
-            int parFrames = 60 * 30;
-            int timeBonus = max(0, parFrames - _levelFrames) / 60 * 10;
-            ctx.drawPrintfCentered(boxY + 18, "+%d PTS", 100 * _data->level + timeBonus);
-        }
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        ctx.drawBox(boxX, boxY, boxW, boxH);
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        ctx.drawFrame(boxX, boxY, boxW, boxH);
+        
+        ctx.drawStrCentered(boxY + 9, "LEVEL CLEAR!");
+        
+        char tb[32];
+        snprintf(tb, sizeof(tb), "TIME BNS: %d", _lastTimeBonus);
+        ctx.drawStrCentered(boxY + 19, tb);
+        
+        char lb[32];
+        snprintf(lb, sizeof(lb), "LEVEL BNS: %d", _lastLevelBonus);
+        ctx.drawStrCentered(boxY + 29, lb);
     }
     ctx.popDrawState();
     ctx.endScreenSpace();
@@ -959,6 +979,14 @@ void BBPlayScene::drawField(Console& ctx) const {
                 if (_bricks[r][c].type == BrickType::HARD) {
                     ctx.drawBox(x + 1, y + 1, BRICK_W - 2, BRICK_H - 2);
                     ctx.drawFrame(x, y, BRICK_W, BRICK_H);
+                    
+                    if (_bricks[r][c].hp == 1) {
+                        ctx.setDrawColor(Console::COLOR_BLACK);
+                        // Draw a jagged crack
+                        ctx.drawLine(x + 2, y + 1, x + 4, y + 3);
+                        ctx.drawLine(x + 4, y + 3, x + 3, y + 5);
+                        ctx.setDrawColor(Console::COLOR_WHITE);
+                    }
                 } else if (_bricks[r][c].type == BrickType::SOLID) {
                     ctx.drawDitherBox(x, y, BRICK_W, BRICK_H, 2);
                 } else if (_bricks[r][c].type == BrickType::EXPLOSIVE) {
