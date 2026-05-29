@@ -195,7 +195,7 @@ void SystemMenu::draw(Console& ctx) {
         // Draw footer pagination overrides
         ctx.setDrawColor(Console::COLOR_WHITE);
         ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
-        ctx.setFont(u8g2_font_5x7_tf);
+        ctx.setFont(u8g2_font_4x6_tr);
         ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[M1]Card View");
         
         char pageBuf[12];
@@ -301,7 +301,7 @@ void SystemMenu::_drawPagination(Console& ctx, uint8_t idx) {
 
 void SystemMenu::_drawFooter(Console& ctx) {
     ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
-    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.setFont(u8g2_font_4x6_tr);
     
     // Left Text
     ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B]About [M1]List [A]Play");
@@ -367,7 +367,7 @@ void SystemMenu::_drawAboutPage(Console& ctx) {
 
     // 4. Footer override for About Page
     ctx.drawHLine(0, Layout::FTR_LINE_Y, Console::W);
-    ctx.setFont(u8g2_font_5x7_tf);
+    ctx.setFont(u8g2_font_4x6_tr);
     ctx.drawStr(Layout::FTR_TEXT_X, Layout::FTR_TEXT_Y, "[B/M1] Back");
 }
 
