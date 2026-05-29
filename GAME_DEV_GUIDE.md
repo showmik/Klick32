@@ -7,21 +7,33 @@ This guide provides a deep dive into the architecture, limitations, and APIs of 
 ---
 
 ## Table of Contents
+
+**Part 1: The Fundamentals**
 1. [Core Philosophy & Hardware Constraints](#1-core-philosophy--hardware-constraints)
 2. [Getting Started (Scaffolding)](#2-getting-started-scaffolding)
 3. [The Static Singleton Architecture](#3-the-static-singleton-architecture)
+
+**Part 2: Core APIs & Assets**
 4. [Scene Management](#4-scene-management)
 5. [The Console Hardware Abstraction Layer (HAL)](#5-the-console-hardware-abstraction-layer-hal)
-6. [Zero-Allocation Entity Management](#6-zero-allocation-entity-management)
-7. [Particle System](#7-particle-system)
-8. [Camera & Screen Shake](#8-camera--screen-shake)
-9. [Performance & Best Practices](#9-performance--best-practices)
-10. [Full End-to-End Example: Flappy Block](#10-full-end-to-end-example-flappy-block)
-11. [Game Cards & Cover Art](#11-game-cards--cover-art)
-12. [Asset Pipeline (Bitmaps)](#12-asset-pipeline-bitmaps)
-13. [The PC Simulator Environment](#13-the-pc-simulator-environment)
+6. [Asset Pipeline (Bitmaps)](#6-asset-pipeline-bitmaps)
+7. [Game Cards & Cover Art](#7-game-cards--cover-art)
+
+**Part 3: Advanced Systems**
+8. [Zero-Allocation Entity Management](#8-zero-allocation-entity-management)
+9. [Particle System](#9-particle-system)
+10. [Camera & Screen Shake](#10-camera--screen-shake)
+
+**Part 4: Optimization & Tooling**
+11. [Performance & Best Practices](#11-performance--best-practices)
+12. [The PC Simulator Environment](#12-the-pc-simulator-environment)
+
+**Part 5: Putting It All Together**
+13. [Full End-to-End Example: Flappy Block](#13-full-end-to-end-example-flappy-block)
 
 ---
+
+# Part 1: The Fundamentals
 
 ## 1. Core Philosophy & Hardware Constraints
 
@@ -81,6 +93,8 @@ void MyCoolGame::onEnter(Console& ctx) {
 
 ---
 
+# Part 2: Core APIs & Assets
+
 ## 4. Scene Management
 
 Klick32 games are usually broken up into "Scenes" (e.g., `TitleScene`, `PlayScene`, `PauseScene`). The `SceneManager` is a stack-based router that handles transitioning between these states.
@@ -132,7 +146,7 @@ Read button states during `update()`:
 Available buttons: `UP`, `DOWN`, `LEFT`, `RIGHT`, `A`, `B`, `MENU1`, `MENU2`.
 
 ### 5.2 Drawing
-All drawing is automatically translated by the Camera system (see Section 8).
+All drawing is automatically translated by the Camera system (see Section 10).
 
 * **Primitives**: `ctx.drawBox(x, y, w, h)`, `ctx.drawFrame(x, y, w, h)`, `ctx.drawCircle(x, y, r)`.
 * **Colors**: `ctx.setDrawColor(Console::COLOR_WHITE)` or `Console::COLOR_BLACK`. You can also use `Console::COLOR_XOR` to invert pixels beneath the shape.
@@ -186,7 +200,48 @@ void PlayScene::die(Console& ctx) {
 
 ---
 
-## 6. Zero-Allocation Entity Management
+## 6. Asset Pipeline (Bitmaps)
+
+Because Klick32 uses the `U8g2` display format, you cannot simply load `.png` or `.bmp` files. Graphics must be baked into your C++ code as `PROGMEM` byte arrays (XBM format).
+
+**How to generate graphics:**
+1. Draw your sprite in Aseprite, MS Paint, or any editor (using only strict Black and White pixels).
+2. Export it as a `.bmp` or `.png`.
+3. Use an online tool like **image2cpp** (https://javl.github.io/image2cpp/) or the U8g2 XBM tools.
+4. Settings for `image2cpp`:
+   - Code output format: `Arduino Code`
+   - Draw mode: `Horizontal, 1 bit per pixel`
+5. Copy the generated `const unsigned char [] PROGMEM` array into a header file (e.g. `assets.h`) and include it in your game.
+
+> **Tip:** If your sprite has transparency, you will need to generate *two* bitmaps: the sprite data, and a separate "mask" data, drawing the mask first with `COLOR_BLACK` and the sprite with `COLOR_WHITE`.
+
+---
+
+## 7. Game Cards & Cover Art
+
+By default, your game appears in the OS menu as a blank card with the first letter of its name. To make your game stand out, you can override two virtual functions in your `GameBase` class to provide custom artwork:
+
+```cpp
+// A tiny 16x16 icon displayed next to your game's name
+const uint8_t* getIcon() const override {
+    static const uint8_t PROGMEM icon[] = { ... };
+    return icon;
+}
+
+// A massive 128x45 banner displayed when your game is selected
+const uint8_t* getCoverArt() const override {
+    static const uint8_t PROGMEM cover[] = { ... };
+    return cover;
+}
+```
+
+The cover art must be exactly 128 pixels wide (16 bytes per row) and 45 pixels high. The System Menu automatically handles drawing this beneath the header and above the footer!
+
+---
+
+# Part 3: Advanced Systems
+
+## 8. Zero-Allocation Entity Management
 
 Because `std::vector` is forbidden, Klick32 provides a templated `EntityManager`. It allocates a fixed block of memory at boot and recycles object slots dynamically.
 
@@ -222,7 +277,7 @@ _bullets.draw(ctx);
 
 ---
 
-## 7. Particle System
+## 9. Particle System
 
 The built-in `ParticleManager` is highly optimized for generating explosions, sparks, and debris.
 
@@ -241,7 +296,7 @@ _particles.draw(ctx);
 
 ---
 
-## 8. Camera & Screen Shake
+## 10. Camera & Screen Shake
 
 The OS features a global 2D Camera. By default, the camera is locked at `(0,0)`. Any drawing function you call on `Console` is automatically shifted by the Camera's current offset.
 
@@ -267,7 +322,9 @@ ctx.endScreenSpace();
 
 ---
 
-## 9. Performance & Best Practices
+# Part 4: Optimization & Tooling
+
+## 11. Performance & Best Practices
 
 1. **Avoid floating point math** where integers will suffice. (e.g. `millis()` timing vs `dt` tracking). The FPU is fast, but integer math is faster.
 2. **Minimize `drawPixel` loops.** If you need to fill an area with a pattern, rely on `drawDitherBox` which is heavily optimized at the OS level.
@@ -276,7 +333,25 @@ ctx.endScreenSpace();
 
 ---
 
-## 10. Full End-to-End Example: Flappy Block
+## 12. The PC Simulator Environment
+
+Flashing the ESP32-S3 over USB can take 30–60 seconds. When iterating on game logic, this is agonizingly slow. 
+
+Klick32 includes a **Native PC Simulator**! 
+Instead of compiling for the ESP32, you can compile the OS as a native Windows/Mac/Linux executable using CMake. 
+
+To run the simulator:
+1. Navigate to the `simulator/` directory.
+2. Build using CMake: `cmake -S . -B build` then `cmake --build build`.
+3. The simulator opens a window mapping your keyboard arrows to the D-Pad, `Z` to `A`, `X` to `B`, and `Enter`/`Shift` to the Menu buttons.
+
+In your game code, you can use the `#ifdef SIMULATOR` block if you need to mock out hardware-specific logic that doesn't exist on the PC (like reading an analog sensor).
+
+---
+
+# Part 5: Putting It All Together
+
+## 13. Full End-to-End Example: Flappy Block
 
 The best way to learn is to see everything working together. Here is a complete, minimal implementation of a "Flappy Bird" clone using the Klick32 Engine.
 
@@ -402,58 +477,3 @@ public:
 // 5. Expose to the OS
 REGISTER_GAME(FlappyGame)
 ```
-
----
-
-## 11. Game Cards & Cover Art
-
-By default, your game appears in the OS menu as a blank card with the first letter of its name. To make your game stand out, you can override two virtual functions in your `GameBase` class to provide custom artwork:
-
-```cpp
-// A tiny 16x16 icon displayed next to your game's name
-const uint8_t* getIcon() const override {
-    static const uint8_t PROGMEM icon[] = { ... };
-    return icon;
-}
-
-// A massive 128x45 banner displayed when your game is selected
-const uint8_t* getCoverArt() const override {
-    static const uint8_t PROGMEM cover[] = { ... };
-    return cover;
-}
-```
-
-The cover art must be exactly 128 pixels wide (16 bytes per row) and 45 pixels high. The System Menu automatically handles drawing this beneath the header and above the footer!
-
----
-
-## 12. Asset Pipeline (Bitmaps)
-
-Because Klick32 uses the `U8g2` display format, you cannot simply load `.png` or `.bmp` files. Graphics must be baked into your C++ code as `PROGMEM` byte arrays (XBM format).
-
-**How to generate graphics:**
-1. Draw your sprite in Aseprite, MS Paint, or any editor (using only strict Black and White pixels).
-2. Export it as a `.bmp` or `.png`.
-3. Use an online tool like **image2cpp** (https://javl.github.io/image2cpp/) or the U8g2 XBM tools.
-4. Settings for `image2cpp`:
-   - Code output format: `Arduino Code`
-   - Draw mode: `Horizontal, 1 bit per pixel`
-5. Copy the generated `const unsigned char [] PROGMEM` array into a header file (e.g. `assets.h`) and include it in your game.
-
-> **Tip:** If your sprite has transparency, you will need to generate *two* bitmaps: the sprite data, and a separate "mask" data, drawing the mask first with `COLOR_BLACK` and the sprite with `COLOR_WHITE`.
-
----
-
-## 13. The PC Simulator Environment
-
-Flashing the ESP32-S3 over USB can take 30–60 seconds. When iterating on game logic, this is agonizingly slow. 
-
-Klick32 includes a **Native PC Simulator**! 
-Instead of compiling for the ESP32, you can compile the OS as a native Windows/Mac/Linux executable using CMake. 
-
-To run the simulator:
-1. Navigate to the `simulator/` directory.
-2. Build using CMake: `cmake -S . -B build` then `cmake --build build`.
-3. The simulator opens a window mapping your keyboard arrows to the D-Pad, `Z` to `A`, `X` to `B`, and `Enter`/`Shift` to the Menu buttons.
-
-In your game code, you can use the `#ifdef SIMULATOR` block if you need to mock out hardware-specific logic that doesn't exist on the PC (like reading an analog sensor).
