@@ -27,16 +27,33 @@ void BBTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
         ctx.sfxMenuBack();
         sm.pop(ctx);
     }
+    
+    _bx += _bvx; _by += _bvy;
+    if (_bx < 0 || _bx > Console::W) _bvx = -_bvx;
+    if (_by < 0 || _by > Console::H) _bvy = -_bvy;
+    
+    _bx2 += _bvx2; _by2 += _bvy2;
+    if (_bx2 < 0 || _bx2 > Console::W) _bvx2 = -_bvx2;
+    if (_by2 < 0 || _by2 > Console::H) _bvy2 = -_bvy2;
 }
 
 void BBTitleScene::draw(Console& ctx) {
+    ctx.drawBox(_bx, _by, 2, 2);
+    ctx.drawBox(_bx2, _by2, 2, 2);
+    
     Screens::drawTitle(ctx, "BRICK BREAKER");
+    if (_data && _data->hiScore > 0) {
+        ctx.setFont(u8g2_font_4x6_tr);
+        ctx.drawPrintfCentered(45, "HI-SCORE: %lu", (unsigned long)_data->hiScore);
+    }
 }
 
 // ─── BBPlayScene ────────────────────────────────────────────────────────────
 
 void BBPlayScene::onEnter(Console& ctx) {
     _screenFlashFrames = 0;
+    _levelFrames = 0;
+    _combo = 1;
     _data->score = 0;
     _data->lives = 3;
     _data->level = 1;
@@ -59,6 +76,26 @@ void BBPlayScene::_generateLevel() {
     }
     
     int level = _data->level;
+    
+    _boss.active = false;
+    for (int i=0; i<3; i++) _projectiles[i].active = false;
+    
+    if (level > 0 && level % 5 == 0) {
+        _boss.active = true;
+        _boss.hp = _boss.maxHp = level * 5;
+        _boss.x = Console::W / 2 - 12;
+        _boss.y = 15;
+        _boss.speedX = 0.5f + (level * 0.05f);
+        _boss.attackTimer = 120;
+        
+        _bricksLeft = 1;
+        for (int r = 0; r < ROWS; ++r) {
+            for (int c = 0; c < COLS; ++c) {
+                _bricks[r][c].active = false;
+            }
+        }
+        return;
+    }
     
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
@@ -123,6 +160,24 @@ void BBPlayScene::_generateLevel() {
         }
     }
     
+    if (level > 5 && level % 5 != 0) {
+        // Enforce Symmetry for procedurally generated levels
+        for (int r = 0; r < ROWS; ++r) {
+            for (int c = 0; c < COLS / 2; ++c) {
+                int mirrorC = COLS - 1 - c;
+                if (_bricks[r][mirrorC].active && _bricks[r][mirrorC].type != BrickType::SOLID && _bricks[r][mirrorC].type != BrickType::BARRIER) {
+                    _bricksLeft--;
+                }
+                
+                _bricks[r][mirrorC] = _bricks[r][c];
+                
+                if (_bricks[r][mirrorC].active && _bricks[r][mirrorC].type != BrickType::SOLID && _bricks[r][mirrorC].type != BrickType::BARRIER) {
+                    _bricksLeft++;
+                }
+            }
+        }
+    }
+
     // Add row movement for Level 6+
     if (level >= 6) {
         for (int r = 0; r < ROWS; ++r) {
@@ -283,6 +338,8 @@ void BBPlayScene::_destroyBrick(int c, int r, Console& ctx, bool isExplosion) {
     _data->score += baseScore * _combo;
     ctx.updateHiScore(_data->score);
     
+    _combo = min(20, _combo + 1);
+    
     float brX = GRID_OX + c * BRICK_W + _rowOffsetX[r];
     float brY = GRID_OY + r * BRICK_H;
     
@@ -363,11 +420,11 @@ bool BBPlayScene::_checkBallBrick(BBBall& ball, BBBrick& brick, int bx, int by, 
 
             if (brick.hp <= 0) {
                 _destroyBrick(bx, by, ctx, false);
-                _combo = min(10, _combo + 1); // Cap combo at 10x
             }
         }
-        ctx.beep(400, 10);
-        return true;
+        int pitch = min(1000, 400 + (_combo * 40));
+        ctx.beep(pitch, 10);
+        if (_camera) _camera->shake(1);
     }
     return false;
 }
@@ -379,12 +436,17 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     }
 
     if (_screenFlashFrames > 0) _screenFlashFrames--;
+    
+    if (!_levelClearPause) {
+        _levelFrames++;
+    }
 
     if (_msgTimer > 0) _msgTimer--;
     if (_levelClearPause) {
         if (_clearTimer > 0) {
             _clearTimer--;
         } else {
+            _levelFrames = 0;
             _levelClearPause = false;
             _data->level++;
             _generateLevel();
@@ -421,6 +483,47 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             if (minX < 0 || maxX > Console::W) {
                 _rowSpeedX[r] = -_rowSpeedX[r];
                 _rowOffsetX[r] += _rowSpeedX[r] * 2;
+            }
+        }
+    }
+    
+    // Update Boss
+    if (_boss.active) {
+        _boss.x += _boss.speedX;
+        if (_boss.x <= 0 || _boss.x + _boss.w >= Console::W) {
+            _boss.speedX = -_boss.speedX;
+        }
+        
+        _boss.attackTimer--;
+        if (_boss.attackTimer <= 0) {
+            _boss.attackTimer = max(30, 120 - (_data->level * 5));
+            for (int i=0; i<3; i++) {
+                if (!_projectiles[i].active) {
+                    _projectiles[i].active = true;
+                    _projectiles[i].x = _boss.x + _boss.w/2;
+                    _projectiles[i].y = _boss.y + _boss.h;
+                    ctx.beep(800, 10);
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Update Projectiles
+    for (int i=0; i<3; i++) {
+        if (_projectiles[i].active) {
+            _projectiles[i].y += 1.5f;
+            if (_projectiles[i].y > Console::H) {
+                _projectiles[i].active = false;
+            } else if (rectIntersect(_projectiles[i].x - 1, _projectiles[i].y - 1, 3, 3, _padX, PAD_Y, _padW, 3)) {
+                _projectiles[i].active = false;
+                ctx.sfxDeath();
+                _data->lives--;
+                _stickyPaddle = false;
+                if (_camera) _camera->shake(5);
+                _screenFlashFrames = 5;
+                if (_data->lives > 0) _resetBall(true);
+                for (int j=0; j<3; j++) _projectiles[j].active = false;
             }
         }
     }
@@ -468,6 +571,28 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             continue;
         }
         bool hit = false;
+        
+        if (_boss.active && rectIntersect(_lasers[i].x, _lasers[i].y, 1, 4, _boss.x, _boss.y, _boss.w, _boss.h)) {
+            hit = true;
+            _lasers[i].active = false;
+            _boss.hp--;
+            ctx.beep(400, 10);
+            if (_camera) _camera->shake(1);
+            if (_particles) _particles->spawnPixel(_lasers[i].x, _lasers[i].y, random(-10, 10)*0.1f, random(0, 10)*0.1f, 15);
+            
+            if (_boss.hp <= 0) {
+                _boss.active = false;
+                _bricksLeft--;
+                _data->score += 1000 * (_data->level / 5);
+                ctx.updateHiScore(_data->score);
+                ctx.beep(100, 50);
+                if (_camera) _camera->shake(6);
+                for(int p=0; p<40; p++) {
+                    if(_particles) _particles->spawnPixel(_boss.x + _boss.w/2, _boss.y + _boss.h/2, random(-30, 30)*0.1f, random(-30, 30)*0.1f, random(20, 50));
+                }
+            }
+        }
+        
         for (int r = 0; r < ROWS && !hit; ++r) {
             for (int c = 0; c < COLS && !hit; ++c) {
                 if (_bricks[r][c].active) {
@@ -531,7 +656,7 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         if (_balls[i].x >= Console::W - 1) { _balls[i].x = Console::W - 1; _balls[i].vx = -_balls[i].vx; ctx.beep(300, 10); }
         if (_balls[i].y <= 8) { _balls[i].y = 8; _balls[i].vy = -_balls[i].vy; ctx.beep(300, 10); }
 
-        // Paddle collision
+        // AABB paddle collision
         if (_balls[i].vy > 0 && _balls[i].y >= PAD_Y - 2 && _balls[i].y <= PAD_Y + 2) {
             if (_balls[i].x >= _padX - 2 && _balls[i].x <= _padX + _padW + 2) {
                 _balls[i].y = PAD_Y - 2;
@@ -552,6 +677,39 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     _normalizeBallVelocity(_balls[i], min((float)MAX_SPEED, INIT_SPEED + (_data->level * 0.2f))); 
                 }
                 ctx.beep(500, 15);
+            }
+        }
+
+        // Boss collision
+        if (_boss.active && rectIntersect(_balls[i].x - 1, _balls[i].y - 1, 2, 2, _boss.x, _boss.y, _boss.w, _boss.h)) {
+            float cX = _balls[i].x;
+            float cY = _balls[i].y;
+            float bcX = _boss.x + _boss.w / 2.0f;
+            float bcY = _boss.y + _boss.h / 2.0f;
+            
+            if (!_balls[i].fireball) {
+                if (abs(cX - bcX) / _boss.w > abs(cY - bcY) / _boss.h) {
+                    _balls[i].vx = (cX < bcX) ? -abs(_balls[i].vx) : abs(_balls[i].vx);
+                } else {
+                    _balls[i].vy = (cY < bcY) ? -abs(_balls[i].vy) : abs(_balls[i].vy);
+                }
+            }
+            
+            _boss.hp -= (_balls[i].fireball) ? 2 : 1;
+            ctx.beep(500, 10);
+            if (_camera) _camera->shake(2);
+            if (_particles) _particles->spawnPixel(_balls[i].x, _balls[i].y, 0, 0, 15);
+            
+            if (_boss.hp <= 0) {
+                _boss.active = false;
+                _bricksLeft--;
+                _data->score += 1000 * (_data->level / 5);
+                ctx.updateHiScore(_data->score);
+                ctx.beep(100, 50);
+                if (_camera) _camera->shake(6);
+                for(int p=0; p<40; p++) {
+                    if(_particles) _particles->spawnPixel(_boss.x + _boss.w/2, _boss.y + _boss.h/2, random(-30, 30)*0.1f, random(-30, 30)*0.1f, random(20, 50));
+                }
             }
         }
 
@@ -591,7 +749,9 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         snprintf(_msg, sizeof(_msg), "LEVEL CLEAR!");
         _msgTimer = 90;
         
-        int bonus = 100 * _data->level;
+        int parFrames = 60 * 30; // 30 seconds par time
+        int timeBonus = max(0, parFrames - _levelFrames) / 60 * 10;
+        int bonus = 100 * _data->level + timeBonus;
         _data->score += bonus;
         ctx.updateHiScore(_data->score);
         
@@ -624,6 +784,30 @@ void BBPlayScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void BBPlayScene::draw(Console& ctx) {
     drawField(ctx);
+    
+    if (_boss.active) {
+        ctx.drawBox(_boss.x, _boss.y, _boss.w, _boss.h);
+        ctx.setDrawColor(Console::COLOR_BLACK);
+        
+        // draw teeth pattern
+        for (int i = 0; i < _boss.w; i += 4) {
+            ctx.drawBox(_boss.x + i, _boss.y + _boss.h - 2, 2, 2);
+        }
+        
+        ctx.drawBox(_boss.x + 4, _boss.y + 4, 4, 4); // left eye
+        ctx.drawBox(_boss.x + _boss.w - 8, _boss.y + 4, 4, 4); // right eye
+        ctx.setDrawColor(Console::COLOR_WHITE);
+        
+        // hp bar
+        int hpBarW = (_boss.hp * _boss.w) / _boss.maxHp;
+        ctx.drawBox(_boss.x, _boss.y - 3, hpBarW, 2);
+    }
+    
+    for (int i=0; i<3; i++) {
+        if (_projectiles[i].active) {
+            ctx.drawBox(_projectiles[i].x - 1, _projectiles[i].y - 1, 3, 3);
+        }
+    }
     
     // Draw Paddle (Rounded pill shape, 3 pixels high)
     ctx.drawBox((int)_padX + 1, (int)PAD_Y, (int)_padW - 2, 3);
@@ -750,7 +934,9 @@ void BBPlayScene::draw(Console& ctx) {
         
         if (_levelClearPause) {
             ctx.setFont(u8g2_font_4x6_tr);
-            ctx.drawPrintfCentered(boxY + 18, "+%d PTS", 100 * _data->level);
+            int parFrames = 60 * 30;
+            int timeBonus = max(0, parFrames - _levelFrames) / 60 * 10;
+            ctx.drawPrintfCentered(boxY + 18, "+%d PTS", 100 * _data->level + timeBonus);
         }
     }
     ctx.popDrawState();
@@ -793,7 +979,7 @@ void BBPlayScene::drawField(Console& ctx) const {
 
 // ─── BBPauseScene ───────────────────────────────────────────────────────────
 void BBPauseScene::update(Console& ctx, SceneManager& sm, float dt) {
-    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B) ) {
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::B)) {
         sm.pop(ctx);
     }
 }
@@ -841,10 +1027,11 @@ void BBGameOverScene::draw(Console& ctx) {
     
     ctx.setFont(u8g2_font_4x6_tr);
     ctx.drawPrintfCentered(32, "SCORE: %d", _data->score);
-    ctx.drawPrintfCentered(40, "LEVEL: %d", _data->level);
+    ctx.drawPrintfCentered(40, "HI-SCORE: %d", _data->hiScore);
+    ctx.drawPrintfCentered(48, "LEVEL: %d", _data->level);
     
     if ((_frame / 30) % 2 == 0) {
-        ctx.drawStrCentered(52, "A:RETRY  B:MENU");
+        ctx.drawStrCentered(58, "A:RETRY  B:MENU");
     }
     ctx.popDrawState();
 }
@@ -853,6 +1040,7 @@ void BBGameOverScene::draw(Console& ctx) {
 
 void BrickBreakerGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _data.hiScore = ctx.loadHiScore();
+    _title.setData(&_data);
     _play.setData(&_data);
     _play.setEngine(&_camera, &_particles);
     _gameover.setData(&_data);

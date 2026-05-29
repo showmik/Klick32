@@ -44,6 +44,21 @@ struct BBLaser {
     bool active = false;
 };
 
+struct BBBoss {
+    bool active = false;
+    float x = 0, y = 10;
+    float w = 24, h = 12;
+    int hp = 0;
+    int maxHp = 0;
+    float speedX = 0;
+    int attackTimer = 0;
+};
+
+struct BBProjectile {
+    bool active = false;
+    float x = 0, y = 0;
+};
+
 // Forward Declarations
 class BBPlayScene;
 class BBPauseScene;
@@ -52,11 +67,15 @@ class BBGameOverScene;
 // ─── BBTitleScene ───────────────────────────────────────────────────────────
 class BBTitleScene : public Scene {
 public:
+    void setData(BBSharedData* data) { _data = data; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
     uint8_t _frame = 0;
+    BBSharedData* _data = nullptr;
+    float _bx = 10, _by = 10, _bvx = 1.5f, _bvy = 1.5f;
+    float _bx2 = 110, _by2 = 50, _bvx2 = -1.2f, _bvy2 = -1.8f;
 };
 
 // ─── BBPlayScene ────────────────────────────────────────────────────────────
@@ -91,10 +110,13 @@ private:
     Camera*           _camera    = nullptr;
     ParticleManager* _particles = nullptr;
 
-    BBBrick   _bricks[ROWS][COLS];
-    BBBall    _balls[MAX_BALLS];
+    BBBrick _bricks[ROWS][COLS];
+    BBBall _balls[MAX_BALLS];
     BBPowerUp _powerUps[MAX_POWERUPS];
-    BBLaser   _lasers[MAX_LASERS];
+    BBLaser _lasers[MAX_LASERS];
+    
+    BBBoss _boss;
+    BBProjectile _projectiles[3];
 
     float _padX = 0;
     float _padW = 20.0f;
@@ -114,6 +136,8 @@ private:
     uint8_t _screenFlashFrames = 0;
     float _rowOffsetX[ROWS] = {0};
     float _rowSpeedX[ROWS] = {0};
+
+    int _levelFrames = 0;
 
     void _generateLevel();
     void _spawnPowerUp(float x, float y);
