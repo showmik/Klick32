@@ -296,9 +296,9 @@ void OS::run() {
             activeGame->draw(_console);
             
             if (osOverlayAnim > 0.0f) {
-                // 1. Full Screen Dither Dimming (XOR checkerboard)
+                // 1. Full Screen Dither Dimming (Uniform white checkerboard)
                 _console.beginScreenSpace();
-                _console.setDrawColor(Console::COLOR_XOR);
+                _console.setDrawColor(Console::COLOR_WHITE);
                 _console.drawDitherBox(0, 0, 128, 64, 2);
                 _console.endScreenSpace();
                 
