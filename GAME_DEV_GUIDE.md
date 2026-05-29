@@ -290,9 +290,12 @@ The cover art must be exactly 128 pixels wide (16 bytes per row) and 45 pixels h
 
 # Part 3: Advanced Systems
 
-## 8. Zero-Allocation ECS (Entity Component System)
+## 8. Entity Management (ECS vs OOP Sprites)
 
-Because `std::vector` is forbidden, Klick32 provides a lightweight, SoA (Structure-of-Arrays) ECS designed specifically for microcontrollers. It completely replaces OOP inheritance (e.g., `class Bullet : public Entity`) with pure, contiguous data arrays for maximum cache locality and physics performance.
+Klick32 provides two distinct ways to manage game objects depending on the complexity of your game.
+
+### 8.1 Complex Games: Zero-Allocation ECS
+Because `std::vector` is forbidden, Klick32 provides a lightweight, SoA (Structure-of-Arrays) ECS designed specifically for microcontrollers. It completely replaces OOP inheritance (e.g., `class Bullet : public Entity`) with pure, contiguous data arrays for maximum cache locality and physics performance. Use this for complex games (like Roguelikes or Physics platformers) with many moving parts.
 
 ```cpp
 #include "ECS.h"
@@ -322,6 +325,33 @@ for (EntityID i = 0; i < 32; i++) {
             _registry.destroy(i);
         }
     }
+}
+```
+
+### 8.2 Simple Games: The Sprite Class
+If you are building a simple game (like Pong or Flappy Bird) and don't want the overhead of defining ECS components, the `Core` framework includes a ready-to-use OOP `Sprite` utility class.
+
+```cpp
+#include "Sprite.h"
+
+Sprite _player;
+Sprite _enemy;
+
+void onEnter(Console& ctx) {
+    // x, y, width, height, bitmap, bytesPerRow
+    _player = Sprite(10.0f, 30.0f, 8, 8, PROGMEM_PLAYER_BMP, 1);
+    _enemy  = Sprite(100.0f, 30.0f, 16, 16, PROGMEM_ENEMY_BMP, 2);
+}
+
+void update(Console& ctx, float dt) {
+    if (_player.collidesWith(_enemy)) {
+        // Boom!
+    }
+}
+
+void draw(Console& ctx) {
+    _player.draw(ctx);
+    _enemy.draw(ctx);
 }
 ```
 
