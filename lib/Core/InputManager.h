@@ -41,8 +41,8 @@ public:
 
     // ── Tuning ────────────────────────────────────────────────────────────────
     static constexpr uint8_t RELEASE_FRAMES = 2;   // frames HIGH before release commits (~66 ms)
-    static constexpr uint8_t REPEAT_DELAY   = 20;  // frames before first repeat  (~660 ms)
-    static constexpr uint8_t REPEAT_RATE    = 6;   // frames between repeats      (~200 ms)
+    static constexpr uint8_t REPEAT_DELAY   = 12;  // Reduced from 20 -> ~396 ms before fast scroll triggers
+    static constexpr uint8_t REPEAT_RATE    = 3;   // Reduced from 6 -> ~99 ms intervals during held scrolling
 
     void begin() {
         for (uint8_t i = 0; i < NUM_BTNS; i++) {

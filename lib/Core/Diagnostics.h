@@ -45,9 +45,9 @@ public:
 
         ctx.beginScreenSpace();
         ctx.setDrawColor(Console::COLOR_BLACK);
-        ctx.drawBox(0, 0, 128, 16);
+        ctx.drawBox(0, 0, 128, 9);
         ctx.setDrawColor(Console::COLOR_WHITE);
-        ctx.drawFrame(0, 0, 128, 16);
+        ctx.drawHLine(0, 8, 128);
 
         // Draw debug shapes
         ctx.endScreenSpace(); // shapes are usually world-space
@@ -62,17 +62,24 @@ public:
 
         ctx.setFont(u8g2_font_4x6_tr); // Tiny font
         
-        // FPS and Logic Time
         uint32_t logicTimeUs = _updateEnd - _updateStart;
-        ctx.drawPrintf(2, 6, "FPS: %d  Logic: %lu us", _fps, logicTimeUs);
 
-        // Memory usage
+        // Render compact single-line performance diagnostics
 #ifndef SIMULATOR
         uint32_t freeHeap = ESP.getFreeHeap();
         uint32_t maxBlock = ESP.getMaxAllocHeap();
-        ctx.drawPrintf(2, 13, "RAM: %lu B / Max: %lu B", freeHeap, maxBlock);
+        uint32_t freeHeapKb = freeHeap / 1024;
+        uint32_t maxBlockKb = maxBlock / 1024;
+        
+        ctx.drawPrintf(2, 6, "%uF | %lu.%lums | R:%luK | M:%luK", 
+                       _fps, 
+                       logicTimeUs / 1000, (logicTimeUs % 1000) / 100, 
+                       freeHeapKb, 
+                       maxBlockKb);
 #else
-        ctx.drawPrintf(2, 13, "RAM: --- / Max: --- (Sim)");
+        ctx.drawPrintf(2, 6, "%uF | %lu.%lums | PC Sim", 
+                       _fps, 
+                       logicTimeUs / 1000, (logicTimeUs % 1000) / 100);
 #endif
         ctx.endScreenSpace();
     }
