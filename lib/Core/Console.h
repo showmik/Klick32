@@ -42,6 +42,18 @@ public:
     static constexpr int H = 64;
 
     // ══════════════════════════════════════════════════════════════════════════
+    // HARDWARE POWER SCALING
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Dynamically scale the ESP32 CPU Frequency to save battery.
+    // Allowed values: 240 (Max Performance), 160, 80 (Max Battery)
+    void setCPUSpeed(int mhz) {
+#ifndef SIMULATOR
+        setCpuFrequencyMhz(mhz);
+#endif
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // INPUT
     // ══════════════════════════════════════════════════════════════════════════
 

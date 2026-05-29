@@ -330,6 +330,7 @@ ctx.endScreenSpace();
 2. **Minimize `drawPixel` loops.** If you need to fill an area with a pattern, rely on `drawDitherBox` which is heavily optimized at the OS level.
 3. **Use the Diagnostics HUD.** While your game is running, press `MENU2` (or the mapped button if your game overrides it) to bring up the Diagnostics overlay. Keep an eye on your "Logic Time". You have `33,000 µs` total; try to keep game logic under `15,000 µs` to leave enough time for I2C display flushing.
 4. **Use Fixed Length Types:** Always use `int8_t`, `uint16_t`, `uint32_t` etc. instead of `int` or `long` to ensure precise memory footprints across hardware architectures.
+5. **Dynamic Power Scaling:** If your game is simple (e.g., a puzzle game), you can drop the CPU speed from 240MHz down to 80MHz to drastically save battery life by calling `ctx.setCPUSpeed(80);` in `onEnter()`. The OS will automatically restore 240MHz when your game exits.
 
 ---
 

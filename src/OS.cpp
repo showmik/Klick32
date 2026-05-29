@@ -24,8 +24,12 @@ uint8_t* g_simDisplayBuffer = nullptr;
 #endif
 
 void OS::begin() {
+#ifndef SIMULATOR
+    setCpuFrequencyMhz(240); // Max power by default
+#endif
     Serial.begin(115200);
     Wire.begin(PIN_SDA, PIN_SCL);
+    _disp.setBusClock(1000000); // Massive hardware I2C speed boost (1MHz)
     _disp.begin();
     _input.begin();
     _sound.begin();
@@ -149,6 +153,9 @@ void OS::run() {
                 // Game wants to exit -> Return to the menu!
                 activeGame->onExit(_console);
                 _save.end();                         // Close game namespace
+#ifndef SIMULATOR
+                setCpuFrequencyMhz(240);             // Restore max performance for OS Menu
+#endif
                 // Do NOT delete activeGame; it is a static instance
                 activeGame = &_sysMenu;
                 _save.begin("__os");                 // Reopen OS namespace
