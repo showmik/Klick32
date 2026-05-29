@@ -343,7 +343,7 @@ void SIGameOverScene::draw(Console& ctx) {
         _sm->drawUnder(ctx);
     }
     
-    Screens::drawGameOver(ctx, _data->score, _data->hiScore, _data->score >= _data->hiScore && _data->score > 0);
+    Screens::drawGameOver(ctx, _data->score, _data->hiScore, _data->score >= _data->hiScore && _data->score > 0, _particles);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

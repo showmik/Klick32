@@ -496,7 +496,7 @@ void DinoDeadScene::draw(Console& ctx) {
 
     // Only draw the game over menu once the shake settles to give it impact
     if (_frame > 20) {
-        Screens::drawGameOver(ctx, _data->score, _data->hiScore, _data->score >= _data->hiScore && _data->score > 0);
+        Screens::drawGameOver(ctx, _data->score, _data->hiScore, _data->score >= _data->hiScore && _data->score > 0, _particles);
     }
 }
 

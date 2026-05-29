@@ -1,5 +1,6 @@
 #pragma once
 #include "Console.h"
+#include "ParticleManager.h"
 
 // ─── CommonScreens ───────────────────────────────────────────────────────────
 // Reusable screen layouts to prevent boilerplate copy-pasting across games.
@@ -23,7 +24,7 @@ namespace Screens {
     }
 
     // Standard Game Over screen with score
-    inline void drawGameOver(Console& ctx, uint32_t score, uint32_t highScore, bool isNewHigh = false) {
+    inline void drawGameOver(Console& ctx, uint32_t score, uint32_t highScore, bool isNewHigh = false, ParticleManager* particles = nullptr) {
         ctx.pushDrawState();
         ctx.setDrawColor(Console::COLOR_BLACK);
         ctx.drawBox(6, 6, Console::W - 12, Console::H - 12);
@@ -45,6 +46,21 @@ namespace Screens {
         if ((millis() / 500) % 2 == 0) {
             ctx.drawStrCentered(56, "PRESS A TO CONTINUE");
         }
+
+        // Draw dynamic high score fanfare particles
+        if (isNewHigh && particles) {
+            // Spawn 1 pixel spark every few frames to create a steady celebration fanfare
+            if (random(0, 100) < 35) {
+                float px = 10 + random(0, Console::W - 20);
+                float py = 52;
+                float vx = ((float)random(0, 100) / 100.0f) * 1.2f - 0.6f;
+                float vy = -((float)random(0, 100) / 100.0f) * 0.9f - 0.4f; // shoot upwards
+                uint8_t life = random(10, 20);
+                particles->spawnPixel(px, py, vx, vy, life);
+            }
+            particles->draw(ctx);
+        }
+
         ctx.popDrawState();
     }
 
