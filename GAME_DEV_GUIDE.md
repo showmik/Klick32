@@ -23,13 +23,17 @@ This guide provides a deep dive into the architecture, limitations, and APIs of 
 8. [Zero-Allocation Entity Management](#8-zero-allocation-entity-management)
 9. [Particle System](#9-particle-system)
 10. [Camera & Screen Shake](#10-camera--screen-shake)
+11. [Mathematics & Geometry (Vec2, Rect, and Helpers)](#11-mathematics--geometry-vec2-rect-and-helpers)
+12. [Physics Engine (Swept-AABB Collision)](#12-physics-engine-swept-aabb-collision)
+13. [Easing, Timers & Tweening](#13-easing-timers--tweening)
+14. [UI Helper Widgets](#14-ui-helper-widgets)
 
 **Part 4: Optimization & Tooling**
-11. [Performance & Best Practices](#11-performance--best-practices)
-12. [The PC Simulator Environment](#12-the-pc-simulator-environment)
+15. [Performance & Best Practices](#15-performance--best-practices)
+16. [The PC Simulator Environment](#16-the-pc-simulator-environment)
 
 **Part 5: Putting It All Together**
-13. [Full End-to-End Example: Flappy Block](#13-full-end-to-end-example-flappy-block)
+17. [Full End-to-End Example: Flappy Block](#17-full-end-to-end-example-flappy-block)
 
 ---
 
@@ -47,13 +51,13 @@ Klick32 runs on an ESP32-S3. While powerful for a microcontroller, it has strict
 
 ## 2. Getting Started (Scaffolding)
 
-To create a new game, use the provided Python script. From the root directory, run:
+To create a new game, use the provided Python script in the root directory:
 
 ```bash
-python scripts/create_game.py "My Cool Game"
+python create_game.py MyCoolGame
 ```
 
-This generates a folder in `lib/MyCoolGame/` containing your game's boilerplate headers and source files. The OS automatically discovers this folder during compilation via the `pre_build.py` script and registers it in the System Menu.
+This generates a folder in `lib/MyCoolGameGame/` containing your game's boilerplate headers and source files. The OS automatically discovers this folder during compilation via the `pre_build.py` script, includes its main header in `src/GameIncludes.h`, and registers it in the System Menu.
 
 ---
 
@@ -136,13 +140,15 @@ void PauseScene::draw(Console& ctx) {
 
 The `Console` object (passed as `ctx`) is your sole interface to the hardware. You never include `U8g2` or `Preferences` directly in your game files.
 
-### 8. Input (Buttons)
+### 5.1 Input (Buttons)
 Read inputs via the `ctx` object in `update()`:
-- `ctx.pressed(Btn::A)` — true as long as held.
-- `ctx.justPressed(Btn::A)` — true only on the exact frame it was pressed down.
-- `ctx.justReleased(Btn::A)` — true only on the frame it was let go.
+* `ctx.pressed(Btn::A)` — true as long as held (debounced). Use for continuous actions (e.g., walking, charging).
+* `ctx.justPressed(Btn::A)` — true only on the single frame the button transitions unpressed → pressed. Use for one-shots (e.g., jumping, firing, confirming).
+* `ctx.justReleased(Btn::A)` — true only on the single frame the button transitions pressed → unpressed.
+* `ctx.repeat(Btn::UP)` — true on justPressed, and then fires periodically while held down. Use for UI/menu navigation.
+* `ctx.holdFrames(Btn::A)` — returns the consecutive number of frames the button has been held down. Resets to 0 on release. Useful for charge mechanics (e.g. `if (ctx.holdFrames(Btn::A) == 60) { /* fully charged */ }`).
 
-Available buttons: `UP`, `DOWN`, `LEFT`, `RIGHT`, `A`, `B`, `MENU1`, `MENU2`.
+Available buttons: `Btn::UP`, `Btn::DOWN`, `Btn::LEFT`, `Btn::RIGHT`, `Btn::A`, `Btn::B`, `Btn::MENU1`, `Btn::MENU2`.
 
 > **Note on MENU2:** The Klick32 OS intercepts `MENU2` to open the universal **Quick Settings** overlay (which pauses the game and allows muting audio or quitting). You should avoid using `MENU2` for in-game actions, as it will physically suspend your game loop!
 > Holding `MENU1` + `MENU2` toggles the Developer Diagnostics HUD.
@@ -153,7 +159,7 @@ All drawing is automatically translated by the Camera system (see Section 10).
 * **Primitives**: `ctx.drawBox(x, y, w, h)`, `ctx.drawFrame(x, y, w, h)`, `ctx.drawCircle(x, y, r)`.
 * **Colors**: `ctx.setDrawColor(Console::COLOR_WHITE)` or `Console::COLOR_BLACK`. You can also use `Console::COLOR_XOR` to invert pixels beneath the shape.
 * **Spatial Dithering**: Since we lack true grayscale, you can draw shaded regions using `drawDitherBox(x, y, w, h, shade)`. Shade goes from 0 (Black) to 1 (25%), 2 (50%), 3 (75%), and 4 (White).
-* **Text**: `ctx.setFont(u8g2_font_...)`, then `ctx.drawStr(x, y, "Text")`. Remember that `y` is the **baseline** of the font, not the top!
+* **Text**: `ctx.setFont(u8g2_font_...)`, then `ctx.drawStr(x, y, "Text")`. Remember that `y` is the **baseline** of the font, not the top! Center text easily using `ctx.drawStrCentered(y, "Text")` or centered both horizontally and vertically using `ctx.drawStrCenteredBoth("Text")`.
 
 ### 5.3 Bitmaps & Flipping
 You can draw PROGMEM bitmaps. The `drawBitmapEx` function natively supports hardware-accelerated rendering and software flipping.
@@ -166,6 +172,14 @@ ctx.drawBitmap(x, y, bytesPerRow, height, spriteData);
 ctx.drawBitmapEx(x, y, width, height, bytesPerRow, spriteData, Console::BMP_FLIP_H);
 ```
 
+For a cleaner syntax that avoids positional argument confusion, use the fluent **Bitmap Builder**:
+```cpp
+ctx.blit(spriteData, bytesPerRow, height)
+   .at(x, y)
+   .flipX(true) // horizontally flipped!
+   .draw();
+```
+
 ### 5.4 Audio
 The Klick32 uses a polyphonic software synthesizer running asynchronously on **Core 0**. This means audio mixing happens completely independently from your game logic (which runs on Core 1).
 
@@ -175,6 +189,8 @@ Use the built-in system effects for consistency:
 ctx.sfxJump();
 ctx.sfxDeath();
 ctx.sfxPoint();
+ctx.sfxMenuNav();
+ctx.sfxMenuEnter();
 ```
 Or trigger a custom beep:
 ```cpp
@@ -200,23 +216,34 @@ void MyGame::onEnter(Console& ctx) {
 ```
 
 ### 5.5 Persistence (Saving Data)
-Klick32 automatically sandboxes your game's save data into a secure NVS (Non-Volatile Storage) namespace. You can safely save keys like `"score"` without overwriting another game's `"score"`.
+Klick32 automatically sandboxes your game's save data into a secure NVS (Non-Volatile Storage) namespace. You can safely save keys like `"score"` without overwriting another game's `"score"`. Maximum length for NVS keys is 15 characters.
 
-A robust High Score system example:
 ```cpp
-// 1. Load in onEnter()
-void PlayScene::onEnter(Console& ctx) {
-    _score = 0;
-    _hiScore = ctx.loadUInt("hi", 0); // 0 is the default if not found
-}
+// Write methods:
+ctx.saveUInt("hi", 1234);
+ctx.saveInt("level", -5);
+ctx.saveFloat("vel", 3.14f);
+ctx.saveBool("sfx", true);
+ctx.saveByte("id", 0xFA);
 
-// 2. Check and Save mid-game when the player dies
-void PlayScene::die(Console& ctx) {
-    if (_score > _hiScore) {
-        _hiScore = _score;
-        ctx.saveUInt("hi", _hiScore); // Save immediately to protect against power-loss
-    }
-    _sm->replace(&_gameOverScene, ctx);
+// Read methods (returns default value if key doesn't exist):
+uint32_t val = ctx.loadUInt("hi", 0);
+int32_t level = ctx.loadInt("level", 1);
+float vel = ctx.loadFloat("vel", 0.0f);
+bool sfx = ctx.loadBool("sfx", true);
+uint8_t id = ctx.loadByte("id", 0);
+```
+
+#### 🏆 High Score Persistence Shortcuts
+Rather than manually validating and saving scores, the OS provides highly-optimized shortcuts:
+```cpp
+// Loads the high score for this game (defaults to 0)
+uint32_t best = ctx.loadHiScore();
+
+// Compares, updates NVS *only* if beat, and returns true.
+// Ideal for checking for a new record and playing a fanfare!
+if (ctx.updateHiScore(score)) {
+    ctx.sfxPoint(); // Play sound effect
 }
 ```
 
@@ -231,8 +258,8 @@ Because Klick32 uses the `U8g2` display format, you cannot simply load `.png` or
 2. Export it as a `.bmp` or `.png`.
 3. Use an online tool like **image2cpp** (https://javl.github.io/image2cpp/) or the U8g2 XBM tools.
 4. Settings for `image2cpp`:
-   - Code output format: `Arduino Code`
-   - Draw mode: `Horizontal, 1 bit per pixel`
+   * Code output format: `Arduino Code`
+   * Draw mode: `Horizontal, 1 bit per pixel`
 5. Copy the generated `const unsigned char [] PROGMEM` array into a header file (e.g. `assets.h`) and include it in your game.
 
 > **Tip:** If your sprite has transparency, you will need to generate *two* bitmaps: the sprite data, and a separate "mask" data, drawing the mask first with `COLOR_BLACK` and the sprite with `COLOR_WHITE`.
@@ -268,7 +295,7 @@ The cover art must be exactly 128 pixels wide (16 bytes per row) and 45 pixels h
 Because `std::vector` is forbidden, Klick32 provides a templated `EntityManager`. It allocates a fixed block of memory at boot and recycles object slots dynamically.
 
 ```cpp
-// 1. Define your entity
+// 1. Define your entity by subclassing Entity
 class Bullet : public Entity {
 public:
     int x, y;
@@ -285,7 +312,7 @@ public:
     }
 };
 
-// 2. Instantiate the manager in your Game class
+// 2. Instantiate the manager in your Game/Scene class
 EntityManager<Bullet, 32> _bullets; // Pool of 32 bullets
 
 // 3. Spawn entities
@@ -344,9 +371,181 @@ ctx.endScreenSpace();
 
 ---
 
+## 11. Mathematics & Geometry (Vec2, Rect, and Helpers)
+
+Klick32 bundles header-only, zero-allocation math utilities in `<GameUtils.h>` to simplify 2D operations.
+
+### 11.1 Vec2 (2D Floating-Point Vector)
+Represent coordinates, speeds, and dimensions with `Vec2`.
+```cpp
+#include "GameUtils.h"
+
+Vec2 pos{10.0f, 36.0f};
+Vec2 vel{0.0f, -8.0f};
+
+// Vector arithmetic
+pos += vel * dt;
+
+// Length queries
+float lenSq = vel.lengthSq(); // Squared length (fast - avoids sqrtf)
+float len = vel.length();     // Real Euclidean length
+
+// Manhattan distance (absolute grid distance)
+float distGrid = vel.manhattan(); 
+
+// Normalization & Clamping
+Vec2 dir = vel.normalized(); // Returns unit vector
+Vec2 bounded = pos.clamped({0, 0}, {128, 64});
+
+// Convert to integer screen-space
+int screenX = pos.ix();
+int screenY = pos.iy();
+```
+
+### 11.2 Rect (Integer AABB)
+Represent hitboxes, screen boundaries, and check collisions.
+```cpp
+// Construct: x, y, width, height
+Rect playerBox{dinoX + 4, (int)dinoY + 2, 8, 12};
+Rect obstacleBox{obsX, obsY, 6, 8};
+
+// AABB Intersection check
+if (playerBox.overlaps(obstacleBox)) {
+    // Boom!
+}
+
+// Point containment check
+if (playerBox.contains(mouseX, mouseY)) { /* ... */ }
+
+// Get center
+Vec2 center = playerBox.center();
+
+// Inset/Shrink hitboxes (dx narrower on each side, dy shorter on each top/bottom)
+Rect hitbox = playerBox.inset(2, 1); 
+```
+
+### 11.3 Core Math Utilities
+Common functions prefixed with `g` to avoid standard namespace conflicts:
+* `gclamp(v, lo, hi)`: Clamps value `v` into closed interval `[lo, hi]`.
+* `gsign(v)`: Returns `-1` if `v < 0`, `0` if `v == 0`, and `+1` if `v > 0`.
+* `lerpf(a, b, t)`: Linearly interpolates from `a` to `b` based on float `t` `[0.0, 1.0]`.
+* `lerpi(a, b, t, tmax)`: Precise integer lerp. Returns `a + (b - a) * t / tmax`. Excellent for UI slide-in animations.
+* `mapRange(v, inMin, inMax, outMin, outMax)`: Maps a value from input range to output range.
+* `wrapIdx(idx, count)`: Cyclic index wrapper that safely maps negative index offsets (D-pad LEFT/RIGHT UI menus).
+
+---
+
+## 12. Physics Engine (Swept-AABB Collision)
+
+To prevent high-speed projectiles or falling players from bypassing static hitboxes (known as tunneling), Klick32 offers Swept-AABB collision resolution under `<PhysicsEngine.h>`.
+
+```cpp
+#include "PhysicsEngine.h"
+
+Rect bulletBox{bulletX, bulletY, 2, 2};
+Vec2 velocity{100.0f, 0.0f}; // Moving at 100 pixels per frame!
+Rect brickBox{80, bulletY - 2, 10, 10};
+
+// Swept AABB returns if and when a collision occurs during this frame
+RaycastResult result = PhysicsEngine::sweptAABB(bulletBox, velocity, brickBox);
+
+if (result.hit) {
+    // result.time is [0.0, 1.0] indicating exactly where along velocity it hit.
+    float hitX = bulletBox.x + velocity.x * result.time;
+    
+    // Surface normal allows bouncing:
+    if (result.normalX != 0) velocity.x *= -1.0f; // Bounce X
+    if (result.normalY != 0) velocity.y *= -1.0f; // Bounce Y
+}
+```
+
+---
+
+## 13. Easing, Timers & Tweening
+
+Animate menu panels, player movement, and score rolls smoothly without manual millisecond tracking.
+
+### 13.1 Timer
+Replaces messy `millis()` variables with a single tracking instance.
+```cpp
+#include "Timer.h"
+
+Timer _shootTimer;
+
+// One-shot timer: 500ms
+_shootTimer.start(500);
+
+// Repeating timer: ticks every 1000ms
+_shootTimer.startRepeating(1000);
+
+// In update():
+if (_shootTimer.tick()) {
+    // Fires once (or every 1sec if repeating)
+}
+
+// Get completion progress [0.0f, 1.0f]
+float progress = _shootTimer.progress();
+```
+
+### 13.2 Easing & Tweening
+The `Tween` template class manages starting, interpolating, and retrieving values over time using custom curves.
+```cpp
+#include "Tween.h"
+
+Tween<float> _uiSlideX{-128.0f}; // Initialize at -128.0f
+
+// Tween to 0.0f over 800 milliseconds using quadratic ease out curve
+_uiSlideX.start(-128.0f, 0.0f, 800, Ease::outQuad);
+
+// In update():
+_uiSlideX.update(); // Tick tween progress
+
+// In draw():
+ctx.drawBox(_uiSlideX.val(), 10, 50, 20); // Animates sliding in!
+```
+
+Available ease functions in the `Ease` namespace:
+* `Ease::linear`
+* `Ease::inQuad` / `Ease::outQuad` / `Ease::inOutQuad`
+* `Ease::inCubic` / `Ease::outCubic` / `Ease::inOutCubic`
+* `Ease::outBounce` (Bouncy fallbacks)
+* `Ease::outElastic` (Wobbling spring effect)
+
+---
+
+## 14. UI Helper Widgets
+
+Klick32 provides a reusable vertical layout, selection system, and widgets in the `UI` namespace to avoid writing boilerplate menus.
+
+```cpp
+#include "UI.h"
+
+// 1. Progress Bar
+// Draws an AABB border box and fills it relative to progress [0.0, 1.0]
+UI::drawBar(ctx, 10, 10, 100, 6, healthPercentage);
+
+// 2. Score Widget
+// Renders a tiny label "SCORE" and formatting for high scores below it
+UI::drawScore(ctx, 10, 25, currentScore, "BEST");
+
+// 3. Vertical Text Menu (updates selection automatically and renders cursor)
+const char* menuItems[] = {"RESUME", "RESTART", "QUIT"};
+uint8_t selectedIndex = 0; // State variable (store in your class)
+
+// Call this every frame inside title or pause loops. 
+// Automatically handles Btn::UP, Btn::DOWN input and plays nav audio cues.
+// Returns true when the player confirms with Btn::A.
+if (UI::updateAndDrawMenu(ctx, menuItems, 3, selectedIndex, 20)) {
+    if (selectedIndex == 0) resumeGame();
+    if (selectedIndex == 2) exitGame();
+}
+```
+
+---
+
 # Part 4: Optimization & Tooling
 
-## 11. Performance & Best Practices
+## 15. Performance & Best Practices
 
 1. **Avoid floating point math** where integers will suffice. (e.g. `millis()` timing vs `dt` tracking). The FPU is fast, but integer math is faster.
 2. **Minimize `drawPixel` loops.** If you need to fill an area with a pattern, rely on `drawDitherBox` which is heavily optimized at the OS level.
@@ -356,7 +555,7 @@ ctx.endScreenSpace();
 
 ---
 
-## 12. The PC Simulator Environment
+## 16. The PC Simulator Environment
 
 Flashing the ESP32-S3 over USB can take 30–60 seconds. When iterating on game logic, this is agonizingly slow. 
 
@@ -374,7 +573,7 @@ In your game code, you can use the `#ifdef SIMULATOR` block if you need to mock 
 
 # Part 5: Putting It All Together
 
-## 13. Full End-to-End Example: Flappy Block
+## 17. Full End-to-End Example: Flappy Block
 
 The best way to learn is to see everything working together. Here is a complete, minimal implementation of a "Flappy Bird" clone using the Klick32 Engine.
 
@@ -404,7 +603,7 @@ public:
         _d.playerY = 32.0f;
         _d.velocity = 0.0f;
         _d.score = 0;
-        _d.hiScore = ctx.loadUInt("hi", 0); // Load saved score
+        _d.hiScore = ctx.loadHiScore(); // Load saved score
     }
 
     void update(Console& ctx, SceneManager& sm, float dt) override {
@@ -453,8 +652,8 @@ public:
         // Collision Check (Floor/Ceiling)
         if (_d.playerY > 60.0f || _d.playerY < 0.0f) {
             ctx.sfxDeath();
-            if (_d.score > _d.hiScore) {
-                ctx.saveUInt("hi", _d.score); // Save immediately
+            if (ctx.updateHiScore(_d.score)) {
+                ctx.sfxPoint(); // Play fanfare sound!
             }
             sm.replace(sm.getGameOverScene(), ctx, SceneManager::Effect::FADE);
         }
@@ -499,4 +698,3 @@ public:
 
 // 5. Expose to the OS
 REGISTER_GAME(FlappyGame)
-```
