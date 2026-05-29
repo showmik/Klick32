@@ -2,6 +2,7 @@
 #include "GameRegistry.h"
 #include "Diagnostics.h"
 
+
 GameRegistryNode* GameRegistryNode::head = nullptr;
 
 // Initialize the menu, passing it pointers to the game registry and battery
@@ -37,6 +38,8 @@ void OS::begin() {
     Diagnostics::begin();
     randomSeed(esp_random());
     
+
+
 #ifdef SIMULATOR
     static uint8_t sim_buf[128*64/8];
     _disp.getU8g2()->tile_buf_ptr = sim_buf;
@@ -243,6 +246,7 @@ void OS::run() {
 
             Diagnostics::draw(_console);
             _disp.sendBuffer();
+            
 #ifdef SIMULATOR
             extern void sim_commit_buffer();
             sim_commit_buffer();

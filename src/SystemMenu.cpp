@@ -7,7 +7,6 @@ void SystemMenu::onEnter(Console& ctx) {
     _running = true;
     _dirty = true;
     _launchedGame = nullptr;
-    _lastInputTime = millis();
     _battPct = _batt->readPercent();
     _battTimer = millis();
 }
