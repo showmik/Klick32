@@ -60,7 +60,7 @@ void Camera::shake(uint8_t frames) {
     _shakeFrames = frames;
 }
 
-void Camera::update() {
+void Camera::update(float dt) {
     if (_t < _totalFrames) {
         _t++;
         x = lerpi(_startX, _targetX, _t, _totalFrames);

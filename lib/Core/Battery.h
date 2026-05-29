@@ -21,16 +21,26 @@ public:
 #endif
     }
 
-    // Returns 0–100. Averages 8 samples to reduce ADC noise.
-    // Call once every few seconds, not every frame.
+    // Returns 0–100. Uses a rolling average of 8 samples to reduce ADC noise.
+    // Non-blocking: takes one new ADC reading per call and feeds it into the
+    // ring buffer. Call once every few seconds, not every frame.
     uint8_t readPercent() {
 #ifndef SIMULATOR
-        uint32_t sum = 0;
-        for (uint8_t i = 0; i < 8; i++) {
-            sum += analogReadMilliVolts(PIN_BATT_ADC);
-            delay(1);
+        uint32_t sample = analogReadMilliVolts(PIN_BATT_ADC);
+
+        // First call: fill the entire ring buffer to avoid a ramp-up period
+        if (!_bufferFilled) {
+            for (uint8_t i = 0; i < SAMPLE_COUNT; i++) _samples[i] = sample;
+            _bufferFilled = true;
+        } else {
+            _samples[_sampleIdx] = sample;
         }
-        uint32_t vadc_mv = sum / 8;
+        _sampleIdx = (_sampleIdx + 1) % SAMPLE_COUNT;
+
+        // Average all samples
+        uint32_t sum = 0;
+        for (uint8_t i = 0; i < SAMPLE_COUNT; i++) sum += _samples[i];
+        uint32_t vadc_mv = sum / SAMPLE_COUNT;
         uint32_t vbat_mv = vadc_mv * 2; // undo the 1:2 voltage divider
 
         // LiPo range: 3300 mV (empty) → 4200 mV (full)
@@ -53,4 +63,10 @@ public:
         return false;
 #endif
     }
+
+private:
+    static constexpr uint8_t SAMPLE_COUNT = 8;
+    uint32_t _samples[SAMPLE_COUNT] = {};
+    uint8_t  _sampleIdx    = 0;
+    bool     _bufferFilled = false;
 };
