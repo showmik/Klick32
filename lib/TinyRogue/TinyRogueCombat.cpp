@@ -380,8 +380,10 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
             }
             if (bossDefeated) {
                 _data->map[bossY][bossX] = TileType::STAIRS_DOWN;
-                if (_data->map[bossY + 1][bossX] == TileType::FLOOR) {
+                if (_data->map[bossY + 1][bossX] != TileType::WALL) {
                     _data->map[bossY + 1][bossX] = TileType::CHEST;
+                } else if (_data->map[bossY - 1][bossX] != TileType::WALL) {
+                    _data->map[bossY - 1][bossX] = TileType::CHEST;
                 }
                 snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boss Defeated!");
                 _data->hudMessageTimer = 80;
