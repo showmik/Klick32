@@ -96,21 +96,43 @@ void OS::run() {
 #endif
     }
 
-    // Minimalist Boot Splash
+    // Premium Silhouette progressive-reveal Boot Splash
     uint32_t splashStart = millis();
     while (millis() - splashStart < 1500) {
+        uint32_t elapsed = millis() - splashStart;
         _disp.clearBuffer();
         
-        // Animated expanding circle
-        int radius = (millis() - splashStart) / 30;
-        if (radius > 120) radius = 120;
-        _disp.setDrawColor(Console::COLOR_WHITE);
-        _disp.drawDisc(64, 32, radius);
+        // 1. Calculate cubic ease-out scaling progress
+        float t_norm = elapsed / 1500.0f;
+        float ease = 1.0f - pow(1.0f - t_norm, 3.0f); // smooth ease-out
         
-        // Inverted text
+        int r_solid = (int)(130 * ease);
+        int r1 = r_solid + 12;
+        int r2 = r_solid + 24;
+        int r3 = r_solid + 36;
+        
+        _disp.setDrawColor(Console::COLOR_WHITE);
+        
+        // Draw expanding thin circular sonic rings
+        if (r1 < 80) _disp.drawCircle(64, 32, r1);
+        if (r2 < 80) _disp.drawCircle(64, 32, r2);
+        if (r3 < 80) _disp.drawCircle(64, 32, r3);
+        
+        // Draw main solid white disc
+        int drawR = min(130, r_solid);
+        _disp.drawDisc(64, 32, drawR);
+        
+        // 2. Draw black text and progress bar inside the white circle (only visible inside the disc!)
         _disp.setDrawColor(Console::COLOR_BLACK);
         _disp.setFont(u8g2_font_ncenB14_tr);
-        _disp.drawStr(32, 40, "Klick32");
+        _disp.drawStr(32, 38, "Klick32");
+        
+        // Continuous loading progress
+        int progressW = (int)(56 * (elapsed / 1500.0f));
+        if (progressW > 56) progressW = 56;
+        
+        _disp.drawFrame(34, 47, 60, 3);
+        _disp.drawBox(36, 48, progressW, 1);
         
         _disp.sendBuffer();
 #ifdef SIMULATOR
