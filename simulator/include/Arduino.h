@@ -44,16 +44,19 @@ typedef void* TaskHandle_t;
 inline void esp_deep_sleep_start() { exit(0); }
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
+inline std::chrono::steady_clock::time_point& GetSimStartTime() {
+    static auto start = std::chrono::steady_clock::now();
+    return start;
+}
+
 inline uint32_t millis() {
     using namespace std::chrono;
-    static auto start = steady_clock::now();
-    return static_cast<uint32_t>(duration_cast<milliseconds>(steady_clock::now() - start).count());
+    return static_cast<uint32_t>(duration_cast<milliseconds>(steady_clock::now() - GetSimStartTime()).count());
 }
 
 inline uint32_t micros() {
     using namespace std::chrono;
-    static auto start = steady_clock::now();
-    return static_cast<uint32_t>(duration_cast<microseconds>(steady_clock::now() - start).count());
+    return static_cast<uint32_t>(duration_cast<microseconds>(steady_clock::now() - GetSimStartTime()).count());
 }
 
 inline void delay(uint32_t ms) {
@@ -61,20 +64,24 @@ inline void delay(uint32_t ms) {
 }
 
 // ─── Random ───────────────────────────────────────────────────────────────────
-inline uint32_t esp_random() {
+inline std::mt19937& GetSimRNG() {
     static std::mt19937 rng(std::random_device{}());
-    return rng();
+    return rng;
+}
+
+inline uint32_t esp_random() {
+    return GetSimRNG()();
 }
 inline void randomSeed(uint32_t seed) {
-    srand(seed);
+    GetSimRNG().seed(seed);
 }
 inline long random(long min, long max) {
     if (min >= max) return min;
-    return min + (rand() % (max - min));
+    return min + (GetSimRNG()() % (max - min));
 }
 inline long random(long max) {
-    if (max == 0) return 0;
-    return rand() % max;
+    if (max <= 0) return 0;
+    return GetSimRNG()() % max;
 }
 
 // ─── GPIO Mocking ─────────────────────────────────────────────────────────────
