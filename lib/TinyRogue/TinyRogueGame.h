@@ -6,6 +6,7 @@
 #include "Camera.h"
 #include "ParticleManager.h"
 #include "SceneGame.h"
+#include "../Core/ECS.h"
 
 enum class TurnAction : uint8_t {
     NONE = 0,
@@ -47,38 +48,30 @@ enum class LevelMutator : uint8_t {
 
 enum class Biome : uint8_t { SEWERS, PRISON, DEEP_CAVES, BOSS_ARENA };
 
-struct Entity {
-    int x = 0;
-    int y = 0;
-    int hp = 10;
-    int maxHp = 10;
-    int baseAttack = 2;
-    int baseDefense = 0;
-    int attack = 2;
-    int defense = 0;
-    int level = 1;
-    int xp = 0;
-    int dodge = 0;      // Percentage (0-100)
-    int critChance = 10; // Percentage (0-100)
-    int rootDuration = 0; // NEW: Tracks turns trapped in webs
-};
-
-struct Monster : public Entity {
-    MonsterType type;
-    bool active = false;
-    bool alert = false;
-};
+// --- ECS Components ---
+struct CTransform { int x = 0, y = 0; };
+struct CHealth { int hp = 10, maxHp = 10; };
+struct CCombat { int baseAttack = 2, baseDefense = 0, attack = 2, defense = 0, dodge = 0, critChance = 10; };
+struct CPlayer { int xp = 0, level = 1, rootDuration = 0; };
+struct CMonster { MonsterType type; bool alert = false; int spawnTurn = 0; };
 
 // ─── Shared Game State ───────────────────────────────────────────────────────
 struct RogueSharedData {
     static constexpr int MAP_W = 32;
     static constexpr int MAP_H = 32;
-    static constexpr int MAX_MONSTERS = 25; // Increased to support Infested mutator
+    static constexpr int MAX_ENTITIES = 64; // Increased to 64 for future projectiles etc.
 
     TileType map[MAP_H][MAP_W];
     bool explored[MAP_H][MAP_W]; // Fog of War tracking
-    Entity player;
-    Monster monsters[MAX_MONSTERS];
+
+    ECSRegistry<MAX_ENTITIES> registry;
+    ComponentPool<CTransform, MAX_ENTITIES> transforms;
+    ComponentPool<CHealth, MAX_ENTITIES> healths;
+    ComponentPool<CCombat, MAX_ENTITIES> combats;
+    ComponentPool<CPlayer, MAX_ENTITIES> players;
+    ComponentPool<CMonster, MAX_ENTITIES> monsters;
+
+    EntityID playerID;
     
     uint32_t currentDepth = 1;
     Biome currentBiome = Biome::SEWERS; // NEW

@@ -45,12 +45,12 @@ void RoguePlayScene::onEnter(Console& ctx) {
 
     _data->currentDepth = 1;
     _data->gold = 0;
-    _data->player.level = 1;
-    _data->player.xp = 0;
-    _data->player.maxHp = 10;
-    _data->player.hp = 10;
-    _data->player.baseAttack = 2;
-    _data->player.baseDefense = 0;
+    _data->registry.clear();
+    _data->playerID = _data->registry.create();
+    _data->players.add(_data->playerID, {0, 1, 0});
+    _data->transforms.add(_data->playerID, {0, 0});
+    _data->healths.add(_data->playerID, {10, 10});
+    _data->combats.add(_data->playerID, {2, 0, 2, 0, 0, 0});
     _data->equippedWeapon.type = ItemType::NONE;
     _data->equippedArmor.type = ItemType::NONE;
     _data->equippedAccessory.type = ItemType::NONE;
@@ -76,8 +76,8 @@ void RoguePlayScene::onEnter(Console& ctx) {
 
 
 void RoguePlayScene::_updateCamera(bool snap) {
-    int focusX = isAiming ? aimX : _data->player.x;
-    int focusY = isAiming ? aimY : _data->player.y;
+    int focusX = isAiming ? aimX : _data->transforms.data[_data->playerID].x;
+    int focusY = isAiming ? aimY : _data->transforms.data[_data->playerID].y;
 
     int targetX = (focusX * 8) - (Console::W / 2) + 4;
     int targetY = (focusY * 8) - (Console::H / 2) + 4;
@@ -102,8 +102,8 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             // Screen is completely black, generate the next level!
             _data->currentDepth++;
             TinyRogueMapGen::generateMap(_data); 
-            _camera->snapTo((_data->player.x * 8) - (Console::W / 2) + 4, 
-                            (_data->player.y * 8) - (Console::H / 2) + 4);
+            _camera->snapTo((_data->transforms.data[_data->playerID].x * 8) - (Console::W / 2) + 4, 
+                            (_data->transforms.data[_data->playerID].y * 8) - (Console::H / 2) + 4);
             _descending = false;
             _fadeTimer = -20; // Use negative numbers to track the fade-in opening animation
         }
@@ -131,11 +131,11 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 ctx.sfxMenuNav();
             } else { // Sacrifice
                 _altarMenuOpen = false;
-                _data->player.hp -= 5;
+                _data->healths.data[_data->playerID].hp -= 5;
                 _camera->shake(6);
                 ctx.sfxDeath();
                 
-                if (_data->player.hp <= 0) {
+                if (_data->healths.data[_data->playerID].hp <= 0) {
                     snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Fatal Sacrifice!");
                     _data->hudMessageTimer = 60;
                     if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
@@ -144,10 +144,10 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                 } else {
                     int boon = random(3);
                     if (boon == 0) {
-                        _data->player.baseAttack += 1;
+                        _data->combats.data[_data->playerID].baseAttack += 1;
                         snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boon: +1 Attack!");
                     } else if (boon == 1) {
-                        _data->player.baseDefense += 1;
+                        _data->combats.data[_data->playerID].baseDefense += 1;
                         snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boon: +1 Defense!");
                     } else {
                         bool added = false;
@@ -207,7 +207,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         if (ctx.justPressed(Btn::A)) {
             // Check Line of Sight
             bool hitWall = false;
-            int px = _data->player.x, py = _data->player.y;
+            int px = _data->transforms.data[_data->playerID].x, py = _data->transforms.data[_data->playerID].y;
             int steps = max(abs(aimX - px), abs(aimY - py));
             
             if (steps > 0) {
@@ -246,27 +246,37 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                     }
                 }
 
-                Monster* m = TinyRogueCombat::getMonsterAt(_data, aimX, aimY);
-                if (m) {
-                    int dartDamage = _data->player.baseAttack * 2;
-                    if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->player.hp <= (_data->player.maxHp * 3) / 10) {
+                EntityID m = TinyRogueCombat::getMonsterAt(_data, aimX, aimY);
+                if (m != INVALID_ENTITY) {
+                    int dartDamage = _data->combats.data[_data->playerID].baseAttack * 2;
+                    if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->healths.data[_data->playerID].hp <= (_data->healths.data[_data->playerID].maxHp * 3) / 10) {
                         dartDamage += 3;
                     }
                     if (dartDamage < 3) dartDamage = 3;
-                    m->hp -= dartDamage;
-                    m->alert = true;
+                    _data->healths.data[m].hp -= dartDamage;
+                    _data->monsters.data[m].alert = true;
                     TinyRogueCombat::spawnHitEffect(_particles, aimX, aimY);
                     ctx.beep(1200, 30);
                     
-                    if (m->hp <= 0) {
-                        m->active = false;
-                        if (m->type == MonsterType::BOSS) {
-                            _data->player.xp += 50 + _data->currentDepth * 5;
+                    if (_data->healths.data[m].hp <= 0) {
+                        _data->registry.destroy(m);
+                        if (_data->monsters.data[m].type == MonsterType::BOSS) {
+                            _data->players.data[_data->playerID].xp += 50 + _data->currentDepth * 5;
                             _data->gold += 50 + random(50);
+                            
+                            _data->map[aimY][aimX] = TileType::STAIRS_DOWN;
+                            if (_data->map[aimY + 1][aimX] != TileType::WALL) {
+                                _data->map[aimY + 1][aimX] = TileType::CHEST;
+                            } else if (_data->map[aimY - 1][aimX] != TileType::WALL) {
+                                _data->map[aimY - 1][aimX] = TileType::CHEST;
+                            }
+                            snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boss Defeated!");
+                            _data->hudMessageTimer = 80;
+                            ctx.beep(1500, 200);
                         } else {
-                            _data->player.xp += 10 + _data->currentDepth * 2;
-                            if (random(100) < 40) {
-                                int goldDrop = random(2, 6) + _data->currentDepth;
+                            _data->players.data[_data->playerID].xp += 10 + _data->currentDepth * 2;
+                            if (random(100) < 15) { // 15% chance for gold drop
+                                int goldDrop = random(5, 10) + (_data->currentDepth * 2);
                                 if (_data->equippedAccessory.type == ItemType::RING_WEALTH) goldDrop += goldDrop / 2;
                                 _data->gold += goldDrop;
                             }
@@ -274,16 +284,16 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                         
                         // Bloodlust heal
                         int healAmt = (_data->equippedAccessory.type == ItemType::RING_VAMPIRE) ? 2 : 1;
-                        _data->player.hp += healAmt;
-                        if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
+                        _data->healths.data[_data->playerID].hp += healAmt;
+                        if (_data->healths.data[_data->playerID].hp > _data->healths.data[_data->playerID].maxHp) _data->healths.data[_data->playerID].hp = _data->healths.data[_data->playerID].maxHp;
                         
                         bool leveledUp = false;
-                        while (_data->player.xp >= _data->player.level * 15) {
-                            _data->player.xp -= _data->player.level * 15;
-                            _data->player.level++;
-                            _data->player.maxHp += 5;
-                            _data->player.hp = _data->player.maxHp; 
-                            _data->player.baseAttack += 1;
+                        while (_data->players.data[_data->playerID].xp >= _data->players.data[_data->playerID].level * 15) {
+                            _data->players.data[_data->playerID].xp -= _data->players.data[_data->playerID].level * 15;
+                            _data->players.data[_data->playerID].level++;
+                            _data->healths.data[_data->playerID].maxHp += 5;
+                            _data->healths.data[_data->playerID].hp = _data->healths.data[_data->playerID].maxHp; 
+                            _data->combats.data[_data->playerID].baseAttack += 1;
                             TinyRogueCombat::recalcStats(_data);
                             leveledUp = true;
                         }
@@ -292,10 +302,10 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                             _data->hudMessageTimer = 60;
                             ctx.beep(800, 100); ctx.beep(1200, 150);
                         }
-                        if (m->type == MonsterType::BOSS) {
-                            _data->map[m->y][m->x] = TileType::STAIRS_DOWN;
-                            if (_data->map[m->y + 1][m->x] == TileType::FLOOR) {
-                                _data->map[m->y + 1][m->x] = TileType::CHEST;
+                        if (_data->monsters.data[m].type == MonsterType::BOSS) {
+                            _data->map[aimY][aimX] = TileType::STAIRS_DOWN;
+                            if (_data->map[aimY + 1][aimX] == TileType::FLOOR) {
+                                _data->map[aimY + 1][aimX] = TileType::CHEST;
                             }
                             snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boss Defeated!");
                             _data->hudMessageTimer = 80;
@@ -331,11 +341,15 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         TurnAction action = TinyRogueCombat::processTurn(_data, ctx, sm, dx, dy, _camera, _particles);
         if (action == TurnAction::COMPLETED) {
             TinyRogueCombat::processMonsterTurns(_data, ctx, sm, _camera, _particles); 
+            if (_data->healths.data[_data->playerID].hp <= 0) {
+                ctx.sfxDeath();
+                action = TurnAction::GAME_OVER;
+            }
         } else if (action == TurnAction::OPEN_ALTAR) {
             _altarMenuOpen = true;
             _altarMenuCursor = 0;
-            _activeAltarX = _data->player.x + dx;
-            _activeAltarY = _data->player.y + dy;
+            _activeAltarX = _data->transforms.data[_data->playerID].x + dx;
+            _activeAltarY = _data->transforms.data[_data->playerID].y + dy;
             ctx.sfxMenuEnter();
         } else if (action == TurnAction::OPEN_MERCHANT) {
             ctx.sfxMenuEnter();
@@ -354,10 +368,10 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
     
     // Update Fog of War
     int sightRadius = (_data->currentMutator == LevelMutator::PITCH_BLACK) ? 5 : 20;
-    for (int y = max(0, _data->player.y - 6); y <= min(RogueSharedData::MAP_H - 1, _data->player.y + 6); y++) {
-        for (int x = max(0, _data->player.x - 6); x <= min(RogueSharedData::MAP_W - 1, _data->player.x + 6); x++) {
-            int distX = abs(x - _data->player.x);
-            int distY = abs(y - _data->player.y);
+    for (int y = max(0, _data->transforms.data[_data->playerID].y - 6); y <= min(RogueSharedData::MAP_H - 1, _data->transforms.data[_data->playerID].y + 6); y++) {
+        for (int x = max(0, _data->transforms.data[_data->playerID].x - 6); x <= min(RogueSharedData::MAP_W - 1, _data->transforms.data[_data->playerID].x + 6); x++) {
+            int distX = abs(x - _data->transforms.data[_data->playerID].x);
+            int distY = abs(y - _data->transforms.data[_data->playerID].y);
             if (distX * distX + distY * distY <= sightRadius) {
                 _data->explored[y][x] = true;
             }
@@ -423,13 +437,13 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
         };
 
         if (_cursor == 0) { // Buy Health
-            if (_data->player.hp >= _data->player.maxHp) {
+            if (_data->healths.data[_data->playerID].hp >= _data->healths.data[_data->playerID].maxHp) {
                 ctx.beep(150, 100);
                 snprintf(_msg, sizeof(_msg), "ALREADY FULL!");
                 _msgTimer = 40;
             } else if (_data->gold >= costHealth) {
                 _data->gold -= costHealth;
-                _data->player.hp = gclamp(_data->player.hp + 5, 0, _data->player.maxHp);
+                _data->healths.data[_data->playerID].hp = gclamp(_data->healths.data[_data->playerID].hp + 5, 0, _data->healths.data[_data->playerID].maxHp);
                 ctx.sfxPoint();
                 snprintf(_msg, sizeof(_msg), "HEALED HP!");
                 _msgTimer = 40;
@@ -556,7 +570,7 @@ void RoguePlayScene::draw(Console& ctx) {
         }
     } else {
         char topBuf[32];
-        snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", _data->player.hp, _data->player.maxHp, _data->player.level);
+        snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", _data->healths.data[_data->playerID].hp, _data->healths.data[_data->playerID].maxHp, _data->players.data[_data->playerID].level);
         int topW = ctx.strWidth(topBuf);
         
         ctx.setDrawColor(0);
@@ -566,8 +580,8 @@ void RoguePlayScene::draw(Console& ctx) {
         ctx.drawStr(11, 7, topBuf);
 
         char atkBuf[8], defBuf[8];
-        snprintf(atkBuf, sizeof(atkBuf), "%d", _data->player.attack);
-        snprintf(defBuf, sizeof(defBuf), "%d", _data->player.defense);
+        snprintf(atkBuf, sizeof(atkBuf), "%d", _data->combats.data[_data->playerID].attack);
+        snprintf(defBuf, sizeof(defBuf), "%d", _data->combats.data[_data->playerID].defense);
         
         int atkW = ctx.strWidth(atkBuf);
         int defW = ctx.strWidth(defBuf);
@@ -622,8 +636,8 @@ void RoguePlayScene::draw(Console& ctx) {
     }
 
     // Draw XP Bar at the bottom edge
-    int xpNeeded = _data->player.level * 15;
-    int xpWidth = (Console::W * _data->player.xp) / xpNeeded;
+    int xpNeeded = _data->players.data[_data->playerID].level * 15;
+    int xpWidth = (Console::W * _data->players.data[_data->playerID].xp) / xpNeeded;
     ctx.setDrawColor(0);
     ctx.drawBox(0, Console::H - 3, Console::W, 3);
     ctx.setDrawColor(1);
@@ -682,8 +696,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 
             if (mapX < 0 || mapX >= RogueSharedData::MAP_W || mapY < 0 || mapY >= RogueSharedData::MAP_H) continue;
 
-            int distX = abs(mapX - _data->player.x);
-            int distY = abs(mapY - _data->player.y);
+            int distX = abs(mapX - _data->transforms.data[_data->playerID].x);
+            int distY = abs(mapY - _data->transforms.data[_data->playerID].y);
             int sightRadius = (_data->currentMutator == LevelMutator::PITCH_BLACK) ? 5 : 20;
             bool inSight = (distX * distX + distY * distY <= sightRadius); 
             
@@ -725,36 +739,36 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
             } else if (t == TileType::ALTAR) {
                 ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_altar);
             }
-            Monster* m = TinyRogueCombat::getMonsterAt(_data, mapX, mapY);
-            if (m && inSight) {
+            EntityID m = TinyRogueCombat::getMonsterAt(_data, mapX, mapY);
+            if (m != INVALID_ENTITY && inSight) {
                 ctx.setDrawColor(0);
                 ctx.drawBox(renderX, renderY, 8, 8);
                 ctx.setDrawColor(1);
                 
-                if (m->type == MonsterType::RAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_rat);
-                else if (m->type == MonsterType::GOBLIN) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_goblin);
-                else if (m->type == MonsterType::BAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_bat);
-                else if (m->type == MonsterType::SKELETON) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_skeleton);
-                else if (m->type == MonsterType::ORC) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_orc);
-                else if (m->type == MonsterType::TROLL) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_troll);
-                else if (m->type == MonsterType::BOSS) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_boss);
+                if (_data->monsters.data[m].type == MonsterType::RAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_rat);
+                else if (_data->monsters.data[m].type == MonsterType::GOBLIN) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_goblin);
+                else if (_data->monsters.data[m].type == MonsterType::BAT) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_bat);
+                else if (_data->monsters.data[m].type == MonsterType::SKELETON) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_skeleton);
+                else if (_data->monsters.data[m].type == MonsterType::ORC) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_orc);
+                else if (_data->monsters.data[m].type == MonsterType::TROLL) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_troll);
+                else if (_data->monsters.data[m].type == MonsterType::BOSS) ctx.drawBitmap(renderX, renderY, 1, 8, spr_rogue_boss);
                 
                 // Draw sleeping indicator 'z' if unaware of player
-                if (!m->alert && (millis() / 500) % 2 == 0) {
+                if (!_data->monsters.data[m].alert && (millis() / 500) % 2 == 0) {
                     ctx.setFont(u8g2_font_5x7_tf);
                     ctx.drawStr(renderX + 2, renderY - 1, "z");
                 }
 
                 // Draw HP Bar if damaged
-                if (m->hp < m->maxHp) {
-                    int hpWidth = max(1, (m->hp * 6) / m->maxHp);
+                if (_data->healths.data[m].hp < _data->healths.data[m].maxHp) {
+                    int hpWidth = max(1, (_data->healths.data[m].hp * 6) / _data->healths.data[m].maxHp);
                     ctx.setDrawColor(0);
                     ctx.drawHLine(renderX + 1, renderY + 7, 6);
                     ctx.setDrawColor(1);
                     ctx.drawHLine(renderX + 1, renderY + 7, hpWidth);
                 }
             } 
-            else if (mapX == _data->player.x && mapY == _data->player.y) {
+            else if (mapX == _data->transforms.data[_data->playerID].x && mapY == _data->transforms.data[_data->playerID].y) {
                 ctx.setDrawColor(0);
                 ctx.drawBox(renderX, renderY, 8, 8);
                 ctx.setDrawColor(1);
@@ -778,8 +792,8 @@ void RoguePlayScene::drawDungeon(Console& ctx, int ox, int oy) const {
 
     if (isAiming) {
         ctx.setDrawColor(1);
-        int px = (_data->player.x * 8) + 4;
-        int py = (_data->player.y * 8) + 4;
+        int px = (_data->transforms.data[_data->playerID].x * 8) + 4;
+        int py = (_data->transforms.data[_data->playerID].y * 8) + 4;
         int cx = (aimX * 8) + 4;
         int cy = (aimY * 8) + 4;
         
@@ -959,13 +973,13 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                 bool consumed = false;
                 
                 if (item.type == ItemType::POTION) {
-                    _data->player.hp = gclamp(_data->player.hp + 15, 0, _data->player.maxHp);
+                    _data->healths.data[_data->playerID].hp = gclamp(_data->healths.data[_data->playerID].hp + 15, 0, _data->healths.data[_data->playerID].maxHp);
                     snprintf(_msg, sizeof(_msg), "Healed 15 HP!");
                     _data->inventoryTurnUsed = true;
                     consumed = true;
                 } else if (item.type == ItemType::ELIXIR) {
-                    _data->player.maxHp += 5;
-                    _data->player.hp += 5;
+                    _data->healths.data[_data->playerID].maxHp += 5;
+                    _data->healths.data[_data->playerID].hp += 5;
                     snprintf(_msg, sizeof(_msg), "Max HP +5!");
                     _data->inventoryTurnUsed = true;
                     consumed = true;
@@ -1028,8 +1042,8 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                     sm.pop(ctx);
                     RoguePlayScene* play = (RoguePlayScene*)sm.current(); // Assuming Play is under inventory
                     play->isAiming = true;
-                    play->aimX = _data->player.x;
-                    play->aimY = _data->player.y;
+                    play->aimX = _data->transforms.data[_data->playerID].x;
+                    play->aimY = _data->transforms.data[_data->playerID].y;
                     _itemMenuOpen = false;
                     return;
                 }
@@ -1260,7 +1274,7 @@ void TinyRogueGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     bool loaded = false;
     if (ctx.hasSave("gamestate")) {
         size_t bytesRead = ctx.loadBytes("gamestate", &_data, sizeof(RogueSharedData));
-        if (bytesRead == sizeof(RogueSharedData) && _data.player.hp > 0) {
+        if (bytesRead == sizeof(RogueSharedData) && _data.healths.data[_data.playerID].hp > 0) {
             loaded = true;
         }
     }
@@ -1283,7 +1297,7 @@ void TinyRogueGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
 
 void TinyRogueGame::onExit(Console& ctx) {
     ctx.saveHiScore(_data.hiScore);
-    if (_data.player.hp > 0) {
+    if (_data.healths.data[_data.playerID].hp > 0) {
         ctx.saveBytes("gamestate", &_data, sizeof(RogueSharedData));
     } else {
         ctx.removeSave("gamestate");

@@ -93,8 +93,8 @@ void generateMap(RogueSharedData* _data) {
             
             memset(reachable, 0, sizeof(reachable));
             int head = 0, tail = 0;
-            queue[tail++] = {(uint8_t)_data->player.x, (uint8_t)_data->player.y};
-            reachable[_data->player.y][_data->player.x] = true;
+            queue[tail++] = {(uint8_t)_data->transforms.data[_data->playerID].x, (uint8_t)_data->transforms.data[_data->playerID].y};
+            reachable[_data->transforms.data[_data->playerID].y][_data->transforms.data[_data->playerID].x] = true;
             
             int reachableCount = 0;
             while(head < tail) {
@@ -124,7 +124,7 @@ void generateMap(RogueSharedData* _data) {
                 Coord validKeys[400]; int validKeyCount = 0;
                 for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
                     for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                        if (reachable[y][x] && _data->map[y][x] == TileType::FLOOR && (x != _data->player.x || y != _data->player.y)) {
+                        if (reachable[y][x] && _data->map[y][x] == TileType::FLOOR && (x != _data->transforms.data[_data->playerID].x || y != _data->transforms.data[_data->playerID].y)) {
                             if (validKeyCount < 400) validKeys[validKeyCount++] = {(uint8_t)x, (uint8_t)y};
                         }
                     }
@@ -146,8 +146,11 @@ void generateMap(RogueSharedData* _data) {
                     if (validChestCount > 0) {
                         Coord cp = validChests[random(validChestCount)];
                         _data->map[cp.y][cp.x] = TileType::CHEST;
+                        break; // Successfully placed door!
                     }
-                    break; // Successfully placed door!
+                    
+                    // Revert key if we didn't place a door here
+                    _data->map[kp.y][kp.x] = TileType::FLOOR;
                 }
             }
             // Revert if not a valid choke point
@@ -162,10 +165,25 @@ void generateMap(RogueSharedData* _data) {
         
         for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
             for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                if (_data->map[y][x] == TileType::FLOOR && (x != _data->player.x || y != _data->player.y)) {
+                if (_data->map[y][x] == TileType::FLOOR && (x != _data->transforms.data[_data->playerID].x || y != _data->transforms.data[_data->playerID].y)) {
                     if (random(100) < chance) {
                         _data->map[y][x] = targetTile;
                     }
+                }
+            }
+        }
+    }
+
+    // Spawn 1-2 free chests on every level (except Boss levels)
+    if (_data->currentDepth % 5 != 0) {
+        int numChests = random(1, 3);
+        for (int c = 0; c < numChests; c++) {
+            for (int tries = 0; tries < 100; tries++) {
+                int cx = random(1, RogueSharedData::MAP_W - 1);
+                int cy = random(1, RogueSharedData::MAP_H - 1);
+                if (_data->map[cy][cx] == TileType::FLOOR && (cx != _data->transforms.data[_data->playerID].x || cy != _data->transforms.data[_data->playerID].y)) {
+                    _data->map[cy][cx] = TileType::CHEST;
+                    break;
                 }
             }
         }
@@ -277,8 +295,8 @@ void generateBSPMap(RogueSharedData* _data) {
 
     if (leafCount > 0) {
         Rect firstRoom = nodes[leafIndices[0]].room;
-        _data->player.x = firstRoom.x + firstRoom.w / 2;
-        _data->player.y = firstRoom.y + firstRoom.h / 2;
+        _data->transforms.data[_data->playerID].x = firstRoom.x + firstRoom.w / 2;
+        _data->transforms.data[_data->playerID].y = firstRoom.y + firstRoom.h / 2;
 
         Rect lastRoom = nodes[leafIndices[leafCount - 1]].room;
         _data->map[lastRoom.y + lastRoom.h / 2][lastRoom.x + lastRoom.w / 2] = TileType::STAIRS_DOWN;
@@ -297,7 +315,7 @@ void generateBSPMap(RogueSharedData* _data) {
     do {
         mx = random(1, RogueSharedData::MAP_W - 1);
         my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->transforms.data[_data->playerID].x && my == _data->transforms.data[_data->playerID].y));
     _data->map[my][mx] = TileType::MERCHANT;
 
     // Spawn Altar (30% chance per floor)
@@ -306,7 +324,7 @@ void generateBSPMap(RogueSharedData* _data) {
         do {
             ax = random(1, RogueSharedData::MAP_W - 1);
             ay = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
+        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->transforms.data[_data->playerID].x && ay == _data->transforms.data[_data->playerID].y));
         _data->map[ay][ax] = TileType::ALTAR;
     }
 
@@ -318,7 +336,7 @@ void generateBSPMap(RogueSharedData* _data) {
         do {
             sx = random(1, RogueSharedData::MAP_W - 1);
             sy = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
+        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->transforms.data[_data->playerID].x && sy == _data->transforms.data[_data->playerID].y));
         _data->map[sy][sx] = TileType::SPIKE;
     }
 
@@ -393,20 +411,20 @@ void generateCaveMap(RogueSharedData* _data) {
 
     // 4. Place Player, Stairs, and Loot
     Vec2 p = getOpenTile();
-    _data->player.x = p.ix();
-    _data->player.y = p.iy();
+    _data->transforms.data[_data->playerID].x = p.ix();
+    _data->transforms.data[_data->playerID].y = p.iy();
 
     Vec2 s;
     int attempts = 0; // Prevent infinite loop on tiny disconnected maps
     do { 
         s = getOpenTile(); 
         attempts++;
-    } while (abs(s.ix() - _data->player.x) + abs(s.iy() - _data->player.y) < 15 && attempts < 50); 
+    } while (abs(s.ix() - _data->transforms.data[_data->playerID].x) + abs(s.iy() - _data->transforms.data[_data->playerID].y) < 15 && attempts < 50); 
     _data->map[s.iy()][s.ix()] = TileType::STAIRS_DOWN;
 
     // --- BUG FIX: Guarantee connectivity between player and stairs ---
-    int curX = _data->player.x;
-    int curY = _data->player.y;
+    int curX = _data->transforms.data[_data->playerID].x;
+    int curY = _data->transforms.data[_data->playerID].y;
     
     if (random(2) == 0) {
         while (curX != s.ix()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(s.ix() - curX); }
@@ -421,7 +439,7 @@ void generateCaveMap(RogueSharedData* _data) {
     if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numChests += random(2, 4);
     for (int i = 0; i < numChests; i++) {
         Vec2 c = getOpenTile();
-        if (c.ix() != _data->player.x || c.iy() != _data->player.y) {
+        if (c.ix() != _data->transforms.data[_data->playerID].x || c.iy() != _data->transforms.data[_data->playerID].y) {
             _data->map[c.iy()][c.ix()] = TileType::CHEST;
         }
     }
@@ -431,7 +449,7 @@ void generateCaveMap(RogueSharedData* _data) {
     do {
         mx = random(1, RogueSharedData::MAP_W - 1);
         my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->transforms.data[_data->playerID].x && my == _data->transforms.data[_data->playerID].y));
     _data->map[my][mx] = TileType::MERCHANT;
 
     // Spawn Altar (30% chance per floor)
@@ -440,7 +458,7 @@ void generateCaveMap(RogueSharedData* _data) {
         do {
             ax = random(1, RogueSharedData::MAP_W - 1);
             ay = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
+        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->transforms.data[_data->playerID].x && ay == _data->transforms.data[_data->playerID].y));
         _data->map[ay][ax] = TileType::ALTAR;
     }
 
@@ -452,7 +470,7 @@ void generateCaveMap(RogueSharedData* _data) {
         do {
             sx = random(1, RogueSharedData::MAP_W - 1);
             sy = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->player.x && sy == _data->player.y));
+        } while (_data->map[sy][sx] != TileType::FLOOR || (sx == _data->transforms.data[_data->playerID].x && sy == _data->transforms.data[_data->playerID].y));
         _data->map[sy][sx] = TileType::SPIKE;
     }
 
@@ -492,8 +510,8 @@ void generateMazeMap(RogueSharedData* _data) {
     int floorCount = 0;
     int targetFloors = (RogueSharedData::MAP_W * RogueSharedData::MAP_H) * 0.35f; // Carve 35% of the map
     
-    _data->player.x = curX;
-    _data->player.y = curY;
+    _data->transforms.data[_data->playerID].x = curX;
+    _data->transforms.data[_data->playerID].y = curY;
     
     // Tunnel Digger
     while(floorCount < targetFloors) {
@@ -519,7 +537,7 @@ void generateMazeMap(RogueSharedData* _data) {
         sx = random(1, RogueSharedData::MAP_W - 1);
         sy = random(1, RogueSharedData::MAP_H - 1);
         attempts++;
-    } while ((_data->map[sy][sx] != TileType::FLOOR || (abs(sx - _data->player.x) + abs(sy - _data->player.y) < 15)) && attempts < 500);
+    } while ((_data->map[sy][sx] != TileType::FLOOR || (abs(sx - _data->transforms.data[_data->playerID].x) + abs(sy - _data->transforms.data[_data->playerID].y) < 15)) && attempts < 500);
     _data->map[sy][sx] = TileType::STAIRS_DOWN;
 
     // Spawn 1 Merchant
@@ -527,7 +545,7 @@ void generateMazeMap(RogueSharedData* _data) {
     do {
         mx = random(1, RogueSharedData::MAP_W - 1);
         my = random(1, RogueSharedData::MAP_H - 1);
-    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->player.x && my == _data->player.y));
+    } while (_data->map[my][mx] != TileType::FLOOR || (mx == _data->transforms.data[_data->playerID].x && my == _data->transforms.data[_data->playerID].y));
     _data->map[my][mx] = TileType::MERCHANT;
 
     // Scatter Chests
@@ -538,7 +556,7 @@ void generateMazeMap(RogueSharedData* _data) {
         do {
             cx = random(1, RogueSharedData::MAP_W - 1);
             cy = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[cy][cx] != TileType::FLOOR || (cx == _data->player.x && cy == _data->player.y));
+        } while (_data->map[cy][cx] != TileType::FLOOR || (cx == _data->transforms.data[_data->playerID].x && cy == _data->transforms.data[_data->playerID].y));
         _data->map[cy][cx] = TileType::CHEST;
     }
 
@@ -548,7 +566,7 @@ void generateMazeMap(RogueSharedData* _data) {
         do {
             ax = random(1, RogueSharedData::MAP_W - 1);
             ay = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->player.x && ay == _data->player.y));
+        } while (_data->map[ay][ax] != TileType::FLOOR || (ax == _data->transforms.data[_data->playerID].x && ay == _data->transforms.data[_data->playerID].y));
         _data->map[ay][ax] = TileType::ALTAR;
     }
 
@@ -560,7 +578,7 @@ void generateMazeMap(RogueSharedData* _data) {
         do {
             spx = random(1, RogueSharedData::MAP_W - 1);
             spy = random(1, RogueSharedData::MAP_H - 1);
-        } while (_data->map[spy][spx] != TileType::FLOOR || (spx == _data->player.x && spy == _data->player.y));
+        } while (_data->map[spy][spx] != TileType::FLOOR || (spx == _data->transforms.data[_data->playerID].x && spy == _data->transforms.data[_data->playerID].y));
         _data->map[spy][spx] = TileType::SPIKE;
     }
 
@@ -606,93 +624,79 @@ void generateBossMap(RogueSharedData* _data) {
             }
         }
     }
-    _data->player.x = 16;
-    _data->player.y = 22;
+    _data->transforms.data[_data->playerID].x = 16;
+    _data->transforms.data[_data->playerID].y = 22;
 }
 
 void spawnMonsters(RogueSharedData* _data) {
-    for (auto& m : _data->monsters) m.active = false;
+    for (EntityID e = 0; e < RogueSharedData::MAX_ENTITIES; e++) { 
+        if (e != _data->playerID) _data->registry.destroy(e); 
+    }
 
     float depth = (float)_data->currentDepth;
 
     if (_data->currentDepth % 5 == 0) {
         // Boss Room Setup
-        _data->monsters[0].active = true;
-        _data->monsters[0].type = MonsterType::BOSS;
-        _data->monsters[0].x = 16;
-        _data->monsters[0].y = 10;
-        _data->monsters[0].maxHp = 40 + (int)(depth * 8.0f);
-        _data->monsters[0].hp = _data->monsters[0].maxHp;
-        _data->monsters[0].attack = 4 + (int)(depth * 1.5f);
-        _data->monsters[0].defense = 2 + (int)(depth * 0.8f);
-        _data->monsters[0].alert = true;
+        EntityID boss = _data->registry.create();
+        _data->monsters.add(boss, {MonsterType::BOSS, true, 0});
+        _data->transforms.add(boss, {16, 10});
+        int maxHp = 40 + (int)(depth * 8.0f);
+        _data->healths.add(boss, {maxHp, maxHp});
+        _data->combats.add(boss, {4 + (int)(depth * 1.5f), 2 + (int)(depth * 0.8f), 4 + (int)(depth * 1.5f), 2 + (int)(depth * 0.8f), 0, 10});
         return;
     }
 
     int targetMonsters = (_data->currentDepth * 2) + 6;
     if (_data->currentMutator == LevelMutator::INFESTED) targetMonsters *= 2;
     
-    if (targetMonsters > RogueSharedData::MAX_MONSTERS) {
-        targetMonsters = RogueSharedData::MAX_MONSTERS;
+    // limit max entities 
+    if (targetMonsters > RogueSharedData::MAX_ENTITIES - 5) {
+        targetMonsters = RogueSharedData::MAX_ENTITIES - 5;
     }
 
     for (int i = 0; i < targetMonsters; i++) {
         int mx, my;
-        bool validSpot = false;
-        
-        while (!validSpot) {
+        int attempts = 0;
+        do {
             mx = random(1, RogueSharedData::MAP_W - 1);
             my = random(1, RogueSharedData::MAP_H - 1);
-            
-            if (_data->map[my][mx] == TileType::FLOOR && (mx != _data->player.x || my != _data->player.y)) {
-                bool occupied = false;
-                for (int j = 0; j < i; j++) {
-                    if (_data->monsters[j].x == mx && _data->monsters[j].y == my) {
-                        occupied = true; break;
-                    }
-                }
-                if (!occupied) validSpot = true;
-            }
-        }
+            attempts++;
+        } while ((_data->map[my][mx] == TileType::WALL || _data->map[my][mx] == TileType::WATER ||
+                 (abs(mx - _data->transforms.data[_data->playerID].x) < 5 && abs(my - _data->transforms.data[_data->playerID].y) < 5)) && attempts < 100);
 
-        _data->monsters[i].x = mx;
-        _data->monsters[i].y = my;
-        _data->monsters[i].active = true;
+        if (attempts >= 100) continue; 
+
+        EntityID e = _data->registry.create();
+        if (e == INVALID_ENTITY) break;
+
+        MonsterType t = MonsterType::RAT;
+        int maxHp = 0, atk = 0, def = 0;
+
+        int r = random(100);
+        if (_data->currentBiome == Biome::SEWERS) {
+            if (r < 50) { t = MonsterType::RAT; maxHp = 6 + depth; atk = 1 + (depth*0.5); def = 0; }
+            else if (r < 90) { t = MonsterType::BAT; maxHp = 4 + depth; atk = 2 + (depth*0.5); def = 0; }
+            else { t = MonsterType::GOBLIN; maxHp = 8 + depth*2; atk = 2 + depth; def = 1; }
+        }
+        else if (_data->currentBiome == Biome::PRISON) {
+            if (r < 40) { t = MonsterType::SKELETON; maxHp = 10 + depth*2; atk = 3 + depth; def = 1; }
+            else if (r < 70) { t = MonsterType::GOBLIN; maxHp = 8 + depth*2; atk = 2 + depth; def = 1; }
+            else if (r < 90) { t = MonsterType::ORC; maxHp = 15 + depth*3; atk = 4 + depth; def = 2; }
+            else { t = MonsterType::RAT; maxHp = 8 + depth; atk = 2 + depth; def = 0; }
+        }
+        else { // DEEP_CAVES
+            if (r < 40) { t = MonsterType::ORC; maxHp = 18 + depth*3; atk = 5 + depth; def = 2; }
+            else if (r < 70) { t = MonsterType::SKELETON; maxHp = 12 + depth*2; atk = 4 + depth; def = 1; }
+            else if (r < 95) { t = MonsterType::TROLL; maxHp = 30 + depth*4; atk = 6 + depth; def = 3; }
+            else { t = MonsterType::BAT; maxHp = 6 + depth; atk = 3 + depth; def = 0; }
+        }
         
-        _data->monsters[i].maxHp = 6 + (int)(depth * 2.5f);
-        _data->monsters[i].attack = 2 + (int)(depth * 0.8f);
-        _data->monsters[i].defense = (int)(depth * 0.4f);
-
-        if (_data->currentMutator == LevelMutator::INFESTED) {
-            _data->monsters[i].type = (random(2) == 0) ? MonsterType::RAT : MonsterType::BAT;
-            _data->monsters[i].maxHp = (_data->monsters[i].maxHp * 80) / 100; // -20% HP for swarms
-        } else if (_data->currentDepth < 5) {
-            // Sewers
-            int r = random(3);
-            if (r == 0) _data->monsters[i].type = MonsterType::RAT;
-            else if (r == 1) _data->monsters[i].type = MonsterType::BAT;
-            else _data->monsters[i].type = MonsterType::GOBLIN;
-        } else if (_data->currentDepth < 10) {
-            // Prison
-            int r = random(3);
-            if (r == 0) _data->monsters[i].type = MonsterType::SKELETON;
-            else if (r == 1) _data->monsters[i].type = MonsterType::ORC;
-            else _data->monsters[i].type = MonsterType::GOBLIN;
-        } else {
-            // Deep Caves
-            int r = random(3);
-            if (r == 0) _data->monsters[i].type = MonsterType::TROLL;
-            else if (r == 1) _data->monsters[i].type = MonsterType::ORC;
-            else _data->monsters[i].type = MonsterType::BAT;
-            
-            if (_data->monsters[i].type == MonsterType::TROLL) {
-                _data->monsters[i].maxHp *= 2;
-                _data->monsters[i].attack += 2;
-            }
-        }
-        _data->monsters[i].hp = _data->monsters[i].maxHp;
-        _data->monsters[i].alert = false;
+        _data->monsters.add(e, {t, false, 0});
+        _data->transforms.add(e, {mx, my});
+        _data->healths.add(e, {maxHp, maxHp});
+        _data->combats.add(e, {atk, def, atk, def, 0, 10});
     }
 }
+
 
 }

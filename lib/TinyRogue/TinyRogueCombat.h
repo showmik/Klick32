@@ -5,7 +5,7 @@ namespace TinyRogueCombat {
     void spawnHitEffect(ParticleManager* _particles, int gridX, int gridY);
     void advanceTurn(RogueSharedData* _data);
     void recalcStats(RogueSharedData* _data);
-    Monster* getMonsterAt(RogueSharedData* _data, int x, int y);
+    EntityID getMonsterAt(RogueSharedData* _data, int x, int y);
     void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm, Camera* _camera, ParticleManager* _particles);
     TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, int dx, int dy, Camera* _camera, ParticleManager* _particles);
     

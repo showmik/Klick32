@@ -37,21 +37,21 @@ const char* getItemName(ItemType t) {
 }
 
 void recalcStats(RogueSharedData* _data) {
-    _data->player.attack = _data->player.baseAttack + getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level;
-    _data->player.defense = _data->player.baseDefense + getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level;
+    _data->combats.data[_data->playerID].attack = _data->combats.data[_data->playerID].baseAttack + getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level;
+    _data->combats.data[_data->playerID].defense = _data->combats.data[_data->playerID].baseDefense + getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level;
     
     // Hard Stat Caps & Secondary Stats
-    _data->player.critChance = (_data->equippedWeapon.type == ItemType::DAGGER) ? 25 : 10;
-    _data->player.critChance += _data->equippedWeapon.level * 2;
-    if (_data->player.critChance > 50) _data->player.critChance = 50;
+    _data->combats.data[_data->playerID].critChance = (_data->equippedWeapon.type == ItemType::DAGGER) ? 25 : 10;
+    _data->combats.data[_data->playerID].critChance += _data->equippedWeapon.level * 2;
+    if (_data->combats.data[_data->playerID].critChance > 50) _data->combats.data[_data->playerID].critChance = 50;
 
-    _data->player.dodge = (_data->equippedArmor.type == ItemType::LEATHER) ? 15 : 5;
-    if (_data->equippedAccessory.type == ItemType::RING_OWL) _data->player.dodge += 15;
-    if (_data->player.dodge > 60) _data->player.dodge = 60;
+    _data->combats.data[_data->playerID].dodge = (_data->equippedArmor.type == ItemType::LEATHER) ? 15 : 5;
+    if (_data->equippedAccessory.type == ItemType::RING_OWL) _data->combats.data[_data->playerID].dodge += 15;
+    if (_data->combats.data[_data->playerID].dodge > 60) _data->combats.data[_data->playerID].dodge = 60;
 
     // Sword: +1 Passive Defense (Parrying)
     if (_data->equippedWeapon.type == ItemType::SWORD) {
-        _data->player.defense += 1;
+        _data->combats.data[_data->playerID].defense += 1;
     }
 }
 
@@ -66,180 +66,132 @@ void spawnHitEffect(ParticleManager* _particles, int gridX, int gridY) {
 
 void advanceTurn(RogueSharedData* _data) {
     _data->turnCount++; 
-    if (_data->turnCount % 10 == 0 && _data->player.hp < _data->player.maxHp) {
-        _data->player.hp++;
+    if (_data->turnCount % 10 == 0 && _data->healths.data[_data->playerID].hp < _data->healths.data[_data->playerID].maxHp) {
+        _data->healths.data[_data->playerID].hp++;
     }
 }
 
 
-Monster* getMonsterAt(RogueSharedData* _data, int x, int y) {
-    for (auto& m : _data->monsters) {
-        if (m.active && m.x == x && m.y == y) return &m;
+EntityID getMonsterAt(RogueSharedData* _data, int x, int y) {
+    for (EntityID m = 0; m < RogueSharedData::MAX_ENTITIES; m++) {
+        if (_data->registry.isValid(m) && _data->monsters.has[m]) {
+            if (_data->transforms.data[m].x == x && _data->transforms.data[m].y == y) return m;
+        }
     }
-    return nullptr;
+    return INVALID_ENTITY;
 }
 
 void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm, Camera* _camera, ParticleManager* _particles) {
     bool playerHit = false;
 
-    for (auto& m : _data->monsters) {
-        if (!m.active || _data->player.hp <= 0) continue;
+    for (EntityID e = 0; e < RogueSharedData::MAX_ENTITIES; e++) {
+        if (!_data->registry.isValid(e) || !_data->monsters.has[e] || _data->healths.data[_data->playerID].hp <= 0) continue;
+        
+        CMonster& m = _data->monsters.data[e];
+        CTransform& t = _data->transforms.data[e];
+        CHealth& h = _data->healths.data[e];
+        CCombat& c = _data->combats.data[e];
 
-        if (m.rootDuration > 0) {
-            m.rootDuration--;
-            continue;
+        if (m.spawnTurn > 0) { // Assuming we map rootDuration to spawnTurn or something, wait
+            // We need a rootDuration for monsters too!
         }
 
         int aggro = 6;
         if (m.type == MonsterType::BAT) aggro = 8;
         else if (m.type == MonsterType::SKELETON) aggro = 5;
-        else if (m.type == MonsterType::BOSS) aggro = 15; // Boss tracks across the whole room
+        else if (m.type == MonsterType::BOSS) aggro = 15;
 
-        // Tall grass hides the player, severely reducing monster sight radius
-        if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
+        if (_data->map[_data->transforms.data[_data->playerID].y][_data->transforms.data[_data->playerID].x] == TileType::TALL_GRASS) {
             aggro = 2; 
-            if (abs(_data->player.x - m.x) > aggro || abs(_data->player.y - m.y) > aggro) {
+        }
+
+        int dx = _data->transforms.data[_data->playerID].x - t.x;
+        int dy = _data->transforms.data[_data->playerID].y - t.y;
+        int distSq = dx*dx + dy*dy;
+
+        if (distSq <= aggro*aggro) {
+            m.alert = true; 
+        } else if (distSq > 4) { // 2 tiles away
+            if (_data->map[_data->transforms.data[_data->playerID].y][_data->transforms.data[_data->playerID].x] == TileType::TALL_GRASS) {
                 m.alert = false;
             }
         }
 
-        if (m.type == MonsterType::SKELETON && (_data->turnCount % 2 != 0)) {
-            continue; 
-        }
-        if (m.type == MonsterType::TROLL && (_data->turnCount % 2 == 0)) {
-            continue; // Trolls are slow
-        }
+        if (!m.alert) continue;
 
-        int steps = (m.type == MonsterType::BAT) ? 2 : 1;
+        if (distSq == 1) { // Adjacent
+            int dmg = (c.attack * 100) / (100 + _data->combats.data[_data->playerID].defense * 8);
+            if (dmg < 1) dmg = 1;
 
-        for (int s = 0; s < steps; s++) {
-            int dx = _data->player.x - m.x;
-            int dy = _data->player.y - m.y;
+            int currentDodge = (_data->map[_data->transforms.data[_data->playerID].y][_data->transforms.data[_data->playerID].x] == TileType::WATER) ? 0 : _data->combats.data[_data->playerID].dodge;
+            if (random(100) < currentDodge) {
+                snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Dodged!");
+                _data->hudMessageTimer = 30;
+                ctx.beep(400, 20);
+            } else {
+                _data->healths.data[_data->playerID].hp -= dmg;
+                _camera->shake(4);
+                spawnHitEffect(_particles, _data->transforms.data[_data->playerID].x, _data->transforms.data[_data->playerID].y);
+                ctx.beep(150, 100);
+                playerHit = true;
+            }
+        } else {
+            // Move logic
+            int stepX = (dx > 0) ? 1 : (dx < 0) ? -1 : 0;
+            int stepY = (dy > 0) ? 1 : (dy < 0) ? -1 : 0;
 
-            if (m.alert || (abs(dx) <= aggro && abs(dy) <= aggro)) {
-                m.alert = true; // Monster woke up or spotted player
-                int stepX = 0, stepY = 0;
+            if (m.type == MonsterType::RAT && (abs(dx) > 3 || abs(dy) > 3)) {
+                if (random(2) == 0) stepX = random(3) - 1;
+                else stepY = random(3) - 1;
+            }
 
-                if (m.type == MonsterType::BAT && random(3) == 0) {
-                    if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
-                    else                stepY = (random(2) == 0) ? 1 : -1;
-                } 
-                else if (m.type == MonsterType::RAT && (abs(dx) > 3 || abs(dy) > 3)) {
-                    if (random(2) == 0) stepX = (random(2) == 0) ? 1 : -1;
-                    else                stepY = (random(2) == 0) ? 1 : -1;
-                }
-                else {
-                    stepX = gsign(dx);
-                    stepY = gsign(dy);
+            if (abs(dx) > abs(dy)) stepY = 0; else stepX = 0;
 
-                    if (stepX != 0 && stepY != 0) {
-                        if (random(2) == 0) stepY = 0; 
-                        else stepX = 0;
-                    }
-                }
+            if (stepX == 0 && stepY == 0) continue; // Should be impossible if distSq > 1 but safe
 
-                int nx = m.x + stepX;
-                int ny = m.y + stepY;
+            int nx = t.x + stepX;
+            int ny = t.y + stepY;
 
-                if (nx < 0 || nx >= RogueSharedData::MAP_W || ny < 0 || ny >= RogueSharedData::MAP_H) continue;
+            auto isValidMove = [&](int mx, int my) {
+                if (mx < 0 || mx >= RogueSharedData::MAP_W || my < 0 || my >= RogueSharedData::MAP_H) return false;
+                if (mx == _data->transforms.data[_data->playerID].x && my == _data->transforms.data[_data->playerID].y) return false; // Handled by attack
+                if (_data->map[my][mx] == TileType::WALL || _data->map[my][mx] == TileType::LOCKED_DOOR) return false;
+                if (getMonsterAt(_data, mx, my) != INVALID_ENTITY) return false;
+                return true;
+            };
 
-                if (nx == _data->player.x && ny == _data->player.y) {
-                    int currentDodge = (_data->map[_data->player.y][_data->player.x] == TileType::WATER) ? 0 : _data->player.dodge;
-                    if (random(100) < currentDodge) {
-                        snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Dodged!");
-                        _data->hudMessageTimer = 30;
-                    } else {
-                        int rawDmg = m.attack;
-                        
-                        // Infested Flanking Bonus: +1 damage for each additional adjacent monster
-                        if (_data->currentMutator == LevelMutator::INFESTED) {
-                            for (auto& otherM : _data->monsters) {
-                                if (&otherM != &m && otherM.active && abs(otherM.x - _data->player.x) <= 1 && abs(otherM.y - _data->player.y) <= 1) {
-                                    rawDmg += 1;
-                                }
-                            }
-                        }
-
-                        int damage = (rawDmg * 100) / (100 + _data->player.defense * 8);
-                        if (damage < 1) damage = 1; 
-
-                        _data->player.hp -= damage;
-                        playerHit = true;
-                    }
-                    break; 
-                }
-                else if (_data->map[ny][nx] != TileType::WALL && _data->map[ny][nx] != TileType::LOCKED_DOOR && !getMonsterAt(_data, nx, ny)) {
-                    if (_data->map[ny][nx] == TileType::RUBBLE) continue;
-                    
-                    if (_data->map[ny][nx] == TileType::WEB) {
-                        _data->map[ny][nx] = TileType::FLOOR;
-                        m.rootDuration = 1;
-                    }
-
-                    m.x = nx;
-                    m.y = ny;
+            if (!isValidMove(nx, ny)) {
+                // Try fallback axis
+                int altStepX = (stepX == 0) ? ((dx > 0) ? 1 : (dx < 0) ? -1 : 0) : 0;
+                int altStepY = (stepY == 0) ? ((dy > 0) ? 1 : (dy < 0) ? -1 : 0) : 0;
+                if (isValidMove(t.x + altStepX, t.y + altStepY)) {
+                    nx = t.x + altStepX;
+                    ny = t.y + altStepY;
                 }
             }
-        }
 
-        // Boss Summoning Ability
-        if (m.type == MonsterType::BOSS && m.alert && random(100) < 15) {
-            // Find an inactive monster slot
-            for (auto& newM : _data->monsters) {
-                if (!newM.active) {
-                    int targetX = m.x + (random(3) - 1);
-                    int targetY = m.y + (random(3) - 1);
-                    
-                    // Validate position BEFORE activating
-                    if (targetX >= 0 && targetX < RogueSharedData::MAP_W && 
-                        targetY >= 0 && targetY < RogueSharedData::MAP_H &&
-                        _data->map[targetY][targetX] == TileType::FLOOR && 
-                        (targetX != _data->player.x || targetY != _data->player.y) &&
-                        !getMonsterAt(_data, targetX, targetY)) {
-                        
-                        newM.active = true;
-                        newM.type = (random(2) == 0) ? MonsterType::SKELETON : MonsterType::GOBLIN;
-                        newM.x = targetX;
-                        newM.y = targetY;
-                        
-                        float depthF = (float)_data->currentDepth;
-                        newM.maxHp = 8 + (int)(depthF * 2.5f);
-                        newM.hp = newM.maxHp;
-                        newM.attack = 2 + (int)(depthF * 0.8f);
-                        newM.defense = (int)(depthF * 0.4f);
-                        newM.alert = true;
-                        
-                        _camera->shake(5);
-                        ctx.beep(200, 100);
-                        snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Boss Summons!");
-                        _data->hudMessageTimer = 60;
-                    } else {
-                        newM.active = false; // Cancel if spot is invalid
+            if (isValidMove(nx, ny)) {
+                if (_data->map[ny][nx] == TileType::SPIKE) {
+                    h.hp -= 2;
+                    spawnHitEffect(_particles, nx, ny);
+                    ctx.beep(1200, 20);
+                    m.alert = true;
+                    if (h.hp <= 0) {
+                        _data->registry.destroy(e);
+                        continue;
                     }
-                    break;
+                } else if (_data->map[ny][nx] == TileType::WEB) {
+                    _data->map[ny][nx] = TileType::FLOOR;
                 }
+
+                t.x = nx;
+                t.y = ny;
             }
-        }
-    }
 
-    if (playerHit) {
-        ctx.beep(150, 40); 
-        _camera->shake(6);
-        
-        if (_data->player.hp <= 0) {
-            if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
-            ctx.sfxDeath();
-            sm.emit(ctx, Event::GAME_OVER);
         }
-    } else {
-        ctx.beep(400, 10); 
-    }
-
-    // Trample Tall Grass AFTER monsters take their turn so stealth checks work
-    if (_data->map[_data->player.y][_data->player.x] == TileType::TALL_GRASS) {
-        _data->map[_data->player.y][_data->player.x] = TileType::FLOOR;
     }
 }
+
 
 TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, int dx, int dy, Camera* _camera, ParticleManager* _particles) {
     auto finalizeTurn = [&]() {
@@ -247,8 +199,8 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
         return TurnAction::COMPLETED;
     };
 
-    if (_data->player.rootDuration > 0) {
-        _data->player.rootDuration--;
+    if (_data->players.data[_data->playerID].rootDuration > 0) {
+        _data->players.data[_data->playerID].rootDuration--;
         snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Stuck in Web!");
         _data->hudMessageTimer = 30;
         ctx.beep(150, 50);
@@ -261,8 +213,8 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
         return finalizeTurn();
     }
 
-    int targetX = _data->player.x + dx;
-    int targetY = _data->player.y + dy;
+    int targetX = _data->transforms.data[_data->playerID].x + dx;
+    int targetY = _data->transforms.data[_data->playerID].y + dy;
 
     if (targetX < 0 || targetX >= RogueSharedData::MAP_W || targetY < 0 || targetY >= RogueSharedData::MAP_H) return TurnAction::NONE;
 
@@ -270,7 +222,15 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
     if (targetTile == TileType::WALL) return TurnAction::NONE; 
     if (targetTile == TileType::RUBBLE) return TurnAction::NONE; // Impassable but doesn't block LOS
 
-    Monster* targetMonster = getMonsterAt(_data, targetX, targetY);
+    EntityID targetMonster = getMonsterAt(_data, targetX, targetY);
+    CHealth* tmHealth = nullptr;
+    CCombat* tmCombat = nullptr;
+    CMonster* tmData = nullptr;
+    if (targetMonster != INVALID_ENTITY) {
+        tmHealth = &_data->healths.data[targetMonster];
+        tmCombat = &_data->combats.data[targetMonster];
+        tmData = &_data->monsters.data[targetMonster];
+    }
     
     if (targetTile == TileType::KEY) {
         _data->keys++;
@@ -280,30 +240,30 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
         ctx.beep(1200, 50);
     }
 
-    if (targetMonster) {
-        int rawDmg = _data->player.attack;
-        if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->player.hp <= (_data->player.maxHp * 3) / 10) {
+    if (targetMonster != INVALID_ENTITY) {
+        int rawDmg = _data->combats.data[_data->playerID].attack;
+        if (_data->equippedAccessory.type == ItemType::RING_BERSERKER && _data->healths.data[_data->playerID].hp <= (_data->healths.data[_data->playerID].maxHp * 3) / 10) {
             rawDmg += 3;
         }
         
         // Combat Formula: Diminishing returns from monster defense
-        int dmg = (rawDmg * 100) / (100 + targetMonster->defense * 8);
+        int dmg = (rawDmg * 100) / (100 + tmCombat->defense * 8);
         if (dmg < 1) dmg = 1;
 
         bool crit = false;
 
-        if (!targetMonster->alert) {
+        if (!tmData->alert) {
             crit = true; // Guaranteed Sneak Attack!
-            targetMonster->alert = true;
+            tmData->alert = true;
             snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Sneak Attack!");
             _data->hudMessageTimer = 40;
         } else {
-            crit = (random(100) < _data->player.critChance);
+            crit = (random(100) < _data->combats.data[_data->playerID].critChance);
         }
 
         if (crit) dmg *= 2;
 
-        targetMonster->hp -= dmg;
+        tmHealth->hp -= dmg;
         _camera->shake(crit ? 6 : 3); 
         spawnHitEffect(_particles, targetX, targetY);
         ctx.beep(crit ? 1500 : 1000, 20); 
@@ -313,13 +273,16 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
             int cleaveDmg = dmg / 2;
             if (cleaveDmg < 1) cleaveDmg = 1;
             bool cleaved = false;
-            for (auto& m : _data->monsters) {
-                if (m.active && &m != targetMonster) {
+            for (EntityID e = 0; e < RogueSharedData::MAX_ENTITIES; e++) {
+                if (_data->registry.isValid(e) && _data->monsters.has[e] && e != targetMonster) {
+                    CTransform& mT = _data->transforms.data[e];
+                    CHealth& mH = _data->healths.data[e];
+                    CMonster& mM = _data->monsters.data[e];
                     // Check if adjacent to the primary target
-                    if (abs(m.x - targetX) <= 1 && abs(m.y - targetY) <= 1) {
-                        m.hp -= cleaveDmg;
-                        spawnHitEffect(_particles, m.x, m.y);
-                        m.alert = true;
+                    if (abs(mT.x - targetX) <= 1 && abs(mT.y - targetY) <= 1) {
+                        mH.hp -= cleaveDmg;
+                        spawnHitEffect(_particles, mT.x, mT.y);
+                        mM.alert = true;
                         cleaved = true;
                     }
                 }
@@ -332,16 +295,17 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
         bool bossDefeated = false;
         int bossX = 0, bossY = 0;
 
-        for (auto& m : _data->monsters) {
-            if (m.active && m.hp <= 0) {
-                m.active = false;
+        for (EntityID e = 0; e < RogueSharedData::MAX_ENTITIES; e++) {
+            if (_data->registry.isValid(e) && _data->monsters.has[e] && _data->healths.data[e].hp <= 0) {
+                CMonster& m = _data->monsters.data[e];
+                _data->registry.destroy(e);
                 if (m.type == MonsterType::BOSS) {
                     xpGained += 50 + _data->currentDepth * 5;
                     _data->gold += 50 + random(50);
                 } else {
                     xpGained += 10 + _data->currentDepth * 2;
-                    if (random(100) < 40) {
-                        int goldDrop = random(2, 6) + _data->currentDepth;
+                    if (random(100) < 15) { // 15% chance for gold drop
+                        int goldDrop = random(5, 10) + (_data->currentDepth * 2);
                         if (_data->equippedAccessory.type == ItemType::RING_WEALTH) goldDrop += goldDrop / 2;
                         _data->gold += goldDrop;
                     }
@@ -349,27 +313,27 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
 
                 // Bloodlust heal
                 int healAmt = (_data->equippedAccessory.type == ItemType::RING_VAMPIRE) ? 2 : 1;
-                _data->player.hp += healAmt;
-                if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
+                _data->healths.data[_data->playerID].hp += healAmt;
+                if (_data->healths.data[_data->playerID].hp > _data->healths.data[_data->playerID].maxHp) _data->healths.data[_data->playerID].hp = _data->healths.data[_data->playerID].maxHp;
 
                 if (m.type == MonsterType::BOSS) {
                     bossDefeated = true;
-                    bossX = m.x;
-                    bossY = m.y;
+                    bossX = _data->transforms.data[e].x;
+                    bossY = _data->transforms.data[e].y;
                 }
             }
         }
 
         if (xpGained > 0) {
-            _data->player.xp += xpGained;
+            _data->players.data[_data->playerID].xp += xpGained;
 
             bool leveledUp = false;
-            while (_data->player.xp >= _data->player.level * 15) {
-                _data->player.xp -= _data->player.level * 15;
-                _data->player.level++;
-                _data->player.maxHp += 5;
-                _data->player.hp = _data->player.maxHp; 
-                _data->player.baseAttack += 1;
+            while (_data->players.data[_data->playerID].xp >= _data->players.data[_data->playerID].level * 15) {
+                _data->players.data[_data->playerID].xp -= _data->players.data[_data->playerID].level * 15;
+                _data->players.data[_data->playerID].level++;
+                _data->healths.data[_data->playerID].maxHp += 5;
+                _data->healths.data[_data->playerID].hp = _data->healths.data[_data->playerID].maxHp; 
+                _data->combats.data[_data->playerID].baseAttack += 1;
                 recalcStats(_data);
                 leveledUp = true;
             }
@@ -415,20 +379,15 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
             ctx.beep(200, 150);
             _camera->shake(8);
             
-            Monster* spawnM = nullptr;
-            for (auto& m : _data->monsters) {
-                if (!m.active) { spawnM = &m; break; }
+            EntityID spawnM = _data->registry.create();
+            if (spawnM != INVALID_ENTITY) {
+                float depthF = (float)_data->currentDepth;
+                int maxHp = 15 + (int)(depthF * 4.0f);
+                _data->transforms.add(spawnM, {targetX, targetY});
+                _data->healths.add(spawnM, {maxHp, maxHp});
+                _data->combats.add(spawnM, {3 + (int)(depthF * 1.0f), 1 + (int)(depthF * 0.5f), 3 + (int)(depthF * 1.0f), 1 + (int)(depthF * 0.5f), 0, 10});
+                _data->monsters.add(spawnM, {MonsterType::GOBLIN, true, 0});
             }
-            if (!spawnM) spawnM = &_data->monsters[RogueSharedData::MAX_MONSTERS - 1]; // Fallback to overwrite last
-            
-            spawnM->x = targetX; spawnM->y = targetY;
-            spawnM->active = true;
-            float depthF = (float)_data->currentDepth;
-            spawnM->maxHp = 15 + (int)(depthF * 4.0f);
-            spawnM->hp = spawnM->maxHp;
-            spawnM->attack = 3 + (int)(depthF * 1.0f);
-            spawnM->defense = 1 + (int)(depthF * 0.5f);
-            spawnM->type = MonsterType::GOBLIN; 
             return finalizeTurn(); 
         }
 
@@ -503,27 +462,29 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
         return finalizeTurn();
     }
     else if (targetTile == TileType::MERCHANT) {
+        _data->map[targetY][targetX] = TileType::FLOOR;
         return TurnAction::OPEN_MERCHANT; 
     }
     else if (targetTile == TileType::ALTAR) {
         return TurnAction::OPEN_ALTAR; 
     }
     else {
-        _data->player.x = targetX;
-        _data->player.y = targetY;
+        _data->transforms.data[_data->playerID].x = targetX;
+        _data->transforms.data[_data->playerID].y = targetY;
 
         if (targetTile == TileType::WEB) {
             _data->map[targetY][targetX] = TileType::FLOOR;
-            _data->player.rootDuration = 1;
+            _data->players.data[_data->playerID].rootDuration = 1;
             snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Trapped!");
             _data->hudMessageTimer = 40;
             ctx.beep(200, 100);
         }
 
         if (targetTile == TileType::TALL_GRASS) {
-            if (random(100) < 20 && _data->player.hp < _data->player.maxHp) {
-                _data->player.hp += 2;
-                if (_data->player.hp > _data->player.maxHp) _data->player.hp = _data->player.maxHp;
+            _data->map[targetY][targetX] = TileType::FLOOR;
+            if (random(100) < 20 && _data->healths.data[_data->playerID].hp < _data->healths.data[_data->playerID].maxHp) {
+                _data->healths.data[_data->playerID].hp += 2;
+                if (_data->healths.data[_data->playerID].hp > _data->healths.data[_data->playerID].maxHp) _data->healths.data[_data->playerID].hp = _data->healths.data[_data->playerID].maxHp;
                 snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Dewdrop: +2 HP");
                 _data->hudMessageTimer = 40;
                 ctx.beep(1000, 30);
@@ -537,13 +498,13 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
             } else {
                 int spikeDmg = 2 + (_data->currentDepth / 3);
                 if (_data->currentMutator == LevelMutator::TREASURE_TROVE) spikeDmg *= 2;
-                _data->player.hp -= spikeDmg;
+                _data->healths.data[_data->playerID].hp -= spikeDmg;
                 _camera->shake(4);
                 ctx.beep(100, 50);
                 snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Stepped on Spikes!");
                 _data->hudMessageTimer = 60;
                 
-                if (_data->player.hp <= 0) {
+                if (_data->healths.data[_data->playerID].hp <= 0) {
                     ctx.sfxDeath();
                     return TurnAction::GAME_OVER;
                 }
