@@ -95,7 +95,7 @@ void RogueTitleScene::draw(Console& ctx) {
     }
     
     // Draw Title Text
-    Screens::drawTitle(ctx, "TINY ROGUE");
+    Screens::drawTitle(ctx, "TINY ROGUE", nullptr, 0, 0, false);
     
     // Draw High Score
     if (_data && _data->hiScore > 0) {
@@ -682,7 +682,7 @@ void RoguePlayScene::draw(Console& ctx) {
     }
     
     char topBuf[32];
-    snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", _data->healths.data[_data->playerID].hp, _data->healths.data[_data->playerID].maxHp, _data->players.data[_data->playerID].level);
+    snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", max(0, (int)_data->healths.data[_data->playerID].hp), _data->healths.data[_data->playerID].maxHp, _data->players.data[_data->playerID].level);
     int topW = ctx.strWidth(topBuf);
     
     ctx.setDrawColor(0);

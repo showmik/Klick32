@@ -8,7 +8,7 @@
 namespace Screens {
 
     // Standard "Press A to Start" title screen
-    inline void drawTitle(Console& ctx, const char* title, const uint8_t* icon = nullptr, int iconW = 0, int iconH = 0) {
+    inline void drawTitle(Console& ctx, const char* title, const uint8_t* icon = nullptr, int iconW = 0, int iconH = 0, bool showPressA = true) {
         ctx.setFont(u8g2_font_8x13_tf);
         int ty = (icon) ? 20 : 30;
         ctx.drawStrCentered(ty, title);
@@ -17,9 +17,11 @@ namespace Screens {
             ctx.blit(icon, (iconW + 7) / 8, iconH).at(Console::W / 2 - (iconW / 2), ty + 5).draw();
         }
 
-        ctx.setFont(u8g2_font_4x6_tr);
-        if ((millis() / 500) % 2 == 0) {
-            ctx.drawStrCentered(55, "PRESS A TO START");
+        if (showPressA) {
+            ctx.setFont(u8g2_font_4x6_tr);
+            if ((millis() / 500) % 2 == 0) {
+                ctx.drawStrCentered(55, "PRESS A TO START");
+            }
         }
     }
 
