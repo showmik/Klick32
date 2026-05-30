@@ -337,6 +337,7 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
                 _data->healths.data[_data->playerID].hp = _data->healths.data[_data->playerID].maxHp; 
                 _data->combats.data[_data->playerID].baseAttack += 1;
                 recalcStats(_data);
+                _camera->shake(10);
                 leveledUp = true;
             }
             if (leveledUp) {
@@ -433,13 +434,38 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
             }
             
             if (!added) {
-                for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
-                    if(_data->inventory[i].type == ItemType::NONE) {
-                        _data->inventory[i].type = itemToGive;
-                        _data->inventory[i].count = 1;
-                        _data->inventory[i].level = 0;
-                        added = true; 
-                        break;
+                // QoL: Auto-Equip if slot is empty
+                if ((itemToGive == ItemType::DAGGER || itemToGive == ItemType::SWORD || itemToGive == ItemType::AXE) && _data->equippedWeapon.type == ItemType::NONE) {
+                    _data->equippedWeapon.type = itemToGive;
+                    _data->equippedWeapon.count = 1;
+                    _data->equippedWeapon.level = 0;
+                    added = true;
+                    recalcStats(_data);
+                }
+                else if ((itemToGive == ItemType::LEATHER || itemToGive == ItemType::CHAINMAIL || itemToGive == ItemType::PLATE) && _data->equippedArmor.type == ItemType::NONE) {
+                    _data->equippedArmor.type = itemToGive;
+                    _data->equippedArmor.count = 1;
+                    _data->equippedArmor.level = 0;
+                    added = true;
+                    recalcStats(_data);
+                }
+                else if ((itemToGive >= ItemType::RING_VAMPIRE && itemToGive <= ItemType::RING_BERSERKER) && _data->equippedAccessory.type == ItemType::NONE) {
+                    _data->equippedAccessory.type = itemToGive;
+                    _data->equippedAccessory.count = 1;
+                    _data->equippedAccessory.level = 0;
+                    added = true;
+                    recalcStats(_data);
+                }
+
+                if (!added) {
+                    for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
+                        if(_data->inventory[i].type == ItemType::NONE) {
+                            _data->inventory[i].type = itemToGive;
+                            _data->inventory[i].count = 1;
+                            _data->inventory[i].level = 0;
+                            added = true; 
+                            break;
+                        }
                     }
                 }
             }
@@ -507,11 +533,6 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
                 ctx.beep(100, 50);
                 snprintf(_data->hudMessage, sizeof(_data->hudMessage), "Stepped on Spikes!");
                 _data->hudMessageTimer = 60;
-                
-                if (_data->healths.data[_data->playerID].hp <= 0) {
-                    ctx.sfxDeath();
-                    return TurnAction::GAME_OVER;
-                }
             }
         }
 

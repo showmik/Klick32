@@ -51,13 +51,18 @@ void RoguePlayScene::onEnter(Console& ctx) {
     _data->transforms.add(_data->playerID, {0, 0});
     _data->healths.add(_data->playerID, {10, 10});
     _data->combats.add(_data->playerID, {2, 0, 2, 0, 0, 0});
-    _data->equippedWeapon.type = ItemType::NONE;
+    _data->equippedWeapon.type = ItemType::DAGGER;
+    _data->equippedWeapon.level = 0;
+    _data->equippedWeapon.count = 1;
     _data->equippedArmor.type = ItemType::NONE;
     _data->equippedAccessory.type = ItemType::NONE;
     TinyRogueCombat::recalcStats(_data);
     for (int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
         _data->inventory[i].type = ItemType::NONE;
     }
+    _data->inventory[0].type = ItemType::POTION;
+    _data->inventory[0].count = 1;
+    _data->inventory[0].level = 0;
     TinyRogueMapGen::generateMap(_data);
 }
 
@@ -295,6 +300,7 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
                             _data->healths.data[_data->playerID].hp = _data->healths.data[_data->playerID].maxHp; 
                             _data->combats.data[_data->playerID].baseAttack += 1;
                             TinyRogueCombat::recalcStats(_data);
+                            _camera->shake(10);
                             leveledUp = true;
                         }
                         if (leveledUp) {
@@ -341,11 +347,9 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
         TurnAction action = TinyRogueCombat::processTurn(_data, ctx, sm, dx, dy, _camera, _particles);
         if (action == TurnAction::COMPLETED) {
             TinyRogueCombat::processMonsterTurns(_data, ctx, sm, _camera, _particles); 
-            if (_data->healths.data[_data->playerID].hp <= 0) {
-                ctx.sfxDeath();
-                action = TurnAction::GAME_OVER;
-            }
-        } else if (action == TurnAction::OPEN_ALTAR) {
+        } 
+        
+        if (action == TurnAction::OPEN_ALTAR) {
             _altarMenuOpen = true;
             _altarMenuCursor = 0;
             _activeAltarX = _data->transforms.data[_data->playerID].x + dx;
@@ -358,10 +362,15 @@ void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
             ctx.beep(400, 100); ctx.beep(300, 150); 
             _descending = true;
             _fadeTimer = 20;
-        } else if (action == TurnAction::GAME_OVER) {
-            if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
-            sm.emit(ctx, Event::GAME_OVER);
         }
+    }
+
+    // Universal Death Check
+    if (_data->healths.data[_data->playerID].hp <= 0) {
+        ctx.sfxDeath();
+        if (_data->gold > _data->hiScore) _data->hiScore = _data->gold;
+        sm.emit(ctx, Event::GAME_OVER);
+        return;
     }
 
     _updateCamera(); 
@@ -562,7 +571,7 @@ void RoguePlayScene::draw(Console& ctx) {
     ctx.setFont(u8g2_font_5x7_tf);
     
     if (_data->hudMessageTimer > 0) {
-        int floatY = lerpi(0, 12, _data->hudMessageTimer, 60);
+        int floatY = lerpi(10, 22, _data->hudMessageTimer, 60);
         bool visible = (_data->hudMessageTimer > 15) || (_data->hudMessageTimer % 2 == 0);
         
         if (visible) {
@@ -572,37 +581,37 @@ void RoguePlayScene::draw(Console& ctx) {
             ctx.setDrawColor(1);
             ctx.drawStrCentered(floatY + 7, _data->hudMessage);
         }
-    } else {
-        char topBuf[32];
-        snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", _data->healths.data[_data->playerID].hp, _data->healths.data[_data->playerID].maxHp, _data->players.data[_data->playerID].level);
-        int topW = ctx.strWidth(topBuf);
-        
-        ctx.setDrawColor(0);
-        ctx.drawBox(0, 0, 10 + topW + 2, 10);
-        ctx.setDrawColor(1);
-        ctx.drawBitmap(1, 1, 1, 8, spr_icon_heart);
-        ctx.drawStr(11, 7, topBuf);
-
-        char atkBuf[8], defBuf[8];
-        snprintf(atkBuf, sizeof(atkBuf), "%d", _data->combats.data[_data->playerID].attack);
-        snprintf(defBuf, sizeof(defBuf), "%d", _data->combats.data[_data->playerID].defense);
-        
-        int atkW = ctx.strWidth(atkBuf);
-        int defW = ctx.strWidth(defBuf);
-        int trTotalW = 8 + 2 + atkW + 4 + 8 + 2 + defW;
-        int trStartX = Console::W - trTotalW - 2;
-        
-        ctx.setDrawColor(0);
-        ctx.drawBox(trStartX, 0, trTotalW + 2, 10);
-        ctx.setDrawColor(1);
-        
-        ctx.drawBitmap(trStartX + 1, 1, 1, 8, spr_icon_sword);
-        ctx.drawStr(trStartX + 11, 7, atkBuf);
-        
-        int shieldX = trStartX + 11 + atkW + 4;
-        ctx.drawBitmap(shieldX, 1, 1, 8, spr_icon_shield);
-        ctx.drawStr(shieldX + 10, 7, defBuf);
     }
+    
+    char topBuf[32];
+    snprintf(topBuf, sizeof(topBuf), "%d/%d L:%d", _data->healths.data[_data->playerID].hp, _data->healths.data[_data->playerID].maxHp, _data->players.data[_data->playerID].level);
+    int topW = ctx.strWidth(topBuf);
+    
+    ctx.setDrawColor(0);
+    ctx.drawBox(0, 0, 10 + topW + 2, 10);
+    ctx.setDrawColor(1);
+    ctx.drawBitmap(1, 1, 1, 8, spr_icon_heart);
+    ctx.drawStr(11, 7, topBuf);
+
+    char atkBuf[8], defBuf[8];
+    snprintf(atkBuf, sizeof(atkBuf), "%d", _data->combats.data[_data->playerID].attack);
+    snprintf(defBuf, sizeof(defBuf), "%d", _data->combats.data[_data->playerID].defense);
+    
+    int atkW = ctx.strWidth(atkBuf);
+    int defW = ctx.strWidth(defBuf);
+    int trTotalW = 8 + 2 + atkW + 4 + 8 + 2 + defW;
+    int trStartX = Console::W - trTotalW - 2;
+    
+    ctx.setDrawColor(0);
+    ctx.drawBox(trStartX, 0, trTotalW + 2, 10);
+    ctx.setDrawColor(1);
+    
+    ctx.drawBitmap(trStartX + 1, 1, 1, 8, spr_icon_sword);
+    ctx.drawStr(trStartX + 11, 7, atkBuf);
+    
+    int shieldX = trStartX + 11 + atkW + 4;
+    ctx.drawBitmap(shieldX, 1, 1, 8, spr_icon_shield);
+    ctx.drawStr(shieldX + 10, 7, defBuf);
 
     char depBuf[8], goldBuf[16];
     snprintf(depBuf, sizeof(depBuf), "%d", _data->currentDepth);
@@ -870,7 +879,7 @@ void RogueDeadScene::update(Console& ctx, SceneManager& sm, float dt) {
 
 void RogueDeadScene::draw(Console& ctx) {
     if (_sm) _sm->drawUnder(ctx);
-    int bx = 20, by = 20, bw = 88, bh = 28;
+    int bx = 20, by = 16, bw = 88, bh = 40;
 
     ctx.setDrawColor(0);
     ctx.drawBox(bx + 2, by + 2, bw, bh);
@@ -887,10 +896,15 @@ void RogueDeadScene::draw(Console& ctx) {
     ctx.drawStr(bx + (bw - tw) / 2, by + 11, "YOU DIED");
     
     ctx.setDrawColor(1);
+    ctx.setFont(u8g2_font_5x7_tf);
+    char stats[32];
+    snprintf(stats, sizeof(stats), "D: %d  G: %d", _data->currentDepth, _data->gold);
+    int sw = ctx.strWidth(stats);
+    ctx.drawStr(bx + (bw - sw) / 2, by + 23, stats);
+
     if ((_frame / 15) % 2 == 0) {
-        ctx.setFont(u8g2_font_5x7_tf);
         tw = ctx.strWidth("A to restart");
-        ctx.drawStrCentered(by + 24, "A to restart");
+        ctx.drawStrCentered(by + 35, "A to restart");
     }
 }
 

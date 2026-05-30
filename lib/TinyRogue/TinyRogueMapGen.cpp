@@ -409,11 +409,47 @@ void generateCaveMap(RogueSharedData* _data) {
         return Vec2{(float)tx, (float)ty};
     };
 
-    // 4. Place Player, Stairs, and Loot
+    // 4. Place Player
     Vec2 p = getOpenTile();
     _data->transforms.data[_data->playerID].x = p.ix();
     _data->transforms.data[_data->playerID].y = p.iy();
 
+    // --- BUG FIX: Remove disconnected caves to ensure 100% connectivity ---
+    struct Coord { uint8_t x, y; };
+    bool reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W] = {false};
+    Coord queue[RogueSharedData::MAP_W * RogueSharedData::MAP_H];
+    int head = 0, tail = 0;
+    
+    queue[tail++] = {(uint8_t)p.ix(), (uint8_t)p.iy()};
+    reachable[p.iy()][p.ix()] = true;
+    
+    while(head < tail) {
+        Coord curr = queue[head++];
+        int dx[] = {0, 0, -1, 1};
+        int dy[] = {-1, 1, 0, 0};
+        for(int d = 0; d < 4; d++) {
+            int nx = curr.x + dx[d];
+            int ny = curr.y + dy[d];
+            if (nx >= 0 && nx < RogueSharedData::MAP_W && ny >= 0 && ny < RogueSharedData::MAP_H) {
+                if (!reachable[ny][nx] && _data->map[ny][nx] == TileType::FLOOR) {
+                    reachable[ny][nx] = true;
+                    queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
+                }
+            }
+        }
+    }
+    
+    // Convert unreachable floors to walls
+    for (int y = 0; y < RogueSharedData::MAP_H; y++) {
+        for (int x = 0; x < RogueSharedData::MAP_W; x++) {
+            if (_data->map[y][x] == TileType::FLOOR && !reachable[y][x]) {
+                _data->map[y][x] = TileType::WALL;
+            }
+        }
+    }
+    // ----------------------------------------------------------------------
+
+    // Now safe to place stairs and loot in guaranteed reachable space
     Vec2 s;
     int attempts = 0; // Prevent infinite loop on tiny disconnected maps
     do { 
@@ -421,19 +457,6 @@ void generateCaveMap(RogueSharedData* _data) {
         attempts++;
     } while (abs(s.ix() - _data->transforms.data[_data->playerID].x) + abs(s.iy() - _data->transforms.data[_data->playerID].y) < 15 && attempts < 50); 
     _data->map[s.iy()][s.ix()] = TileType::STAIRS_DOWN;
-
-    // --- BUG FIX: Guarantee connectivity between player and stairs ---
-    int curX = _data->transforms.data[_data->playerID].x;
-    int curY = _data->transforms.data[_data->playerID].y;
-    
-    if (random(2) == 0) {
-        while (curX != s.ix()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(s.ix() - curX); }
-        while (curY != s.iy()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(s.iy() - curY); }
-    } else {
-        while (curY != s.iy()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curY += gsign(s.iy() - curY); }
-        while (curX != s.ix()) { if (_data->map[curY][curX] == TileType::WALL) _data->map[curY][curX] = TileType::CORRIDOR; curX += gsign(s.ix() - curX); }
-    }
-    // ---------------------------------------------------------------
 
     int numChests = random(1, 4);
     if (_data->currentMutator == LevelMutator::TREASURE_TROVE) numChests += random(2, 4);
