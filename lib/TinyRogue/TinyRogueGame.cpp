@@ -12,19 +12,102 @@
 
 void RogueTitleScene::onEnter(Console& ctx) {
     _frame = 0;
+    
+    // Initialize bats
+    for (int i = 0; i < 5; i++) {
+        _bats[i].x = random(0, Console::W);
+        _bats[i].y = random(0, Console::H / 2);
+        _bats[i].vx = (random(10, 20) / 10.0f) * (random(2) == 0 ? 1 : -1);
+        _bats[i].vy = (random(5, 10) / 10.0f) * (random(2) == 0 ? 1 : -1);
+    }
+    
+    // Initialize sparks
+    for (int i = 0; i < 15; i++) {
+        _sparks[i].x = random(0, Console::W);
+        _sparks[i].y = Console::H + random(0, 30);
+        _sparks[i].vy = -(random(5, 15) / 10.0f);
+        _sparks[i].life = random(30, 80);
+    }
 }
 
 void RogueTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
     _frame++;
 
-    if (ctx.justPressed(Btn::A) ) {
+    if (ctx.justPressed(Btn::A) || ctx.justPressed(Btn::MENU1)) {
         ctx.sfxMenuEnter();
         sm.emit(ctx, Event::CUSTOM_1); // Map CUSTOM_1 to PlayScene in Game
+    }
+    
+    // Update bats
+    for (int i = 0; i < 5; i++) {
+        _bats[i].x += _bats[i].vx;
+        _bats[i].y += _bats[i].vy;
+        
+        // Bounce bats
+        if (_bats[i].x < 0) { _bats[i].x = 0; _bats[i].vx *= -1; }
+        if (_bats[i].x > Console::W - 8) { _bats[i].x = Console::W - 8; _bats[i].vx *= -1; }
+        if (_bats[i].y < 0) { _bats[i].y = 0; _bats[i].vy *= -1; }
+        if (_bats[i].y > Console::H - 20) { _bats[i].y = Console::H - 20; _bats[i].vy *= -1; }
+        
+        // Randomly change direction occasionally
+        if (random(100) < 2) _bats[i].vx *= -1;
+        if (random(100) < 2) _bats[i].vy *= -1;
+    }
+    
+    // Update sparks
+    for (int i = 0; i < 15; i++) {
+        _sparks[i].y += _sparks[i].vy;
+        _sparks[i].x += sin(_frame * 0.1f + i) * 0.5f; // Sway
+        _sparks[i].life--;
+        
+        if (_sparks[i].life <= 0 || _sparks[i].y < 0) {
+            _sparks[i].x = random(0, Console::W);
+            _sparks[i].y = Console::H + random(0, 10);
+            _sparks[i].vy = -(random(5, 15) / 10.0f);
+            _sparks[i].life = random(30, 80);
+        }
     }
 }
 
 void RogueTitleScene::draw(Console& ctx) {
+    // Draw background elements
+    ctx.setDrawColor(0);
+    ctx.drawBox(0, 0, Console::W, Console::H);
+    ctx.setDrawColor(1);
+    
+    // Draw floor patterns at the bottom
+    for (int i = 0; i < Console::W; i += 8) {
+        ctx.drawBitmap(i, Console::H - 8, 1, 8, spr_rogue_wall);
+    }
+    
+    // Draw Sparks
+    for (int i = 0; i < 15; i++) {
+        if (_sparks[i].life > 0) {
+            ctx.drawPixel((int)_sparks[i].x, (int)_sparks[i].y);
+        }
+    }
+    
+    // Draw Bats
+    for (int i = 0; i < 5; i++) {
+        bool flip = _bats[i].vx > 0;
+        bool frame1 = (_frame / 10 + i) % 2 == 0;
+        ctx.drawBitmap((int)_bats[i].x, (int)_bats[i].y, 1, 8, frame1 ? spr_monster_bat_1 : spr_monster_bat_2, flip);
+    }
+    
+    // Draw Title Text
     Screens::drawTitle(ctx, "TINY ROGUE");
+    
+    // Draw Start instruction
+    if (_frame % 60 < 40) {
+        ctx.setFont(u8g2_font_4x6_tr);
+        ctx.drawPrintfCentered(45, "PRESS A TO ENTER");
+    }
+    
+    // Draw High Score
+    if (_data && _data->hiScore > 0) {
+        ctx.setFont(u8g2_font_4x6_tr);
+        ctx.drawPrintfCentered(55, "HI-SCORE: %lu", (unsigned long)_data->hiScore);
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

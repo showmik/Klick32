@@ -128,11 +128,18 @@ private:
 
 class RogueTitleScene : public Scene {
 public:
+    void setData(RogueSharedData* d) { _data = d; }
     void onEnter(Console& ctx) override;
     void update (Console& ctx, SceneManager& sm, float dt) override;
     void draw   (Console& ctx) override;
 private:
-    uint8_t _frame = 0;
+    uint32_t _frame = 0;
+    RogueSharedData* _data = nullptr;
+    
+    struct Bat { float x, y, vx, vy; };
+    Bat _bats[5];
+    struct Spark { float x, y, vy; int life; };
+    Spark _sparks[15];
 };
 
 class RogueShopScene : public Scene {
