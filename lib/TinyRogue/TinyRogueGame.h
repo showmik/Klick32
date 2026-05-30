@@ -224,7 +224,11 @@ private:
 
 class TinyRogueGame : public SceneGame<RogueSharedData> {
 public:
-    void reset() override { *this = TinyRogueGame(); }
+    void reset() override {
+        TinyRogueGame* defaultState = new TinyRogueGame();
+        *this = *defaultState;
+        delete defaultState;
+    }
     void onEnter(Console& ctx) override;
     void onExit (Console& ctx) override;
     

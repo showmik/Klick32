@@ -4,6 +4,10 @@
 
 namespace TinyRogueMapGen {
 
+struct Coord { uint8_t x, y; };
+static bool g_reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
+static Coord g_queue[RogueSharedData::MAP_H * RogueSharedData::MAP_W];
+
 void generateMap(RogueSharedData* _data) {
     // 1. Reset Fog of War
     memset(_data->explored, 0, sizeof(_data->explored));
@@ -63,7 +67,7 @@ void generateMap(RogueSharedData* _data) {
             }
         }
 
-        struct Coord { uint8_t x, y; };
+
         static Coord corridors[300];
         int corridorCount = 0;
         
@@ -83,22 +87,21 @@ void generateMap(RogueSharedData* _data) {
             corridors[j] = temp;
         }
 
-        static bool reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W];
-        static Coord queue[1024];
+
 
         // Find a valid choke point
         for (int i = 0; i < corridorCount; i++) {
             Coord c = corridors[i];
             _data->map[c.y][c.x] = TileType::LOCKED_DOOR;
             
-            memset(reachable, 0, sizeof(reachable));
+            memset(g_reachable, 0, sizeof(g_reachable));
             int head = 0, tail = 0;
-            queue[tail++] = {(uint8_t)_data->transforms.data[_data->playerID].x, (uint8_t)_data->transforms.data[_data->playerID].y};
-            reachable[_data->transforms.data[_data->playerID].y][_data->transforms.data[_data->playerID].x] = true;
+            g_queue[tail++] = {(uint8_t)_data->transforms.data[_data->playerID].x, (uint8_t)_data->transforms.data[_data->playerID].y};
+            g_reachable[_data->transforms.data[_data->playerID].y][_data->transforms.data[_data->playerID].x] = true;
             
             int reachableCount = 0;
             while(head < tail) {
-                Coord curr = queue[head++];
+                Coord curr = g_queue[head++];
                 reachableCount++;
                 
                 int dx[] = {0, 0, -1, 1};
@@ -107,11 +110,11 @@ void generateMap(RogueSharedData* _data) {
                     int nx = curr.x + dx[d];
                     int ny = curr.y + dy[d];
                     if (nx >= 0 && nx < RogueSharedData::MAP_W && ny >= 0 && ny < RogueSharedData::MAP_H) {
-                        if (!reachable[ny][nx]) {
+                        if (!g_reachable[ny][nx]) {
                             TileType t = _data->map[ny][nx];
                             if (t != TileType::WALL && t != TileType::LOCKED_DOOR) {
-                                reachable[ny][nx] = true;
-                                queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
+                                g_reachable[ny][nx] = true;
+                                g_queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
                             }
                         }
                     }
@@ -119,12 +122,12 @@ void generateMap(RogueSharedData* _data) {
             }
             
             // Check if valid bridge (Stairs are reachable, but some floors are blocked off)
-            if (reachable[sy][sx] && reachableCount < totalFloors) {
+            if (g_reachable[sy][sx] && reachableCount < totalFloors) {
                 // 1. Place Key in reachable area
-                Coord validKeys[400]; int validKeyCount = 0;
+                static Coord validKeys[400]; int validKeyCount = 0;
                 for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
                     for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                        if (reachable[y][x] && _data->map[y][x] == TileType::FLOOR && (x != _data->transforms.data[_data->playerID].x || y != _data->transforms.data[_data->playerID].y)) {
+                        if (g_reachable[y][x] && _data->map[y][x] == TileType::FLOOR && (x != _data->transforms.data[_data->playerID].x || y != _data->transforms.data[_data->playerID].y)) {
                             if (validKeyCount < 400) validKeys[validKeyCount++] = {(uint8_t)x, (uint8_t)y};
                         }
                     }
@@ -135,10 +138,10 @@ void generateMap(RogueSharedData* _data) {
                     _data->map[kp.y][kp.x] = TileType::KEY;
                     
                     // 2. Place Chest in isolated area to guarantee reward
-                    Coord validChests[400]; int validChestCount = 0;
+                    static Coord validChests[400]; int validChestCount = 0;
                     for (int y = 1; y < RogueSharedData::MAP_H - 1; y++) {
                         for (int x = 1; x < RogueSharedData::MAP_W - 1; x++) {
-                            if (!reachable[y][x] && _data->map[y][x] == TileType::FLOOR) {
+                            if (!g_reachable[y][x] && _data->map[y][x] == TileType::FLOOR) {
                                 if (validChestCount < 400) validChests[validChestCount++] = {(uint8_t)x, (uint8_t)y};
                             }
                         }
@@ -218,7 +221,7 @@ void generateBSPMap(RogueSharedData* _data) {
     }
 
     const int MAX_NODES = 31;
-    BSPNode nodes[MAX_NODES];
+    static BSPNode nodes[MAX_NODES];
     int numNodes = 0;
 
     nodes[numNodes++] = { {1, 1, RogueSharedData::MAP_W - 2, RogueSharedData::MAP_H - 2}, {0,0,0,0}, -1, -1 };
@@ -415,25 +418,23 @@ void generateCaveMap(RogueSharedData* _data) {
     _data->transforms.data[_data->playerID].y = p.iy();
 
     // --- BUG FIX: Remove disconnected caves to ensure 100% connectivity ---
-    struct Coord { uint8_t x, y; };
-    bool* reachable = new bool[RogueSharedData::MAP_W * RogueSharedData::MAP_H]();
-    Coord* queue = new Coord[RogueSharedData::MAP_W * RogueSharedData::MAP_H];
+    memset(g_reachable, 0, sizeof(g_reachable));
     int head = 0, tail = 0;
     
-    queue[tail++] = {(uint8_t)p.ix(), (uint8_t)p.iy()};
-    reachable[p.iy() * RogueSharedData::MAP_W + p.ix()] = true;
+    g_queue[tail++] = {(uint8_t)p.ix(), (uint8_t)p.iy()};
+    g_reachable[p.iy()][p.ix()] = true;
     
     while(head < tail) {
-        Coord curr = queue[head++];
+        Coord curr = g_queue[head++];
         int dx[] = {0, 0, -1, 1};
         int dy[] = {-1, 1, 0, 0};
         for(int d = 0; d < 4; d++) {
             int nx = curr.x + dx[d];
             int ny = curr.y + dy[d];
             if (nx >= 0 && nx < RogueSharedData::MAP_W && ny >= 0 && ny < RogueSharedData::MAP_H) {
-                if (!reachable[ny * RogueSharedData::MAP_W + nx] && _data->map[ny][nx] == TileType::FLOOR) {
-                    reachable[ny * RogueSharedData::MAP_W + nx] = true;
-                    queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
+                if (!g_reachable[ny][nx] && _data->map[ny][nx] == TileType::FLOOR) {
+                    g_reachable[ny][nx] = true;
+                    g_queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
                 }
             }
         }
@@ -442,14 +443,11 @@ void generateCaveMap(RogueSharedData* _data) {
     // Convert unreachable floors to walls
     for (int y = 0; y < RogueSharedData::MAP_H; y++) {
         for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-            if (_data->map[y][x] == TileType::FLOOR && !reachable[y * RogueSharedData::MAP_W + x]) {
+            if (_data->map[y][x] == TileType::FLOOR && !g_reachable[y][x]) {
                 _data->map[y][x] = TileType::WALL;
             }
         }
     }
-    
-    delete[] reachable;
-    delete[] queue;
     // ----------------------------------------------------------------------
 
     // Now safe to place stairs and loot in guaranteed reachable space
