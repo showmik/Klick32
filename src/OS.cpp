@@ -162,6 +162,7 @@ void OS::run() {
 
         static bool osOverlayActive = false;
         static int  osOverlayCursor = 0;
+        static int  osOverlayScroll = 0;
         static float osOverlayAnim = 0.0f;
 
         _input.update();
@@ -221,6 +222,7 @@ void OS::run() {
         } else if (activeGame != &_sysMenu && _console.justPressed(Btn::MENU2)) {
             osOverlayActive = !osOverlayActive;
             osOverlayCursor = 0;
+            osOverlayScroll = 0;
             if (osOverlayActive) SFX::menuEnter(_sound);
             else SFX::menuBack(_sound);
         }
@@ -229,12 +231,24 @@ void OS::run() {
         if (osOverlayActive) {
             if (_console.justPressed(Btn::UP)) {
                 osOverlayCursor--;
-                if (osOverlayCursor < 0) osOverlayCursor = 6;
+                if (osOverlayCursor < 0) {
+                    osOverlayCursor = 6;
+                    osOverlayScroll = 6 - 4; // Show last 5 items
+                }
+                if (osOverlayCursor < osOverlayScroll) {
+                    osOverlayScroll = osOverlayCursor;
+                }
                 SFX::menuNav(_sound);
             }
             if (_console.justPressed(Btn::DOWN)) {
                 osOverlayCursor++;
-                if (osOverlayCursor > 6) osOverlayCursor = 0;
+                if (osOverlayCursor > 6) {
+                    osOverlayCursor = 0;
+                    osOverlayScroll = 0;
+                }
+                if (osOverlayCursor > osOverlayScroll + 4) {
+                    osOverlayScroll = osOverlayCursor - 4;
+                }
                 SFX::menuNav(_sound);
             }
             if (_console.justPressed(Btn::A)) {
@@ -336,6 +350,10 @@ void OS::run() {
                 
                 _console.beginScreenSpace();
                 
+                // Drop shadow
+                _console.setDrawColor(Console::COLOR_BLACK);
+                _console.drawRBox(12, y + 2, 108, h, 4);
+                
                 // Solid black background
                 _console.setDrawColor(Console::COLOR_BLACK);
                 _console.drawRBox(10, y, 108, h, 4);
@@ -344,44 +362,66 @@ void OS::run() {
                 _console.setDrawColor(Console::COLOR_WHITE);
                 _console.drawRFrame(10, y, 108, h, 4);
                 
-                // Content only if fully or mostly open
-                if (osOverlayAnim >= 0.9f) {
-                    _console.drawHLine(16, y + 9, 96);
-                    
+                // Content dynamically clipped by bounding checks
+                if (h >= 12) {
+                    _console.drawHLine(16, y + 10, 96);
                     _console.setFont(u8g2_font_5x7_tf);
-                    _console.drawStrCentered(y + 7, "QUICK SETTINGS");
+                    _console.drawStrCentered(y + 8, "QUICK SETTINGS");
+                }
+                
+                const char* items[7];
+                items[0] = "Resume Game";
+                items[1] = "Save Snapshot";
+                items[2] = "Load Snapshot";
+                
+                char soundBuf[16];
+                snprintf(soundBuf, sizeof(soundBuf), "Audio: %s", _sound.isMuted() ? "OFF" : "ON");
+                items[3] = soundBuf;
+                
+                char cpuBuf[20];
+                snprintf(cpuBuf, sizeof(cpuBuf), "CPU: %s", (osCpuSpeed == 240) ? "Max 240M" : (osCpuSpeed == 160) ? "Bal 160M" : "Eco 80M");
+                items[4] = cpuBuf;
+                
+                char hudBuf[20];
+                snprintf(hudBuf, sizeof(hudBuf), "Debug HUD: %s", Diagnostics::isVisible() ? "ON" : "OFF");
+                items[5] = hudBuf;
+                
+                items[6] = "Quit to Menu";
+                
+                _console.setDrawColor(Console::COLOR_WHITE);
+                for (int i = 0; i < 5; i++) {
+                    int itemIdx = osOverlayScroll + i;
+                    if (itemIdx > 6) break;
                     
-                    const char* items[7];
-                    items[0] = "Resume Game";
-                    items[1] = "Save Snapshot";
-                    items[2] = "Load Snapshot";
+                    int itemY = y + 20 + (i * 9); 
                     
-                    char soundBuf[16];
-                    snprintf(soundBuf, sizeof(soundBuf), "Audio: %s", _sound.isMuted() ? "OFF" : "ON");
-                    items[3] = soundBuf;
-                    
-                    char cpuBuf[20];
-                    snprintf(cpuBuf, sizeof(cpuBuf), "CPU: %s", (osCpuSpeed == 240) ? "Max 240M" : (osCpuSpeed == 160) ? "Bal 160M" : "Eco 80M");
-                    items[4] = cpuBuf;
-                    
-                    char hudBuf[20];
-                    snprintf(hudBuf, sizeof(hudBuf), "Debug HUD: %s", Diagnostics::isVisible() ? "ON" : "OFF");
-                    items[5] = hudBuf;
-                    
-                    items[6] = "Quit to Menu";
-                    
-                    _console.setDrawColor(Console::COLOR_WHITE);
-                    for (int i = 0; i < 7; i++) {
-                        int itemY = y + 17 + (i * 7);
+                    // Only draw items that fit within the expanding modal height
+                    if (itemY <= y + h - 3) {
                         // Indent active item slightly to create a subtle micro-animation
-                        int textX = (i == osOverlayCursor) ? 28 : 24;
-                        _console.drawStr(textX, itemY, items[i]);
+                        int textX = (itemIdx == osOverlayCursor) ? 28 : 24;
+                        _console.drawStr(textX, itemY, items[itemIdx]);
                     }
-                    
-                    // Draw single cohesive XOR selection pill
-                    int selectY = y + 17 + (osOverlayCursor * 7);
+                }
+                
+                // Draw single cohesive XOR selection pill
+                int visualIndex = osOverlayCursor - osOverlayScroll;
+                int selectY = y + 20 + (visualIndex * 9);
+                if (selectY + 2 <= y + h - 2) {
                     _console.setDrawColor(Console::COLOR_XOR);
-                    _console.drawRBox(18, selectY - 6, 92, 8, 2);
+                    _console.drawRBox(18, selectY - 7, 92, 9, 2);
+                }
+                
+                // Scroll indicators (flatter arrows)
+                if (h >= 50) {
+                    _console.setDrawColor(Console::COLOR_WHITE);
+                    if (osOverlayScroll > 0) {
+                        _console.drawHLine(63, y + 11, 3);
+                        _console.drawHLine(62, y + 12, 5);
+                    }
+                    if (osOverlayScroll + 4 < 6) {
+                        _console.drawHLine(62, y + 58, 5);
+                        _console.drawHLine(63, y + 59, 3);
+                    }
                 }
                 
                 _console.endScreenSpace();
