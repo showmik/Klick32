@@ -421,7 +421,11 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
         auto giveItem = [&](ItemType type, int count) -> bool {
             for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
                 if(_data->inventory[i].type == type) {
-                    _data->inventory[i].count += count;
+                    if ((int)_data->inventory[i].count + count <= 255) {
+                        _data->inventory[i].count += count;
+                    } else {
+                        _data->inventory[i].count = 255;
+                    }
                     return true;
                 }
             }
@@ -930,8 +934,10 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
         }
         if (ctx.justPressed(Btn::A)) {
             Item* target = (_upgradeSelect == 0) ? &_data->equippedWeapon : &_data->equippedArmor;
-            if (target->type != ItemType::NONE) {
-                target->level++;
+            if (target && target->type != ItemType::NONE) {
+                if (target->level < 255) {
+                    target->level++;
+                }
                 TinyRogueCombat::recalcStats(_data);
                 
                 _data->inventory[_cursor].count--;
@@ -995,7 +1001,8 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                     }
                 } else if (item.type == ItemType::DAGGER || item.type == ItemType::SWORD || item.type == ItemType::AXE) {
                     if (_data->equippedWeapon.type == item.type) {
-                        _data->equippedWeapon.level += item.level + 1; // Merge!
+                        int newLevel = (int)_data->equippedWeapon.level + item.level + 1;
+                        _data->equippedWeapon.level = (newLevel > 255) ? 255 : newLevel; // Merge!
                         TinyRogueCombat::recalcStats(_data);
                         snprintf(_msg, sizeof(_msg), "Weapons Merged!");
                         ctx.beep(1200, 40); ctx.beep(1500, 60);
@@ -1013,7 +1020,8 @@ void RogueInventoryScene::update(Console& ctx, SceneManager& sm, float dt) {
                     }
                 } else if (item.type == ItemType::LEATHER || item.type == ItemType::CHAINMAIL || item.type == ItemType::PLATE) {
                     if (_data->equippedArmor.type == item.type) {
-                        _data->equippedArmor.level += item.level + 1; // Merge!
+                        int newLevel = (int)_data->equippedArmor.level + item.level + 1;
+                        _data->equippedArmor.level = (newLevel > 255) ? 255 : newLevel; // Merge!
                         TinyRogueCombat::recalcStats(_data);
                         snprintf(_msg, sizeof(_msg), "Armors Merged!");
                         ctx.beep(1200, 40); ctx.beep(1500, 60);

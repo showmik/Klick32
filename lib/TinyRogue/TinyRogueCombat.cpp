@@ -92,8 +92,9 @@ void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm,
         CHealth& h = _data->healths.data[e];
         CCombat& c = _data->combats.data[e];
 
-        if (m.spawnTurn > 0) { // Assuming we map rootDuration to spawnTurn or something, wait
-            // We need a rootDuration for monsters too!
+        if (m.spawnTurn > 0) {
+            m.spawnTurn--;
+            continue;
         }
 
         int aggro = 6;
@@ -182,6 +183,7 @@ void processMonsterTurns(RogueSharedData* _data, Console& ctx, SceneManager& sm,
                     }
                 } else if (_data->map[ny][nx] == TileType::WEB) {
                     _data->map[ny][nx] = TileType::FLOOR;
+                    m.spawnTurn = 2; // Monster is stuck in web for 2 turns
                 }
 
                 t.x = nx;
@@ -421,7 +423,9 @@ TurnAction processTurn(RogueSharedData* _data, Console& ctx, SceneManager& sm, i
             if (itemToGive == ItemType::POTION || itemToGive == ItemType::ELIXIR || itemToGive == ItemType::SCROLL_UPGRADE) {
                 for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
                     if(_data->inventory[i].type == itemToGive) {
-                        _data->inventory[i].count++;
+                        if (_data->inventory[i].count < 255) {
+                            _data->inventory[i].count++;
+                        }
                         added = true; 
                         break;
                     }
