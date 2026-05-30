@@ -15,18 +15,18 @@ void RogueTitleScene::onEnter(Console& ctx) {
     
     // Initialize bats
     for (int i = 0; i < 5; i++) {
-        _bats[i].x = random(0, Console::W);
-        _bats[i].y = random(0, Console::H / 2);
-        _bats[i].vx = (random(10, 20) / 10.0f) * (random(2) == 0 ? 1 : -1);
-        _bats[i].vy = (random(5, 10) / 10.0f) * (random(2) == 0 ? 1 : -1);
+        _bats[i].x = (float)random(0, Console::W);
+        _bats[i].y = (float)random(0, Console::H / 2);
+        _bats[i].vx = (float)(random(10, 20) / 10.0f) * (random(2) == 0 ? 1.0f : -1.0f);
+        _bats[i].vy = (float)(random(5, 10) / 10.0f) * (random(2) == 0 ? 1.0f : -1.0f);
     }
     
     // Initialize sparks
     for (int i = 0; i < 15; i++) {
-        _sparks[i].x = random(0, Console::W);
-        _sparks[i].y = Console::H + random(0, 30);
-        _sparks[i].vy = -(random(5, 15) / 10.0f);
-        _sparks[i].life = random(30, 80);
+        _sparks[i].x = (float)random(0, Console::W);
+        _sparks[i].y = (float)(Console::H + random(0, 30));
+        _sparks[i].vy = -(float)(random(5, 15) / 10.0f);
+        _sparks[i].life = (int)random(30, 80);
     }
 }
 
@@ -61,10 +61,10 @@ void RogueTitleScene::update(Console& ctx, SceneManager& sm, float dt) {
         _sparks[i].life--;
         
         if (_sparks[i].life <= 0 || _sparks[i].y < 0) {
-            _sparks[i].x = random(0, Console::W);
-            _sparks[i].y = Console::H + random(0, 10);
-            _sparks[i].vy = -(random(5, 15) / 10.0f);
-            _sparks[i].life = random(30, 80);
+            _sparks[i].x = (float)random(0, Console::W);
+            _sparks[i].y = (float)(Console::H + random(0, 10));
+            _sparks[i].vy = -(float)(random(5, 15) / 10.0f);
+            _sparks[i].life = (int)random(30, 80);
         }
     }
 }
@@ -89,24 +89,18 @@ void RogueTitleScene::draw(Console& ctx) {
     
     // Draw Bats
     for (int i = 0; i < 5; i++) {
-        bool flip = _bats[i].vx > 0;
-        bool frame1 = (_frame / 10 + i) % 2 == 0;
-        ctx.drawBitmap((int)_bats[i].x, (int)_bats[i].y, 1, 8, frame1 ? spr_monster_bat_1 : spr_monster_bat_2, flip);
+        uint8_t flip = (_bats[i].vx > 0) ? Console::BMP_FLIP_H : Console::BMP_FLIP_NONE;
+        int yOff = ((_frame / 5 + i) % 2 == 0) ? 1 : 0; // Simple flap animation
+        ctx.drawBitmapEx((int)_bats[i].x, (int)_bats[i].y + yOff, 1, 8, spr_rogue_bat, flip);
     }
     
     // Draw Title Text
     Screens::drawTitle(ctx, "TINY ROGUE");
     
-    // Draw Start instruction
-    if (_frame % 60 < 40) {
-        ctx.setFont(u8g2_font_4x6_tr);
-        ctx.drawPrintfCentered(45, "PRESS A TO ENTER");
-    }
-    
     // Draw High Score
     if (_data && _data->hiScore > 0) {
         ctx.setFont(u8g2_font_4x6_tr);
-        ctx.drawPrintfCentered(55, "HI-SCORE: %lu", (unsigned long)_data->hiScore);
+        ctx.drawPrintfCentered(45, "HI-SCORE: %lu", (unsigned long)_data->hiScore);
     }
 }
 
@@ -178,6 +172,27 @@ void RoguePlayScene::_updateCamera(bool snap) {
     } else {
         _camera->panTo(targetX, targetY, 6);
     }
+}
+
+void RoguePlayScene::saveSnapshot(Console& ctx) {
+    if (_data && _data->healths.data[_data->playerID].hp > 0) {
+        ctx.saveBytes("gamestate", _data, sizeof(RogueSharedData));
+    }
+}
+
+void RoguePlayScene::loadSnapshot(Console& ctx) {
+    if (_data && ctx.hasSave("gamestate")) {
+        ctx.loadBytes("gamestate", _data, sizeof(RogueSharedData));
+    }
+}
+
+void RoguePlayScene::onSnapshotRestored(Console& ctx) {
+    _descending = false;
+    _fadeTimer = 0;
+    _altarMenuOpen = false;
+    isAiming = false;
+    TinyRogueCombat::recalcStats(_data);
+    _updateCamera(true);
 }
 
 void RoguePlayScene::update(Console& ctx, SceneManager& sm, float dt) {
@@ -505,10 +520,10 @@ void RogueShopScene::update(Console& ctx, SceneManager& sm, float dt) {
     if (_msgTimer > 0) _msgTimer--;
 
     if (ctx.justPressed(Btn::A)) {
-        int costHealth = 20;
-        int costPotion = 40;
-        int costDarts  = 30;
-        int costScroll = 150;
+        uint32_t costHealth = 20;
+        uint32_t costPotion = 40;
+        uint32_t costDarts  = 30;
+        uint32_t costScroll = 150;
         
         auto giveItem = [&](ItemType type, int count) -> bool {
             for(int i = 0; i < RogueSharedData::MAX_INVENTORY; i++) {
@@ -1234,7 +1249,7 @@ void RogueInventoryScene::draw(Console& ctx) {
     if (_data->equippedWeapon.type != ItemType::NONE) {
         snprintf(wStr, sizeof(wStr), "%s+%d(+%d)", getShortName(_data->equippedWeapon.type), _data->equippedWeapon.level, TinyRogueCombat::getWeaponAttack(_data->equippedWeapon.type) + _data->equippedWeapon.level);
     } else {
-        strcpy(wStr, "None");
+        snprintf(wStr, sizeof(wStr), "None");
     }
     ctx.drawBitmap(bx + 4, by + 11, 1, 8, spr_icon_sword);
     ctx.drawStr(bx + 14, by + 18, wStr);
@@ -1243,7 +1258,7 @@ void RogueInventoryScene::draw(Console& ctx) {
     if (_data->equippedArmor.type != ItemType::NONE) {
         snprintf(aStr, sizeof(aStr), "%s+%d(+%d)", getShortName(_data->equippedArmor.type), _data->equippedArmor.level, TinyRogueCombat::getArmorDefense(_data->equippedArmor.type) + _data->equippedArmor.level);
     } else {
-        strcpy(aStr, "None");
+        snprintf(aStr, sizeof(aStr), "None");
     }
     ctx.drawBitmap(bx + 4, by + 20, 1, 8, spr_icon_shield);
     ctx.drawStr(bx + 14, by + 27, aStr);
@@ -1252,7 +1267,7 @@ void RogueInventoryScene::draw(Console& ctx) {
     if (_data->equippedAccessory.type != ItemType::NONE) {
         snprintf(acStr, sizeof(acStr), "Ac:%s", getShortName(_data->equippedAccessory.type));
     } else {
-        strcpy(acStr, "Ac:None");
+        snprintf(acStr, sizeof(acStr), "Ac:None");
     }
     ctx.drawStr(bx + 64, by + 18, acStr);
     
@@ -1281,7 +1296,7 @@ void RogueInventoryScene::draw(Console& ctx) {
         Item& item = _data->inventory[i];
         char nameBuf[32];
         if (item.type == ItemType::NONE) {
-            strcpy(nameBuf, "- Empty -");
+            snprintf(nameBuf, sizeof(nameBuf), "- Empty -");
         } else {
             const char* shortName = getShortName(item.type);
             int atk = TinyRogueCombat::getWeaponAttack(item.type);
@@ -1393,6 +1408,8 @@ void TinyRogueGame::onEnter(Console& ctx) { ctx.setCPUSpeed(80);
     _inventory.setData(&_data);
 
     useDefaultEvents(&_pause, &_dead);
+    setSnapshotScene(&_play); // Enable Snapshot Support via OS Quick Settings
+    
     _sm.onEvent(Event::CUSTOM_1,  SceneManager::REPLACE, &_play); // Start/Restart Game
     _sm.onEvent(Event::CUSTOM_2,  SceneManager::PUSH, &_shop);    // Enter Shop
     _sm.onEvent(Event::CUSTOM_3,  SceneManager::PUSH, &_inventory); // Enter Inventory

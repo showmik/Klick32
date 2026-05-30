@@ -164,6 +164,10 @@ public:
     void onEnter(Console& ctx) override;
     void resumeSavedGame() { _resumed = true; }
     
+    void saveSnapshot(Console& ctx) override;
+    void loadSnapshot(Console& ctx) override;
+    void onSnapshotRestored(Console& ctx) override;
+    
     // Public state for external triggering (Aim Mode)
     bool isAiming = false;
     int aimX = 0, aimY = 0;
