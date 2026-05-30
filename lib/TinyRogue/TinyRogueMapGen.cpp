@@ -416,12 +416,12 @@ void generateCaveMap(RogueSharedData* _data) {
 
     // --- BUG FIX: Remove disconnected caves to ensure 100% connectivity ---
     struct Coord { uint8_t x, y; };
-    bool reachable[RogueSharedData::MAP_H][RogueSharedData::MAP_W] = {false};
-    Coord queue[RogueSharedData::MAP_W * RogueSharedData::MAP_H];
+    bool* reachable = new bool[RogueSharedData::MAP_W * RogueSharedData::MAP_H]();
+    Coord* queue = new Coord[RogueSharedData::MAP_W * RogueSharedData::MAP_H];
     int head = 0, tail = 0;
     
     queue[tail++] = {(uint8_t)p.ix(), (uint8_t)p.iy()};
-    reachable[p.iy()][p.ix()] = true;
+    reachable[p.iy() * RogueSharedData::MAP_W + p.ix()] = true;
     
     while(head < tail) {
         Coord curr = queue[head++];
@@ -431,8 +431,8 @@ void generateCaveMap(RogueSharedData* _data) {
             int nx = curr.x + dx[d];
             int ny = curr.y + dy[d];
             if (nx >= 0 && nx < RogueSharedData::MAP_W && ny >= 0 && ny < RogueSharedData::MAP_H) {
-                if (!reachable[ny][nx] && _data->map[ny][nx] == TileType::FLOOR) {
-                    reachable[ny][nx] = true;
+                if (!reachable[ny * RogueSharedData::MAP_W + nx] && _data->map[ny][nx] == TileType::FLOOR) {
+                    reachable[ny * RogueSharedData::MAP_W + nx] = true;
                     queue[tail++] = {(uint8_t)nx, (uint8_t)ny};
                 }
             }
@@ -442,11 +442,14 @@ void generateCaveMap(RogueSharedData* _data) {
     // Convert unreachable floors to walls
     for (int y = 0; y < RogueSharedData::MAP_H; y++) {
         for (int x = 0; x < RogueSharedData::MAP_W; x++) {
-            if (_data->map[y][x] == TileType::FLOOR && !reachable[y][x]) {
+            if (_data->map[y][x] == TileType::FLOOR && !reachable[y * RogueSharedData::MAP_W + x]) {
                 _data->map[y][x] = TileType::WALL;
             }
         }
     }
+    
+    delete[] reachable;
+    delete[] queue;
     // ----------------------------------------------------------------------
 
     // Now safe to place stairs and loot in guaranteed reachable space
